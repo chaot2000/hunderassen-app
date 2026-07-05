@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------
+# .htaccess – Hunderassen-Verwaltungs-App
+#
+# Diese App nutzt direkte PHP-Dateien statt eines Front-Controllers
+# (siehe Projekt-Prinzipien), daher übernimmt diese .htaccess NICHT
+# das Routing, sondern ausschließlich Absicherung:
+#  - HTTPS wird erzwungen (siehe Block unten)
+#  - Verzeichnisse mit sensiblen Dateien (config/, sql/, models/,
+#    views/, logs/, DB_Generator/) sind vom Web nicht direkt erreichbar
+#  - .sql-Dateien sind grundsätzlich nirgendwo im Projekt ausleferbar
+#  - Verzeichnis-Listing ist aus
+#
+# HINWEIS: all-inkl nutzt Apache — diese Regeln setzen Apache 2.4+
+# Syntax voraus ("Require all denied"). Falls euer Hosting noch
+# Apache 2.2 fährt, müsste "Deny from all" statt "Require all denied"
+# verwendet werden — im Zweifel beide Blöcke drin lassen (siehe unten,
+# beide sind aktiv, das jeweils nicht unterstützte Directive wird von
+# Apache ignoriert bzw. bei 2.4 als Fallback über <IfModule> geschützt).
+# ---------------------------------------------------------------------
+
+# HTTPS erzwingen. Nur wirksam, wenn auf all-inkl bereits ein gültiges
+# SSL-Zertifikat für die Domain aktiv ist (KAS: "SSL-Zertifikate") —
+# sonst würde die Weiterleitung in eine Schleife/einen Fehler laufen.
+# Die Ausnahme deckt dieselben lokalen Muster ab wie die
+# development-Erkennung in config/environment.php (localhost, 127.0.0.1,
+# *.test, *.local) — insbesondere Laragons Standard-Domainendung
+# ".test" (z.B. hunderassen-app.test), die sonst ohne lokales SSL in
+# eine Redirect-Schleife/ERR_SSL_PROTOCOL_ERROR laufen würde.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)$
+    RewriteCond %{HTTP_HOST} !\.(test|local)$
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Diagnose-/Debug-Dateien nie öffentlich ausliefern (Defense-in-Depth
+# zusätzlich zur Empfehlung, solche Dateien vor dem Deployment ganz zu
+# entfernen — siehe phpinfo.php).
+<FilesMatch "^phpinfo\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Verzeichnis-Listing global aus
+Options -Indexes
+
+# .sql-Dateien nie ausliefern, egal wo im Projekt sie liegen
+# (Migrationsscripte, Schema-Backups, import_*.sql etc.)
+<FilesMatch "\.sql$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Cache-Datei des TheDogAPI-Abgleichs nicht öffentlich ausliefern
+<FilesMatch "^cache_thedogapi_breeds\.json$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Zugangsdaten-Dateien nie ausliefern, egal wo sie liegen — zusätzliche
+# Absicherung (defense-in-depth) falls config/ versehentlich doch mal
+# im Document Root landet.
+<FilesMatch "^database\.local(\.example)?\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

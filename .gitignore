@@ -1,0 +1,26 @@
+# Laufzeit-generierte Dateien
+/logs/*.log
+!/logs/.gitkeep
+
+# TheDogAPI-Zwischenspeicher (wird zur Laufzeit neu erzeugt)
+/cache_thedogapi_breeds.json
+
+# Lokale Zugangsdaten, falls ihr config/database.php irgendwann durch
+# eine nicht versionierte Variante ersetzt (empfohlen für Produktiv-
+# Zugangsdaten, siehe README "Sicherheitshinweise")
+/config/database.local.php
+/.env
+/.env.local
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+
+# Composer (falls später eingeführt)
+/vendor/
+composer.lock

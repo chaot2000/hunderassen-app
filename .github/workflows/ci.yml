@@ -1,0 +1,102 @@
+name: CI
+
+# Läuft bei jedem Push und jedem Pull Request. Baut die App komplett
+# frisch auf (MariaDB + Schema + Testdaten + PHP-Webserver) und lässt
+# den Rauchtest aus bin/smoke-test.sh dagegenlaufen — fängt genau das
+# Muster ab, das uns schon mehrfach passiert ist: ein falscher
+# require_once-Pfad oder eine fehlende Datei führt lokal manchmal erst
+# beim Klicken auf, hier fällt es sofort bei jedem Push auf.
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        # all-inkl fährt MariaDB (Stand 2026: 10.5/10.6, je nach KAS-
+        # Einstellung — ggf. anpassen, falls dort eine andere Version
+        # gewählt ist). Vorher lief hier ein mysql:8.0-Image; MySQL und
+        # MariaDB sind für das, was diese App nutzt, praktisch
+        # kompatibel, aber "praktisch" ist nicht "getestet" — deshalb
+        # jetzt die tatsächliche Zielversion.
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: hunderassen_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: PHP einrichten
+        uses: shivammathur/setup-php@v2
+        with:
+          # all-inkl erlaubt PHP frei bis 8.5 wählbar — das ist die
+          # Version, auf die auch produktiv gestellt wird.
+          php-version: '8.5'
+          extensions: pdo_mysql, mbstring, gd, fileinfo, json
+          coverage: none
+
+      - name: Auf MariaDB warten
+        run: |
+          for i in $(seq 1 30); do
+            mysqladmin ping -h127.0.0.1 -P3306 -uroot -proot && break
+            echo "Warte auf MariaDB... ($i/30)"
+            sleep 2
+          done
+
+      - name: Schema importieren
+        run: mysql -h127.0.0.1 -P3306 -uroot -proot hunderassen_ci < sql/schema.sql
+
+      - name: Testdaten (Fixture) importieren
+        run: mysql -h127.0.0.1 -P3306 -uroot -proot hunderassen_ci < sql/fixtures/ci_seed.sql
+
+      - name: Test-Admin-Passwort setzen
+        run: |
+          HASH=$(php -r "echo password_hash('CiTest123!', PASSWORD_DEFAULT);")
+          mysql -h127.0.0.1 -P3306 -uroot -proot hunderassen_ci \
+            -e "UPDATE users SET password_hash = '${HASH}', is_active = 1 WHERE username = 'admin';"
+
+      - name: config/database.local.php erzeugen
+        run: |
+          cat > config/database.local.php << 'PHPEOF'
+          <?php
+          return [
+              'host'    => '127.0.0.1',
+              'name'    => 'hunderassen_ci',
+              'user'    => 'root',
+              'pass'    => 'root',
+              'charset' => 'utf8mb4',
+          ];
+          PHPEOF
+
+      - name: logs-Verzeichnis anlegen
+        run: mkdir -p logs
+
+      - name: PHP-Webserver im Hintergrund starten
+        run: |
+          php -S 127.0.0.1:8000 &
+          echo "Warte auf PHP-Server..."
+          for i in $(seq 1 15); do
+            curl -s -o /dev/null http://127.0.0.1:8000/login.php && break
+            sleep 1
+          done
+
+      - name: Rauchtest ausführen
+        run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123!
+
+      - name: App-Fehlerlog bei Fehlschlag anzeigen
+        if: failure()
+        run: |
+          echo "--- logs/app_errors.log ---"
+          cat logs/app_errors.log 2>/dev/null || echo "(kein Log vorhanden)"
