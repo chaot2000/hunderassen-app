@@ -27,6 +27,8 @@ CREATE TABLE `users` (
     `username`      VARCHAR(50)  NOT NULL,
     `password_hash` VARCHAR(255) NOT NULL,           -- password_hash() Output, PASSWORD_DEFAULT
     `role`          ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+    `can_manage_breeds` TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Rassen-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
+    `can_manage_tests`  TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Test-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1, -- manuelles Sperren durch Admin möglich
     `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_by`    INT UNSIGNED NULL,                -- welcher Admin hat den Account angelegt

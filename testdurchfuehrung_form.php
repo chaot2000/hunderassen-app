@@ -167,7 +167,7 @@ require __DIR__ . '/views/partials/header.php';
     <div class="bg-white/80 rounded-2xl shadow border border-sand p-6">
         <p class="text-sm text-fellDk/60">
             Es wurden noch keine Tests im Test-Katalog angelegt.
-            <?php if ($isAdmin): ?>
+            <?php if (can_manage_tests()): ?>
                 <a href="/test_form.php" class="text-tanne underline hover:text-tanneDk">Jetzt einen Test anlegen</a>.
             <?php endif; ?>
         </p>

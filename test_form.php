@@ -27,7 +27,7 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/Test.php';
 
 secure_session_start();
-require_admin();
+require_manage_tests();
 
 $editingId  = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $existing   = $editingId ? Test::findById($editingId) : null;

@@ -39,11 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password        = $_POST['password'] ?? '';
         $passwordConfirm = $_POST['password_confirm'] ?? '';
         $role            = $_POST['role'] ?? 'user';
+        $canManageBreeds = isset($_POST['can_manage_breeds']);
+        $canManageTests  = isset($_POST['can_manage_tests']);
 
         if ($password !== $passwordConfirm) {
             $errorMessage = 'Die Passwörter stimmen nicht überein.';
         } else {
-            $result = User::createByAdmin($username, $password, $role, (int) current_user()['id']);
+            $result = User::createByAdmin($username, $password, $role, (int) current_user()['id'], $canManageBreeds, $canManageTests);
 
             if ($result['success']) {
                 $successMessage = $result['message'];
@@ -80,7 +82,7 @@ require __DIR__ . '/views/partials/header.php';
     <div class="bg-white/80 rounded-2xl shadow border border-sand p-6">
         <h2 class="text-lg font-bold text-fellDk mb-4">Neuen Benutzer anlegen</h2>
 
-        <form method="post" action="/admin_add_user.php" class="space-y-4">
+        <form method="post" action="/admin_add_user.php" x-data="{ role: 'user' }" class="space-y-4">
             <?= csrf_field() ?>
 
             <div>
@@ -126,11 +128,24 @@ require __DIR__ . '/views/partials/header.php';
                 <select
                     id="role"
                     name="role"
+                    x-model="role"
                     class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                 >
-                    <option value="user">Benutzer (nur lesen/suchen)</option>
+                    <option value="user">Benutzer (Portal, nur eigene Einträge)</option>
                     <option value="admin">Administrator (volle Rechte)</option>
                 </select>
+            </div>
+
+            <div x-show="role === 'user'" x-cloak class="space-y-2 border border-sand rounded-lg p-3 bg-creme/40">
+                <p class="text-xs font-semibold text-fellDk/70">Zusätzliche Portal-Rechte (geteilte Kataloge)</p>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="can_manage_breeds" class="rounded border-sand">
+                    Rassen verwalten (Rassen anlegen, Eigenschaften &amp; Aktivitäten)
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="can_manage_tests" class="rounded border-sand">
+                    Tests verwalten (Test-Katalog anlegen/bearbeiten)
+                </label>
             </div>
 
             <button
