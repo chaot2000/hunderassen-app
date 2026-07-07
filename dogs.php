@@ -40,6 +40,10 @@ $pageTitle = $isAdmin ? 'Alle Hunde' : 'Meine Hunde';
 require __DIR__ . '/views/partials/header.php';
 ?>
 
+<a href="/dashboard.php" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
+    ← Zur Übersicht
+</a>
+
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
     <h1 class="text-2xl font-extrabold text-fellDk">
         <?= $isAdmin ? 'Alle Hunde' : 'Meine Hunde' ?>

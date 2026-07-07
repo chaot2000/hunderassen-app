@@ -147,8 +147,62 @@ require __DIR__ . '/views/partials/header.php';
             </div>
 
             <!-- Eigenschaften / Tags -->
-            <div>
+            <?php
+                // Flache Tag-Liste (id, name, category, count) als JSON fürs
+                // Alpine-Autocomplete unten — Daten sind ohnehin serverseitig
+                // schon geladen, daher kein zusätzlicher AJAX-Request nötig.
+                $tagsFuerAutocomplete = [];
+                foreach ($tagGroups as $category => $tags) {
+                    foreach ($tags as $tag) {
+                        $id = (int) $tag['id'];
+                        $tagsFuerAutocomplete[] = [
+                            'id'       => $id,
+                            'name'     => $tag['name'],
+                            'category' => $category,
+                            'count'    => $counts['tags'][$id] ?? 0,
+                        ];
+                    }
+                }
+            ?>
+            <div x-data="{
+                    checkedTags: [<?= implode(',', $selectedTags) ?>],
+                    tagQuery: '',
+                    alleTags: <?= e(json_encode($tagsFuerAutocomplete, JSON_UNESCAPED_UNICODE)) ?>,
+                    get vorschlaege() {
+                        const q = this.tagQuery.trim().toLowerCase();
+                        if (q === '') return [];
+                        return this.alleTags
+                            .filter(t => !this.checkedTags.includes(t.id))
+                            .filter(t => this.checkedTags.length > 0 || t.count > 0) // 0-Treffer nur ausblenden, wenn noch kein Filter aktiv
+                            .filter(t => t.name.toLowerCase().includes(q))
+                            .slice(0, 8);
+                    },
+                    tagHinzufuegen(tag) {
+                        this.checkedTags.push(tag.id);
+                        this.tagQuery = '';
+                    }
+                 }">
                 <h3 class="font-bold text-sm mb-2 text-tanneDk">Eigenschaften</h3>
+
+                <div class="relative mb-2">
+                    <input
+                        type="text" x-model="tagQuery"
+                        placeholder="Tag suchen, z. B. „agil“ …"
+                        autocomplete="off"
+                        class="w-full rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne"
+                    >
+                    <div x-show="vorschlaege.length > 0" x-cloak
+                         class="absolute z-10 left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-sand overflow-hidden">
+                        <template x-for="tag in vorschlaege" :key="tag.id">
+                            <button type="button" @click="tagHinzufuegen(tag)"
+                                class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-creme transition-colors">
+                                <span x-text="tag.name"></span>
+                                <span class="text-xs text-fellDk/40" x-text="'(' + tag.category + ')'"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
                 <div class="space-y-3 max-h-48 overflow-y-auto pr-2">
                     <?php foreach ($tagGroups as $category => $tags): ?>
                         <div>
@@ -161,7 +215,7 @@ require __DIR__ . '/views/partials/header.php';
                             ?>
                                 <label class="flex items-center gap-2 text-sm <?= $disabled ? 'opacity-40' : '' ?>">
                                     <input type="checkbox" name="tags[]" value="<?= $id ?>"
-                                        <?= $active ? 'checked' : '' ?>
+                                        x-model.number="checkedTags"
                                         <?= $disabled ? 'disabled' : '' ?>
                                         class="rounded border-sand text-tanne focus:ring-tanne">
                                     <span><?= e($tag['name']) ?></span>

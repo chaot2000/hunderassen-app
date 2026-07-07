@@ -14,6 +14,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/Dog.php';
+require_once __DIR__ . '/models/TestDurchfuehrung.php';
 
 secure_session_start();
 require_login();
@@ -37,6 +38,10 @@ if ($dog === null) {
 // Auf Portal-Ebene ist "sehen" bereits gleichbedeutend mit "eigen oder
 // Admin" (siehe oben) — Bearbeiten/Löschen ist daher hier immer erlaubt.
 $canEdit = true;
+
+$testdurchfuehrungen = TestDurchfuehrung::findAllForDog((int) $dog['id']);
+$durchfuehrungStatusLabels = ['offen' => 'Offen', 'bestanden' => 'Bestanden', 'nicht_bestanden' => 'Nicht bestanden'];
+$durchfuehrungStatusFarben = ['offen' => 'bg-sand/50 text-fellDk/70', 'bestanden' => 'bg-tanne/10 text-tanneDk', 'nicht_bestanden' => 'bg-red-50 text-red-700'];
 
 $pageTitle = $dog['name'];
 require __DIR__ . '/views/partials/header.php';
@@ -162,6 +167,34 @@ require __DIR__ . '/views/partials/header.php';
             <?php endif; ?>
         </div>
     </div>
+</div>
+
+<div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-fellDk">🧪 Testdurchführungen</h2>
+        <a href="/testdurchfuehrung_form.php?dog_id=<?= (int) $dog['id'] ?>" class="text-sm bg-tanne hover:bg-tanneDk text-creme font-bold px-4 py-2 rounded-full transition-colors whitespace-nowrap">
+            + Testdurchführung erfassen
+        </a>
+    </div>
+
+    <?php if (empty($testdurchfuehrungen)): ?>
+        <p class="text-sm text-fellDk/50">Für diesen Hund wurden noch keine Testdurchführungen erfasst.</p>
+    <?php else: ?>
+        <div class="space-y-2">
+            <?php foreach ($testdurchfuehrungen as $durchfuehrung): ?>
+                <a href="/testdurchfuehrung_detail.php?id=<?= (int) $durchfuehrung['id'] ?>"
+                   class="flex flex-wrap items-center justify-between gap-2 border border-sand rounded-lg px-4 py-2.5 hover:bg-creme/60 transition-colors">
+                    <div>
+                        <span class="text-sm font-semibold text-tanne"><?= e($durchfuehrung['test_name']) ?></span>
+                        <span class="text-xs text-fellDk/50 ml-2"><?= e(date('d.m.Y', strtotime($durchfuehrung['durchfuehrungsdatum']))) ?></span>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full <?= $durchfuehrungStatusFarben[$durchfuehrung['status']] ?? 'bg-sand/50 text-fellDk/70' ?>">
+                        <?= e($durchfuehrungStatusLabels[$durchfuehrung['status']] ?? $durchfuehrung['status']) ?>
+                    </span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 </div>
 
 <?php require __DIR__ . '/views/partials/footer.php'; ?>

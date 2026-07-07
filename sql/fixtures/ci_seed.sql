@@ -38,3 +38,38 @@ INSERT INTO `dogs` (`id`, `name`, `breed_id`, `zuechter_id`, `created_by`)
 VALUES (1, 'CI-Testhund', 1, 1, 1);
 
 INSERT INTO `dog_halter` (`dog_id`, `halter_id`) VALUES (1, 1);
+
+-- ---------------------------------------------------------------------
+-- Test-Katalog (Phase 1 des Test-/Testdurchführungs-Frameworks) — ein
+-- Test mit 2 Aufgaben, je 2 Ergebnissen, damit smoke-test.sh
+-- admin_manage_tests.php/test_form.php mit echtem Inhalt prüfen kann.
+-- ---------------------------------------------------------------------
+INSERT INTO `tests` (`id`, `name`, `beschreibung`, `zielgruppe`, `created_by`)
+VALUES (1, 'CI-Testtest', 'Nur für automatisierte Tests angelegt.', 'beide', 1);
+
+INSERT INTO `test_aufgaben` (`id`, `test_id`, `titel`, `beschreibung`)
+VALUES
+    (1, 1, 'CI-Aufgabe 1', 'Reaktion auf fremden Hund'),
+    (2, 1, 'CI-Aufgabe 2', 'Reaktion auf lautes Geräusch');
+
+INSERT INTO `test_ergebnisse` (`id`, `aufgabe_id`, `bezeichnung`, `kategorie`)
+VALUES
+    (1, 1, 'Bleibt entspannt', 'bestanden'),
+    (2, 1, 'Bellt kurz, beruhigt sich', 'neutral'),
+    (3, 1, 'Zeigt aggressives Verhalten', 'nicht_bestanden'),
+    (4, 2, 'Bleibt entspannt', 'bestanden'),
+    (5, 2, 'Schreckt kurz, beruhigt sich', 'neutral');
+
+-- ---------------------------------------------------------------------
+-- Testdurchführung (Phase 2) — eine erfasste Durchführung des
+-- CI-Testtest bei CI-Testhund, damit smoke-test.sh dog_detail.php's
+-- Historie-Sektion sowie testdurchfuehrung_detail.php mit echtem
+-- Inhalt prüfen kann.
+-- ---------------------------------------------------------------------
+INSERT INTO `test_durchfuehrungen` (`id`, `dog_id`, `test_id`, `durchfuehrungsdatum`, `status`, `notizen`, `created_by`)
+VALUES (1, 1, 1, '2026-07-01', 'bestanden', 'CI-Testnotiz zur Gesamtdurchführung.', 1);
+
+INSERT INTO `test_durchfuehrung_ergebnisse` (`durchfuehrung_id`, `aufgabe_id`, `ergebnis_id`, `notizen`)
+VALUES
+    (1, 1, 1, 'CI-Testnotiz zur Aufgabe 1.'),
+    (1, 2, 4, NULL);
