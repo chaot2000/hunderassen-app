@@ -175,7 +175,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                     </div>
                 </div>
 
-                <?php if (is_admin()): ?>
+                <?php if (can_manage_breeds() || can_manage_tests() || is_admin()): ?>
                     <div class="relative" @click.outside="verwaltungOpen = false">
                         <button type="button" @click="verwaltungOpen = !verwaltungOpen"
                             class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors <?= $verwaltungAktiv ? 'bg-creme/15 text-creme' : 'hover:text-pfote' ?>">
@@ -191,17 +191,25 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                         <div x-show="verwaltungOpen" x-transition
                              class="absolute left-0 right-auto sm:left-auto sm:right-0 mt-2 w-64 max-w-[90vw] bg-white text-fellDk rounded-xl shadow-lg border border-sand overflow-hidden max-h-[80vh] overflow-y-auto"
                              style="display: none;">
-                            <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50">Rassen (geteilter Katalog)</p>
-                            <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rasse anlegen</a>
-                            <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Eigenschaften &amp; Aktivitäten</a>
-                            <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">TheDogAPI-Abgleich</a>
+                            <?php if (can_manage_breeds()): ?>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50">Rassen (geteilter Katalog)</p>
+                                <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rasse anlegen</a>
+                                <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Eigenschaften &amp; Aktivitäten</a>
+                                <?php if (is_admin()): ?>
+                                    <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">TheDogAPI-Abgleich</a>
+                                <?php endif; ?>
+                            <?php endif; ?>
 
-                            <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (geteilter Katalog)</p>
-                            <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Tests verwalten</a>
+                            <?php if (can_manage_tests()): ?>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (geteilter Katalog)</p>
+                                <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Tests verwalten</a>
+                            <?php endif; ?>
 
-                            <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
-                            <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
-                            <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer anlegen</a>
+                            <?php if (is_admin()): ?>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
+                                <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
+                                <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer anlegen</a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>

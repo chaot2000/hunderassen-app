@@ -125,6 +125,88 @@ else
     check_status "admin_manage_users.php (admin-only)" "$BASE_URL/admin_manage_users.php" "200"
 
     echo ""
+    echo "--- Granulare Portal-Rechte (can_manage_breeds/can_manage_tests) ---"
+
+    # Legt über admin_add_user.php einen Benutzer OHNE Admin-Rolle, aber
+    # MIT can_manage_breeds an, und prüft mit einem eigenen (zweiten)
+    # Cookie-Jar, dass dieser Benutzer genau die Rassen-Verwaltungsseiten
+    # sehen darf, aber NICHT die Test-Verwaltung oder Benutzerverwaltung
+    # (require_manage_breeds()/require_manage_tests() in config/auth.php
+    # müssen unabhängig voneinander greifen, nicht wie früher pauschal
+    # require_admin()).
+    check_status "admin_add_user.php lädt" "$BASE_URL/admin_add_user.php" "200"
+    ADD_USER_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    PORTAL_USER="ci-portalrechte-$(date +%s)"
+    PORTAL_PASS="Portal-Rechte-Test-123!"
+
+    if [ -z "$ADD_USER_CSRF" ]; then
+        echo "FAIL Kein CSRF-Token auf admin_add_user.php gefunden — Portal-Rechte-Test wird übersprungen."
+        FAILED=1
+    else
+        check_status "Benutzer mit can_manage_breeds anlegen (Erfolgsmeldung erwartet)" "$BASE_URL/admin_add_user.php" "200" \
+            "--data-urlencode csrf_token=$ADD_USER_CSRF \
+             --data-urlencode username=$PORTAL_USER \
+             --data-urlencode password=$PORTAL_PASS \
+             --data-urlencode password_confirm=$PORTAL_PASS \
+             --data-urlencode role=user \
+             --data-urlencode can_manage_breeds=1"
+        check_body_contains "Neuer Portal-Rechte-Benutzer erfolgreich angelegt" "erfolgreich angelegt"
+
+        PORTAL_COOKIE_JAR="$(mktemp)"
+        curl -s -c "$PORTAL_COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_portaluser_login.html
+        PORTAL_LOGIN_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_portaluser_login.html || true)
+        curl -s -b "$PORTAL_COOKIE_JAR" -c "$PORTAL_COOKIE_JAR" \
+            --data-urlencode "csrf_token=$PORTAL_LOGIN_CSRF" \
+            --data-urlencode "username=$PORTAL_USER" \
+            --data-urlencode "password=$PORTAL_PASS" \
+            "$BASE_URL/login.php" -o /dev/null
+
+        RASSEN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b "$PORTAL_COOKIE_JAR" -c "$PORTAL_COOKIE_JAR" "$BASE_URL/admin_add_breed.php")
+        TESTS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b "$PORTAL_COOKIE_JAR" -c "$PORTAL_COOKIE_JAR" "$BASE_URL/test_form.php")
+        USERS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b "$PORTAL_COOKIE_JAR" -c "$PORTAL_COOKIE_JAR" "$BASE_URL/admin_manage_users.php")
+
+        if [ "$RASSEN_STATUS" = "200" ]; then
+            echo "OK   [200] Portal-Rechte-Benutzer darf admin_add_breed.php (can_manage_breeds=1)"
+        else
+            echo "FAIL [$RASSEN_STATUS, erwartet 200] Portal-Rechte-Benutzer darf admin_add_breed.php"
+            FAILED=1
+        fi
+        if [ "$TESTS_STATUS" = "403" ]; then
+            echo "OK   [403] Portal-Rechte-Benutzer OHNE can_manage_tests wird von test_form.php abgewiesen"
+        else
+            echo "FAIL [$TESTS_STATUS, erwartet 403] Portal-Rechte-Benutzer sollte test_form.php NICHT sehen dürfen"
+            FAILED=1
+        fi
+        if [ "$USERS_STATUS" = "403" ]; then
+            echo "OK   [403] Portal-Rechte-Benutzer (kein Admin) wird von admin_manage_users.php abgewiesen"
+        else
+            echo "FAIL [$USERS_STATUS, erwartet 403] Portal-Rechte-Benutzer sollte admin_manage_users.php NICHT sehen dürfen"
+            FAILED=1
+        fi
+
+        rm -f "$PORTAL_COOKIE_JAR" /tmp/smoke_portaluser_login.html
+
+        # Aufräumen: den temporären Testbenutzer wieder löschen, damit der
+        # Lauf wiederholbar bleibt. Dafür zurück auf admin_manage_users.php
+        # (mit dem Haupt-COOKIE_JAR, also weiterhin als Admin eingeloggt).
+        check_status "admin_manage_users.php lädt (für Aufräumen)" "$BASE_URL/admin_manage_users.php" "200"
+        DELETE_USER_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+
+        # Die Benutzer-ID über den bekannten Benutzernamen ermitteln: das
+        # umgebende <input type="hidden" name="user_id" value="..."> steht
+        # im selben Karten-Block wie der Benutzername im HTML.
+        PORTAL_USER_ID=$(grep -ozP "(?s)$PORTAL_USER.*?name=\"user_id\" value=\"\K[0-9]+" /tmp/smoke_last_response.html | tr -d '\0' || true)
+
+        if [ -n "$PORTAL_USER_ID" ] && [ -n "$DELETE_USER_CSRF" ]; then
+            check_status "Temporären Portal-Rechte-Benutzer wieder löschen" "$BASE_URL/admin_manage_users.php" "302" \
+                "-X POST --data-urlencode csrf_token=$DELETE_USER_CSRF --data-urlencode action=delete_user --data-urlencode user_id=$PORTAL_USER_ID"
+        else
+            echo "FAIL Konnte user_id für $PORTAL_USER nicht ermitteln — manuelles Aufräumen in der DB nötig."
+            FAILED=1
+        fi
+    fi
+
+    echo ""
     echo "--- Test-Katalog (Tests-Modul, Phase 1) ---"
     check_status "admin_manage_tests.php (admin-only)" "$BASE_URL/admin_manage_tests.php" "200"
     check_body_contains "CI-Testtest wird in der Liste angezeigt" "CI-Testtest"

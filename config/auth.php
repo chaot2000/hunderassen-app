@@ -34,6 +34,32 @@ function is_admin(): bool
 }
 
 /**
+ * Portal-Recht "Rassen verwalten". Admins haben es implizit immer,
+ * unabhängig vom can_manage_breeds-Flag in der Session.
+ */
+function can_manage_breeds(): bool
+{
+    if (is_admin()) {
+        return true;
+    }
+    $user = current_user();
+    return $user !== null && !empty($user['can_manage_breeds']);
+}
+
+/**
+ * Portal-Recht "Tests verwalten". Admins haben es implizit immer,
+ * unabhängig vom can_manage_tests-Flag in der Session.
+ */
+function can_manage_tests(): bool
+{
+    if (is_admin()) {
+        return true;
+    }
+    $user = current_user();
+    return $user !== null && !empty($user['can_manage_tests']);
+}
+
+/**
  * Erzwingt einen eingeloggten Benutzer. Nicht eingeloggte Besucher
  * werden zur Login-Seite umgeleitet. In jeder geschützten View ganz
  * oben aufzurufen, NACH secure_session_start().
@@ -58,6 +84,34 @@ function require_admin(): void
     if (!is_admin()) {
         http_response_code(403);
         die('Zugriff verweigert: Diese Aktion ist nur für Administratoren verfügbar.');
+    }
+}
+
+/**
+ * Erzwingt das Portal-Recht "Rassen verwalten" (Admins immer erlaubt,
+ * sonst nur Benutzer mit gesetztem can_manage_breeds-Flag).
+ */
+function require_manage_breeds(): void
+{
+    require_login();
+
+    if (!can_manage_breeds()) {
+        http_response_code(403);
+        die('Zugriff verweigert: Diese Aktion erfordert die Berechtigung "Rassen verwalten".');
+    }
+}
+
+/**
+ * Erzwingt das Portal-Recht "Tests verwalten" (Admins immer erlaubt,
+ * sonst nur Benutzer mit gesetztem can_manage_tests-Flag).
+ */
+function require_manage_tests(): void
+{
+    require_login();
+
+    if (!can_manage_tests()) {
+        http_response_code(403);
+        die('Zugriff verweigert: Diese Aktion erfordert die Berechtigung "Tests verwalten".');
     }
 }
 

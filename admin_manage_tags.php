@@ -11,7 +11,7 @@ require_once __DIR__ . '/models/Tag.php';
 require_once __DIR__ . '/models/Activity.php';
 
 secure_session_start();
-require_admin();
+require_manage_breeds();
 
 $errorMessage   = null;
 $successMessage = null;

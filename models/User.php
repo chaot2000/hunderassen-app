@@ -28,7 +28,7 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, username, password_hash, role, is_active FROM users WHERE username = :username LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
         $stmt->execute([':username' => $username]);
         $user = $stmt->fetch();
 
@@ -59,7 +59,7 @@ class User
      * Legt einen neuen Benutzer an (nur durch Admin).
      * @return array{success: bool, message: string}
      */
-    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId): array
+    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
         $username = clean_input($username);
 
@@ -85,18 +85,30 @@ class User
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $insertStmt = $pdo->prepare(
-            'INSERT INTO users (username, password_hash, role, is_active, created_at, created_by) VALUES (:username, :hash, :role, 1, NOW(), :created_by)'
+            'INSERT INTO users (username, password_hash, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by)
+             VALUES (:username, :hash, :role, :can_manage_breeds, :can_manage_tests, 1, NOW(), :created_by)'
         );
-        $insertStmt->execute([':username' => $username, ':hash' => $hash, ':role' => $role, ':created_by' => $createdByUserId]);
+        $insertStmt->execute([
+            ':username'          => $username,
+            ':hash'              => $hash,
+            ':role'              => $role,
+            ':can_manage_breeds' => $canManageBreeds ? 1 : 0,
+            ':can_manage_tests'  => $canManageTests ? 1 : 0,
+            ':created_by'        => $createdByUserId,
+        ]);
 
         return ['success' => true, 'message' => 'Benutzer "' . $username . '" wurde erfolgreich angelegt.'];
     }
 
     /**
-     * Aktualisiert Benutzername und Rolle. Admin kann sich nicht selbst downgraden.
+     * Aktualisiert Benutzername, Rolle und die granularen Portal-Rechte.
+     * Admin kann sich nicht selbst downgraden. Die Portal-Rechte werden
+     * unabhängig von der Rolle gespeichert, sind aber nur bei role='user'
+     * wirksam — ein Admin hat can_manage_breeds/can_manage_tests ohnehin
+     * implizit immer (siehe config/auth.php).
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, string $username, string $role, int $currentAdminId): array
+    public static function update(int $id, string $username, string $role, int $currentAdminId, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
         $username = clean_input($username);
 
@@ -120,8 +132,16 @@ class User
             return ['success' => false, 'message' => 'Dieser Benutzername ist bereits vergeben.'];
         }
 
-        $stmt = $pdo->prepare('UPDATE users SET username = :username, role = :role WHERE id = :id');
-        $stmt->execute([':username' => $username, ':role' => $role, ':id' => $id]);
+        $stmt = $pdo->prepare(
+            'UPDATE users SET username = :username, role = :role, can_manage_breeds = :can_manage_breeds, can_manage_tests = :can_manage_tests WHERE id = :id'
+        );
+        $stmt->execute([
+            ':username'          => $username,
+            ':role'              => $role,
+            ':can_manage_breeds' => $canManageBreeds ? 1 : 0,
+            ':can_manage_tests'  => $canManageTests ? 1 : 0,
+            ':id'                => $id,
+        ]);
 
         return ['success' => true, 'message' => 'Benutzer "' . $username . '" wurde aktualisiert.'];
     }
@@ -209,7 +229,7 @@ class User
     public static function findAll(): array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->query('SELECT id, username, role, is_active, created_at, created_by FROM users ORDER BY created_at DESC');
+        $stmt = $pdo->query('SELECT id, username, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by FROM users ORDER BY created_at DESC');
         return $stmt->fetchAll();
     }
 
@@ -223,7 +243,7 @@ class User
     public static function findById(int $id): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, username, role, is_active, created_at FROM users WHERE id = :id LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, username, role, can_manage_breeds, can_manage_tests, is_active, created_at FROM users WHERE id = :id LIMIT 1');
         $stmt->execute([':id' => $id]);
         $user = $stmt->fetch();
         return $user ?: null;

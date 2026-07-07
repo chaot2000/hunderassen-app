@@ -18,7 +18,7 @@ require_once __DIR__ . '/models/Activity.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
 
 secure_session_start();
-require_admin();
+require_manage_breeds();
 
 $editingId   = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $existing    = $editingId ? Breed::findById($editingId) : null;

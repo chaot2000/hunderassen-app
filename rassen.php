@@ -21,7 +21,7 @@ secure_session_start();
 require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_breed_id'])) {
-    require_admin();
+    require_manage_breeds();
     csrf_require_valid();
     Breed::delete((int) $_POST['delete_breed_id']);
     header('Location: /rassen.php');
@@ -77,7 +77,7 @@ require __DIR__ . '/views/partials/header.php';
 
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-extrabold text-fellDk">🐕 Rassen durchsuchen</h1>
-        <?php if (is_admin()): ?>
+        <?php if (can_manage_breeds()): ?>
             <a href="/admin_add_breed.php" class="bg-pfote hover:bg-fell text-white text-sm font-bold px-4 py-2 rounded-full transition-colors">
                 + Neue Rasse anlegen
             </a>
@@ -279,7 +279,7 @@ require __DIR__ . '/views/partials/header.php';
                             class="flex-1 text-center text-sm bg-tanne/10 text-tanneDk font-semibold py-2 rounded-full hover:bg-tanne/20 transition-colors">
                             Details
                         </a>
-                        <?php if (is_admin()): ?>
+                        <?php if (can_manage_breeds()): ?>
                             <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>"
                                 class="flex-1 text-center text-sm bg-pfote/10 text-fell font-semibold py-2 rounded-full hover:bg-pfote/20 transition-colors">
                                 Bearbeiten

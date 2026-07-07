@@ -29,7 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (int) ($_POST['user_id'] ?? 0),
                 $_POST['username'] ?? '',
                 $_POST['role'] ?? '',
-                $currentAdminId
+                $currentAdminId,
+                isset($_POST['can_manage_breeds']),
+                isset($_POST['can_manage_tests'])
             );
             $result['success'] ? $successMessage = $result['message'] : $errorMessage = $result['message'];
             break;
@@ -119,6 +121,12 @@ require __DIR__ . '/views/partials/header.php';
                         <?php if (!$isActive): ?>
                             <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">Deaktiviert</span>
                         <?php endif; ?>
+                        <?php if ($user['role'] !== 'admin' && !empty($user['can_manage_breeds'])): ?>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-tanne/10 text-tanneDk font-semibold">Rassen verwalten</span>
+                        <?php endif; ?>
+                        <?php if ($user['role'] !== 'admin' && !empty($user['can_manage_tests'])): ?>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-tanne/10 text-tanneDk font-semibold">Tests verwalten</span>
+                        <?php endif; ?>
                         <?php if ($isSelf): ?>
                             <span class="text-xs text-fellDk/40">(du)</span>
                         <?php endif; ?>
@@ -193,6 +201,18 @@ require __DIR__ . '/views/partials/header.php';
                             </select>
                         <?php endif; ?>
                     </div>
+                </div>
+
+                <div x-show="role === 'user'" x-cloak class="space-y-2 border border-sand rounded-lg p-3 bg-creme/40">
+                    <p class="text-xs font-semibold text-fellDk/70">Zusätzliche Portal-Rechte (geteilte Kataloge)</p>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="can_manage_breeds" <?= !empty($user['can_manage_breeds']) ? 'checked' : '' ?> class="rounded border-sand">
+                        Rassen verwalten
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="can_manage_tests" <?= !empty($user['can_manage_tests']) ? 'checked' : '' ?> class="rounded border-sand">
+                        Tests verwalten
+                    </label>
                 </div>
 
                 <div class="flex gap-2">
