@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -l /c/laragon/www/hunderassen-app/models/Test.php)",
+      "Bash(php -l /c/laragon/www/hunderassen-app/admin_manage_tests.php)"
+    ]
+  }
+}

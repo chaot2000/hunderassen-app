@@ -4,6 +4,7 @@
  *
  * Zentrale Sicherheitsfunktionen der Anwendung:
  *  - Sichere Session-Konfiguration & Start
+ *  - Inaktivitäts-Timeout (automatischer Logout nach 30 Minuten)
  *  - CSRF-Token-Erzeugung und -Prüfung
  *  - XSS-Escaping-Helfer (Context-Aware HTML-Encoding)
  *  - Brute-Force-Schutz (5 Fehlversuche -> 15 Minuten Sperre)
@@ -21,6 +22,10 @@ require_once __DIR__ . '/database.php';
 // =====================================================================
 // 1. Sicheres Session-Management
 // =====================================================================
+
+// Nach so vielen Sekunden ohne Request wird ein eingeloggter Benutzer
+// automatisch abgemeldet (siehe secure_session_start()).
+const SESSION_IDLE_TIMEOUT_SECONDS = 1800; // 30 Minuten
 
 /**
  * Startet die Session mit gehärteten Cookie-Einstellungen.
@@ -50,6 +55,22 @@ function secure_session_start(): void
 
     session_name('HRA_SESSID'); // generischer Name statt Standard PHPSESSID
     session_start();
+
+    // Inaktivitäts-Timeout: War der Benutzer eingeloggt, aber der letzte
+    // Request liegt länger als SESSION_IDLE_TIMEOUT_SECONDS zurück, wird
+    // die Session verworfen. is_logged_in() liefert danach false, sodass
+    // require_login() ganz regulär zur Login-Seite umleitet.
+    if (
+        isset($_SESSION['user'], $_SESSION['_last_activity'])
+        && (time() - $_SESSION['_last_activity']) > SESSION_IDLE_TIMEOUT_SECONDS
+    ) {
+        destroy_session();
+        session_start();
+        session_regenerate_id(true);
+        $_SESSION['_last_regeneration'] = time();
+    }
+
+    $_SESSION['_last_activity'] = time();
 
     // Session-Fixation-Schutz: regelmäßige Regeneration der Session-ID
     if (!isset($_SESSION['_last_regeneration'])) {

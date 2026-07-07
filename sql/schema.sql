@@ -189,6 +189,120 @@ CREATE TABLE `breed_activities` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
+-- Tabelle: tests
+-- Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test") —
+-- geteilte Katalogdaten wie breeds/tags/activities, admin-gepflegt.
+-- `created_by` dient nur der Nachvollziehbarkeit, nicht der Sichtbar-
+-- keitseinschränkung. Siehe sql/migrationen/migration_2026_07_07_tests_phase1.sql
+-- für den Hintergrund dieser Phase-1-Tabellen (Test-Katalog als
+-- eigenständiges Modul, noch ohne Anbindung an Hunde/Testdurchführungen).
+-- `zielgruppe` (siehe migration_2026_07_09_tests_zielgruppe.sql) steuert
+-- den Filter bei der Testauswahl in testdurchfuehrung_form.php.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `tests`;
+CREATE TABLE `tests` (
+    `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name`         VARCHAR(150) NOT NULL,
+    `beschreibung` TEXT NULL,
+    `zielgruppe`   ENUM('welpe', 'erwachsen', 'beide') NOT NULL DEFAULT 'beide',
+    `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `created_by`   INT UNSIGNED NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_test_name` (`name`),
+    KEY `idx_test_created_by` (`created_by`),
+    CONSTRAINT `fk_tests_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: test_aufgaben
+-- Aufgaben einer Test-Vorlage. ON DELETE CASCADE, da eine Aufgabe nicht
+-- unabhängig von ihrem Test existiert (analog breed_sizes -> breeds).
+-- Reihenfolge = Einfügereihenfolge (ORDER BY id), kein sort_order-Feld.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `test_aufgaben`;
+CREATE TABLE `test_aufgaben` (
+    `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `test_id`      INT UNSIGNED NOT NULL,
+    `titel`        VARCHAR(200) NOT NULL,
+    `beschreibung` TEXT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_aufgabe_test` (`test_id`),
+    CONSTRAINT `fk_testaufgaben_test` FOREIGN KEY (`test_id`) REFERENCES `tests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: test_ergebnisse
+-- Mögliche Ergebnis-Optionen je Aufgabe (Definitionsdaten, nicht das
+-- tatsächlich erfasste Ergebnis einer Durchführung — das kommt erst in
+-- Phase 2 über test_durchfuehrung_ergebnisse). Jede Option gehört zu
+-- genau einer von drei Kategorien.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `test_ergebnisse`;
+CREATE TABLE `test_ergebnisse` (
+    `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `aufgabe_id`  INT UNSIGNED NOT NULL,
+    `bezeichnung` VARCHAR(200) NOT NULL,
+    `kategorie`   ENUM('bestanden', 'neutral', 'nicht_bestanden') NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_ergebnis_aufgabe` (`aufgabe_id`),
+    CONSTRAINT `fk_testergebnisse_aufgabe` FOREIGN KEY (`aufgabe_id`) REFERENCES `test_aufgaben` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: test_durchfuehrungen
+-- Phase 2 des Test-Frameworks: die eigentliche Durchführung eines
+-- Tests bei einem Hund (historischer Beurteilungsdatensatz). Siehe
+-- sql/migrationen/migration_2026_07_08_tests_phase2.sql für die
+-- ausführliche Begründung der RESTRICT-Kaskade auf test_id (bewusste
+-- Abweichung vom sonst üblichen ON DELETE SET NULL bei Verweisen auf
+-- geteilte Katalogdaten) und der manuellen (nicht automatisch
+-- berechneten) status-Spalte.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `test_durchfuehrungen`;
+CREATE TABLE `test_durchfuehrungen` (
+    `id`                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `dog_id`              INT UNSIGNED NOT NULL,
+    `test_id`             INT UNSIGNED NOT NULL,
+    `durchfuehrungsdatum` DATE NOT NULL,
+    `status`              ENUM('offen', 'bestanden', 'nicht_bestanden') NOT NULL DEFAULT 'offen',
+    `notizen`             TEXT NULL,
+    `created_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `created_by`          INT UNSIGNED NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_durchfuehrung_dog` (`dog_id`),
+    KEY `idx_durchfuehrung_test` (`test_id`),
+    KEY `idx_durchfuehrung_created_by` (`created_by`),
+    CONSTRAINT `fk_durchfuehrung_dog`        FOREIGN KEY (`dog_id`)     REFERENCES `dogs` (`id`)  ON DELETE CASCADE,
+    CONSTRAINT `fk_durchfuehrung_test`       FOREIGN KEY (`test_id`)    REFERENCES `tests` (`id`) ON DELETE RESTRICT,
+    CONSTRAINT `fk_durchfuehrung_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: test_durchfuehrung_ergebnisse
+-- Das tatsächlich erfasste Ergebnis je Aufgabe innerhalb einer
+-- Durchführung (Payload-Zeile mit eigener id, kein reiner Pivot).
+-- UNIQUE (durchfuehrung_id, aufgabe_id) erzwingt "genau ein Ergebnis
+-- pro Aufgabe pro Durchführung" bereits auf DB-Ebene.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `test_durchfuehrung_ergebnisse`;
+CREATE TABLE `test_durchfuehrung_ergebnisse` (
+    `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `durchfuehrung_id` INT UNSIGNED NOT NULL,
+    `aufgabe_id`       INT UNSIGNED NOT NULL,
+    `ergebnis_id`      INT UNSIGNED NOT NULL,
+    `notizen`          TEXT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_durchfuehrung_aufgabe` (`durchfuehrung_id`, `aufgabe_id`),
+    KEY `idx_tde_aufgabe` (`aufgabe_id`),
+    KEY `idx_tde_ergebnis` (`ergebnis_id`),
+    CONSTRAINT `fk_tde_durchfuehrung` FOREIGN KEY (`durchfuehrung_id`) REFERENCES `test_durchfuehrungen` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_tde_aufgabe`       FOREIGN KEY (`aufgabe_id`)       REFERENCES `test_aufgaben` (`id`)       ON DELETE RESTRICT,
+    CONSTRAINT `fk_tde_ergebnis`      FOREIGN KEY (`ergebnis_id`)      REFERENCES `test_ergebnisse` (`id`)     ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
 -- Tabelle: dogs
 -- Verwaltung einzelner Hunde. `breed_id` und `halter_user_id` sind
 -- bewusst NULLable (Mischling bzw. noch kein Halter hinterlegt),

@@ -61,6 +61,8 @@ $verwaltungsPfade = [
     '/admin_add_user.php',
     '/admin_thedogapi_review.php',
     '/admin_thedogapi_apply.php',
+    '/admin_manage_tests.php',
+    '/test_form.php',
 ];
 $verwaltungAktiv = nav_is_active($currentPath, $verwaltungsPfade);
 
@@ -193,6 +195,9 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                             <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rasse anlegen</a>
                             <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Eigenschaften &amp; Aktivitäten</a>
                             <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">TheDogAPI-Abgleich</a>
+
+                            <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (geteilter Katalog)</p>
+                            <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Tests verwalten</a>
 
                             <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
                             <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
