@@ -754,9 +754,33 @@ else
         login_as "$B_TENANT" "$B_USER" "$B_PASS"
         check_status "B: Versionen des Tests aus Mandant 1 nicht abrufbar (404)" "$BASE_URL/content_versionen.php?typ=test&id=1" "404"
         check_status "B: Versionen des eigenen Tests laden" "$BASE_URL/content_versionen.php?typ=test&id=2" "200"
+        check_status "B: Rassentexte gliedern nur für Super-Admins (403)" "$BASE_URL/admin_rassentexte.php" "403"
         rm -f "$B_VER_JAR"
         COOKIE_JAR="$A_VER_JAR"
     fi
+
+    echo ""
+    echo "--- Rassen-Detailseite und Gliederung der Rassentexte ---"
+    check_status "Rassen-Detailseite lädt" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "FCI-Gruppe als Balken" "Hüte- und Treibhunde"
+    check_body_contains "Aktion: Hund dieser Rasse anlegen" "/dog_form.php?rasse=1"
+    check_body_not_contains "Kein VDH-Restsatz" "Hier werden Würfe"
+    check_status "Hundeformular mit vorgewählter Rasse" "$BASE_URL/dog_form.php?rasse=1" "200"
+    check_body_contains "Rasse 1 ist vorgewählt" 'breedId: "1"'
+    check_status "Rassentexte gliedern lädt (Super-Admin)" "$BASE_URL/admin_rassentexte.php" "200"
+    check_body_contains "Fixture-Rasse ist umstellbar" "umstellbar (1)"
+    GLIED_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Rassentexte umstellen (Redirect)" "$BASE_URL/admin_rassentexte.php" "302" \
+        "-X POST --data-urlencode csrf_token=$GLIED_CSRF --data-urlencode aktion=umstellen"
+    check_status "Ergebnis der Umstellung" "$BASE_URL/admin_rassentexte.php" "200"
+    check_body_contains "Eine Rasse umgestellt" "Umgestellt: 1 Rassen."
+    check_status "Detailseite nach der Umstellung" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Hinweis auf automatische Gliederung" "automatisch zugeordnet"
+    GLIED_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Umstellung zurücknehmen (Redirect)" "$BASE_URL/admin_rassentexte.php" "302" \
+        "-X POST --data-urlencode csrf_token=$GLIED_CSRF --data-urlencode aktion=rueckgaengig"
+    check_status "Ergebnis der Rücknahme" "$BASE_URL/admin_rassentexte.php" "200"
+    check_body_contains "Eine Rasse zurückgesetzt" "Zurückgesetzt: 1 Rassen."
 
     echo ""
     echo "--- Eigenes Passwort ändern (account.php) ---"
