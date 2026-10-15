@@ -26,7 +26,7 @@ $errorMessage = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_test_id'])) {
     csrf_require_valid();
-    $result = Test::delete((int) $_POST['delete_test_id']);
+    $result = Test::delete((int) $_POST['delete_test_id'], $tenantId);
     if ($result['success']) {
         header('Location: /admin_manage_tests.php');
         exit;
@@ -34,9 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_test_id'])) {
     $errorMessage = $result['message'];
 }
 
-$tests               = Test::findAll(null, $tenantId);
-$aufgabenCounts      = Test::getAufgabenCounts();
-$durchfuehrungCounts = Test::getDurchfuehrungCounts();
+$tests               = Test::findAll($tenantId);
+$aufgabenCounts      = Test::getAufgabenCounts($tenantId);
+$durchfuehrungCounts = Test::getDurchfuehrungCounts($tenantId);
 $zielgruppenLabels   = ['welpe' => 'Welpe', 'erwachsen' => 'Erwachsen', 'beide' => 'Beide'];
 
 $pageTitle = 'Tests verwalten';

@@ -202,7 +202,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                             <?php endif; ?>
 
                             <?php if (can_manage_tests()): ?>
-                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (geteilter Katalog)</p>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (Katalog des Mandanten)</p>
                                 <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Tests verwalten</a>
                             <?php endif; ?>
 

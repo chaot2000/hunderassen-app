@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isEditMode) {
-        $result = Test::update($editingId, $testData, $aufgaben);
+        $result = Test::update($editingId, $tenantId, $testData, $aufgaben);
     } else {
         $result = Test::create($testData, $aufgaben, (int) current_user()['id'], $tenantId);
     }
