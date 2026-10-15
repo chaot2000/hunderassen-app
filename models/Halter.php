@@ -21,20 +21,21 @@ class Halter
     /**
      * @return array<int, array<string, mixed>>
      */
-    public static function findAllForUser(int $userId, bool $isAdmin): array
+    public static function findAllForUser(int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
         if ($isAdmin) {
-            $stmt = $pdo->query('SELECT id, name, telefon, email, adresse, notizen, created_by,
+            $stmt = $pdo->prepare('SELECT id, name, telefon, email, adresse, notizen, created_by,
                        bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
-                FROM halter ORDER BY name');
+                FROM halter WHERE tenant_id = :tenant_id ORDER BY name');
+            $stmt->execute([':tenant_id' => $tenantId]);
             $halters = $stmt->fetchAll();
         } else {
             $stmt = $pdo->prepare('SELECT id, name, telefon, email, adresse, notizen, created_by,
                     bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
-             FROM halter WHERE created_by = :uid ORDER BY name');
-            $stmt->execute([':uid' => $userId]);
+             FROM halter WHERE tenant_id = :tenant_id AND created_by = :uid ORDER BY name');
+            $stmt->execute([':tenant_id' => $tenantId, ':uid' => $userId]);
             $halters = $stmt->fetchAll();
         }
 
@@ -47,15 +48,15 @@ class Halter
 
     /**
      * Liefert einen Halter nur zurück, wenn er dem Nutzer gehört ODER
-     * der Nutzer Admin ist — sonst null (führt in den Seiten zu 403).
+     * der Nutzer Admin ist und im gleichen Tenant — sonst null.
      */
-    public static function findByIdForUser(int $id, int $userId, bool $isAdmin): ?array
+    public static function findByIdForUser(int $id, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare('SELECT id, name, telefon, email, adresse, notizen, created_at, created_by,
                        bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
-                FROM halter WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $id]);
+                FROM halter WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
         $halter = $stmt->fetch();
 
         if ($halter === false) {
@@ -72,16 +73,16 @@ class Halter
 
     /**
      * Liefert NUR die rohen Bilddaten (Blob + Mime-Type) eines Halters,
-     * gescoped auf den Nutzer (Ersteller oder Admin) — sonst null.
+     * gescoped auf den Nutzer und Tenant (Ersteller oder Admin) — sonst null.
      * Analog zu Dog::findImageByIdForUser().
      *
      * @return array{blob: string, mime: string}|null
      */
-    public static function findImageByIdForUser(int $halterId, int $userId, bool $isAdmin): ?array
+    public static function findImageByIdForUser(int $halterId, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM halter WHERE id = :id AND bild_blob IS NOT NULL LIMIT 1');
-        $stmt->execute([':id' => $halterId]);
+        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM halter WHERE id = :id AND tenant_id = :tenant_id AND bild_blob IS NOT NULL LIMIT 1');
+        $stmt->execute([':id' => $halterId, ':tenant_id' => $tenantId]);
         $row = $stmt->fetch();
 
         if (!$row) {
@@ -112,16 +113,17 @@ class Halter
      * Anzahl der Hunde pro Halter — für die Übersichtsliste.
      * @return array<int, int>
      */
-    public static function getDogCounts(int $userId, bool $isAdmin): array
+    public static function getDogCounts(int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
         $sql = 'SELECT h.id, COUNT(dh.dog_id) AS hunde_count
                 FROM halter h
-                LEFT JOIN dog_halter dh ON dh.halter_id = h.id';
-        $params = [];
+                LEFT JOIN dog_halter dh ON dh.halter_id = h.id
+                WHERE h.tenant_id = :tenant_id';
+        $params = [':tenant_id' => $tenantId];
         if (!$isAdmin) {
-            $sql .= ' WHERE h.created_by = :uid';
+            $sql .= ' AND h.created_by = :uid';
             $params[':uid'] = $userId;
         }
         $sql .= ' GROUP BY h.id';
@@ -142,7 +144,7 @@ class Halter
      *        bereits verkleinerte Bilddaten, siehe BildVerarbeitung::verarbeiteUpload()
      * @return array{success: bool, message: string, halter_id?: int}
      */
-    public static function create(array $data, int $createdBy, ?array $image = null): array
+    public static function create(array $data, int $createdBy, int $tenantId, ?array $image = null): array
     {
         $validated = self::validate($data);
         if (!$validated['success']) {
@@ -151,10 +153,11 @@ class Halter
 
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'INSERT INTO halter (name, telefon, email, adresse, notizen, bild_blob, bild_mime, bild_updated_at, created_by)
-             VALUES (:name, :telefon, :email, :adresse, :notizen, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
+            'INSERT INTO halter (tenant_id, name, telefon, email, adresse, notizen, bild_blob, bild_mime, bild_updated_at, created_by)
+             VALUES (:tenant_id, :name, :telefon, :email, :adresse, :notizen, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
         );
         $stmt->execute([
+            ':tenant_id'      => $tenantId,
             ':name'            => $validated['name'],
             ':telefon'         => $validated['telefon'],
             ':email'           => $validated['email'],

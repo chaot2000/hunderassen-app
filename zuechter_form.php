@@ -21,9 +21,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $editingId  = isset($_GET['id']) ? (int) $_GET['id'] : null;
-$existing   = $editingId ? Zuechter::findByIdForUser($editingId, $currentUserId, $isAdmin) : null;
+$existing   = $editingId ? Zuechter::findByIdForUser($editingId, $currentUserId, $isAdmin, $tenantId) : null;
 $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
@@ -57,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($isEditMode) {
             $result = Zuechter::update($editingId, $zuechterData, $image, $removeImage);
         } else {
-            $result = Zuechter::create($zuechterData, $currentUserId, $image);
+            $result = Zuechter::create($zuechterData, $currentUserId, $tenantId, $image);
         }
 
         if ($result['success']) {

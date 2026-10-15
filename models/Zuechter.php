@@ -23,16 +23,17 @@ class Zuechter
     /**
      * @return array<int, array<string, mixed>>
      */
-    public static function findAllForUser(int $userId, bool $isAdmin): array
+    public static function findAllForUser(int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
         if ($isAdmin) {
-            $stmt = $pdo->query('SELECT ' . self::SELECT_FIELDS . ' FROM zuechter ORDER BY zuchtname');
+            $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ' FROM zuechter WHERE tenant_id = :tenant_id ORDER BY zuchtname');
+            $stmt->execute([':tenant_id' => $tenantId]);
             $zuechterListe = $stmt->fetchAll();
         } else {
-            $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ' FROM zuechter WHERE created_by = :uid ORDER BY zuchtname');
-            $stmt->execute([':uid' => $userId]);
+            $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ' FROM zuechter WHERE tenant_id = :tenant_id AND created_by = :uid ORDER BY zuchtname');
+            $stmt->execute([':tenant_id' => $tenantId, ':uid' => $userId]);
             $zuechterListe = $stmt->fetchAll();
         }
 
@@ -45,13 +46,13 @@ class Zuechter
 
     /**
      * Liefert einen Züchter nur zurück, wenn er dem Nutzer gehört ODER
-     * der Nutzer Admin ist — sonst null (führt in den Seiten zu 404).
+     * der Nutzer Admin ist und im gleichen Tenant — sonst null.
      */
-    public static function findByIdForUser(int $id, int $userId, bool $isAdmin): ?array
+    public static function findByIdForUser(int $id, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ', created_at FROM zuechter WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $id]);
+        $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ', created_at FROM zuechter WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
         $zuechter = $stmt->fetch();
 
         if ($zuechter === false) {
@@ -68,16 +69,16 @@ class Zuechter
 
     /**
      * Liefert NUR die rohen Bilddaten (Blob + Mime-Type) eines
-     * Züchters, gescoped auf den Nutzer (Ersteller oder Admin) — sonst
-     * null. Analog zu Dog::findImageByIdForUser().
+     * Züchters, gescoped auf den Nutzer und Tenant (Ersteller oder Admin) — sonst null.
+     * Analog zu Dog::findImageByIdForUser().
      *
      * @return array{blob: string, mime: string}|null
      */
-    public static function findImageByIdForUser(int $zuechterId, int $userId, bool $isAdmin): ?array
+    public static function findImageByIdForUser(int $zuechterId, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM zuechter WHERE id = :id AND bild_blob IS NOT NULL LIMIT 1');
-        $stmt->execute([':id' => $zuechterId]);
+        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM zuechter WHERE id = :id AND tenant_id = :tenant_id AND bild_blob IS NOT NULL LIMIT 1');
+        $stmt->execute([':id' => $zuechterId, ':tenant_id' => $tenantId]);
         $row = $stmt->fetch();
 
         if (!$row) {
@@ -107,16 +108,17 @@ class Zuechter
      * Anzahl der Hunde pro Züchter — für die Übersichtsliste.
      * @return array<int, int>
      */
-    public static function getDogCounts(int $userId, bool $isAdmin): array
+    public static function getDogCounts(int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
         $sql = 'SELECT z.id, COUNT(d.id) AS hunde_count
                 FROM zuechter z
-                LEFT JOIN dogs d ON d.zuechter_id = z.id';
-        $params = [];
+                LEFT JOIN dogs d ON d.zuechter_id = z.id
+                WHERE z.tenant_id = :tenant_id';
+        $params = [':tenant_id' => $tenantId];
         if (!$isAdmin) {
-            $sql .= ' WHERE z.created_by = :uid';
+            $sql .= ' AND z.created_by = :uid';
             $params[':uid'] = $userId;
         }
         $sql .= ' GROUP BY z.id';
@@ -136,7 +138,7 @@ class Zuechter
      *        bereits verkleinerte Bilddaten, siehe BildVerarbeitung::verarbeiteUpload()
      * @return array{success: bool, message: string, zuechter_id?: int}
      */
-    public static function create(array $data, int $createdBy, ?array $image = null): array
+    public static function create(array $data, int $createdBy, int $tenantId, ?array $image = null): array
     {
         $validated = self::validate($data);
         if (!$validated['success']) {
@@ -145,10 +147,11 @@ class Zuechter
 
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'INSERT INTO zuechter (zuchtname, ansprechpartner_vorname, ansprechpartner_nachname, adresse, telefon, email, webseite, notizen, bild_blob, bild_mime, bild_updated_at, created_by)
-             VALUES (:zuchtname, :vorname, :nachname, :adresse, :telefon, :email, :webseite, :notizen, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
+            'INSERT INTO zuechter (tenant_id, zuchtname, ansprechpartner_vorname, ansprechpartner_nachname, adresse, telefon, email, webseite, notizen, bild_blob, bild_mime, bild_updated_at, created_by)
+             VALUES (:tenant_id, :zuchtname, :vorname, :nachname, :adresse, :telefon, :email, :webseite, :notizen, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
         );
         $stmt->execute([
+            ':tenant_id'      => $tenantId,
             ':zuchtname'       => $validated['zuchtname'],
             ':vorname'         => $validated['ansprechpartner_vorname'],
             ':nachname'        => $validated['ansprechpartner_nachname'],

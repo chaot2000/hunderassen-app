@@ -29,23 +29,25 @@ class Test
      * @param string|null $zielgruppe Optionaler Filter: 'welpe'/'erwachsen' liefert
      *        zusätzlich immer auch Tests mit Zielgruppe 'beide' (passt auf beide
      *        Altersgruppen), null liefert alle Tests ungefiltert.
+     * @param int $tenantId Tenant-ID für Scoping
      * @return array<int, array<string, mixed>>
      */
-    public static function findAll(?string $zielgruppe = null): array
+    public static function findAll(?string $zielgruppe = null, int $tenantId = 1): array
     {
         $pdo = Database::getConnection();
 
         if ($zielgruppe !== null && in_array($zielgruppe, ['welpe', 'erwachsen'], true)) {
             $stmt = $pdo->prepare(
                 "SELECT id, name, beschreibung, zielgruppe, created_at FROM tests
-                 WHERE zielgruppe = :zielgruppe OR zielgruppe = 'beide'
+                 WHERE (zielgruppe = :zielgruppe OR zielgruppe = 'beide') AND tenant_id = :tenant_id
                  ORDER BY name"
             );
-            $stmt->execute([':zielgruppe' => $zielgruppe]);
+            $stmt->execute([':zielgruppe' => $zielgruppe, ':tenant_id' => $tenantId]);
             return $stmt->fetchAll();
         }
 
-        $stmt = $pdo->query('SELECT id, name, beschreibung, zielgruppe, created_at FROM tests ORDER BY name');
+        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at FROM tests WHERE tenant_id = :tenant_id ORDER BY name');
+        $stmt->execute([':tenant_id' => $tenantId]);
         return $stmt->fetchAll();
     }
 
@@ -54,12 +56,12 @@ class Test
      * Ergebnissen — ein Level tiefer verschachtelt als
      * Breed::findById() (dessen Kind-Arrays sind flach).
      */
-    public static function findById(int $testId): ?array
+    public static function findById(int $testId, int $tenantId = 1): ?array
     {
         $pdo = Database::getConnection();
 
-        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at, updated_at, created_by FROM tests WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $testId]);
+        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at, updated_at, created_by FROM tests WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
         $test = $stmt->fetch();
 
         if (!$test) {
@@ -98,9 +100,10 @@ class Test
     /**
      * @param array<string, mixed> $testData Erwartet Schlüssel: name, beschreibung, zielgruppe
      * @param array $aufgaben Liste von ['titel', 'beschreibung', 'ergebnisse' => [['bezeichnung', 'kategorie'], ...]]
+     * @param int $tenantId Tenant-ID für Scoping
      * @return array{success: bool, message: string, test_id?: int}
      */
-    public static function create(array $testData, array $aufgaben, int $createdByUserId): array
+    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId): array
     {
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
@@ -119,8 +122,8 @@ class Test
 
         $pdo = Database::getConnection();
 
-        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name LIMIT 1');
-        $checkStmt->execute([':name' => $name]);
+        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id LIMIT 1');
+        $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Ein Test mit dem Namen "' . $name . '" existiert bereits.'];
         }
@@ -130,9 +133,10 @@ class Test
 
             $beschreibung = clean_input((string) ($testData['beschreibung'] ?? ''));
             $stmt = $pdo->prepare(
-                'INSERT INTO tests (name, beschreibung, zielgruppe, created_by) VALUES (:name, :beschreibung, :zielgruppe, :created_by)'
+                'INSERT INTO tests (tenant_id, name, beschreibung, zielgruppe, created_by) VALUES (:tenant_id, :name, :beschreibung, :zielgruppe, :created_by)'
             );
             $stmt->execute([
+                ':tenant_id'   => $tenantId,
                 ':name'         => $name,
                 ':beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 ':zielgruppe'   => $zielgruppe,

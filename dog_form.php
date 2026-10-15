@@ -35,9 +35,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $editingId  = isset($_GET['id']) ? (int) $_GET['id'] : null;
-$existing   = $editingId ? Dog::findByIdForUser($editingId, $currentUserId, $isAdmin) : null;
+$existing   = $editingId ? Dog::findByIdForUser($editingId, $currentUserId, $isAdmin, $tenantId) : null;
 $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
@@ -77,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($isEditMode) {
             $result = Dog::update($editingId, $dogData, $postedHalterIds, $image, $removeImage);
         } else {
-            $result = Dog::create($dogData, $postedHalterIds, $currentUserId, $image);
+            $result = Dog::create($dogData, $postedHalterIds, $currentUserId, $tenantId, $image);
         }
 
         if ($result['success']) {

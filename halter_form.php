@@ -20,9 +20,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $editingId  = isset($_GET['id']) ? (int) $_GET['id'] : null;
-$existing   = $editingId ? Halter::findByIdForUser($editingId, $currentUserId, $isAdmin) : null;
+$existing   = $editingId ? Halter::findByIdForUser($editingId, $currentUserId, $isAdmin, $tenantId) : null;
 $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
@@ -53,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($isEditMode) {
             $result = Halter::update($editingId, $halterData, $image, $removeImage);
         } else {
-            $result = Halter::create($halterData, $currentUserId, $image);
+            $result = Halter::create($halterData, $currentUserId, $tenantId, $image);
         }
 
         if ($result['success']) {

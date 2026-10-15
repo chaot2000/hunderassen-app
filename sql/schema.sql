@@ -7,23 +7,45 @@
 -- (Prod-Erstinstallation ODER lokales Fresh-Setup). Sie enthält bereits
 -- den kompletten, aktuellen Stand inkl. aller Migrationen aus
 -- sql/migrationen/ (alternative_namen, TheDogAPI-Felder, dogs, halter,
--- Foto-Spalten). Die Dateien in sql/migrationen/ sind nur noch das
+-- Foto-Spalten, Multi-Tenant). Die Dateien in sql/migrationen/ sind nur noch das
 -- historische Archiv, wie eine bereits laufende ältere Installation
 -- schrittweise auf diesen Stand gebracht wurde — für eine neue
 -- Installation NICHT mehr einzeln ausführen, siehe INSTALL.md.
+--
+-- MULTI-TENANT: Die Anwendung unterstützt Mandantenfähigkeit über
+-- tenant_id Spalten in den Haupttabellen. Geteilte Katalogdaten
+-- (breeds, tags, activities) bleiben global für alle Mandanten.
 -- =====================================================================
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ---------------------------------------------------------------------
+-- Tabelle: tenants
+-- Verwaltet alle Mandanten der Anwendung (Multi-Tenancy)
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `tenants`;
+CREATE TABLE `tenants` (
+    `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name`        VARCHAR(100) NOT NULL,           -- Anzeigename des Mandanten
+    `subdomain`   VARCHAR(50)  NOT NULL,           -- Subdomain für Identifikation
+    `is_active`   TINYINT(1)   NOT NULL DEFAULT 1, -- Mandanten können deaktiviert werden
+    `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_subdomain` (`subdomain`),
+    KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
 -- Tabelle: users
 -- Rollenbasiertes Rechtemanagement (RBAC): 'admin' | 'user'
 -- Keine öffentliche Registrierung — Anlage ausschließlich durch Admin.
+-- Multi-Tenant: username ist pro Tenant eindeutig (tenant_id, username)
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
     `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`     INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
     `username`      VARCHAR(50)  NOT NULL,
     `password_hash` VARCHAR(255) NOT NULL,           -- password_hash() Output, PASSWORD_DEFAULT
     `role`          ENUM('admin', 'user') NOT NULL DEFAULT 'user',
@@ -33,8 +55,10 @@ CREATE TABLE `users` (
     `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_by`    INT UNSIGNED NULL,                -- welcher Admin hat den Account angelegt
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_username` (`username`),
+    UNIQUE KEY `uq_tenant_username` (`tenant_id`, `username`),
     KEY `idx_role` (`role`),
+    KEY `idx_tenant_id` (`tenant_id`),
+    CONSTRAINT `fk_users_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_users_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -193,17 +217,13 @@ CREATE TABLE `breed_activities` (
 -- ---------------------------------------------------------------------
 -- Tabelle: tests
 -- Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test") —
--- geteilte Katalogdaten wie breeds/tags/activities, admin-gepflegt.
--- `created_by` dient nur der Nachvollziehbarkeit, nicht der Sichtbar-
--- keitseinschränkung. Siehe sql/migrationen/migration_2026_07_07_tests_phase1.sql
--- für den Hintergrund dieser Phase-1-Tabellen (Test-Katalog als
--- eigenständiges Modul, noch ohne Anbindung an Hunde/Testdurchführungen).
--- `zielgruppe` (siehe migration_2026_07_09_tests_zielgruppe.sql) steuert
--- den Filter bei der Testauswahl in testdurchfuehrung_form.php.
+-- Multi-Tenant: Tests sind tenant-spezifisch.
+-- `zielgruppe` steuert den Filter bei der Testauswahl in testdurchfuehrung_form.php.
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS `tests`;
 CREATE TABLE `tests` (
     `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`    INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
     `name`         VARCHAR(150) NOT NULL,
     `beschreibung` TEXT NULL,
     `zielgruppe`   ENUM('welpe', 'erwachsen', 'beide') NOT NULL DEFAULT 'beide',
@@ -211,8 +231,10 @@ CREATE TABLE `tests` (
     `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created_by`   INT UNSIGNED NULL,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_test_name` (`name`),
+    UNIQUE KEY `uq_tenant_test_name` (`tenant_id`, `name`),
     KEY `idx_test_created_by` (`created_by`),
+    KEY `idx_tenant_id` (`tenant_id`),
+    CONSTRAINT `fk_tests_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_tests_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -310,7 +332,7 @@ CREATE TABLE `test_durchfuehrung_ergebnisse` (
 -- bewusst NULLable (Mischling bzw. noch kein Halter hinterlegt),
 -- jeweils ON DELETE SET NULL, damit das Löschen einer Rasse oder
 -- eines Users nicht versehentlich Hunde-Datensätze mitreißt.
--- Siehe auch migration_2026_07_02_dogs.sql für bestehende Installationen.
+-- Multi-Tenant: Hunde sind tenant-spezifisch.
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS `dogs`;
 -- ---------------------------------------------------------------------
@@ -318,9 +340,11 @@ DROP TABLE IF EXISTS `dogs`;
 -- Eigenständige Halterverwaltung — ein Halter ist KEIN App-Benutzer
 -- (siehe dogs.halter_id), bewusst getrennt, da nicht jeder Halter
 -- einen Login braucht und nicht jeder Benutzer zwangsläufig Halter ist.
+-- Multi-Tenant: Halter sind tenant-spezifisch.
 -- ---------------------------------------------------------------------
 CREATE TABLE `halter` (
     `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`   INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
     `name`        VARCHAR(150) NOT NULL,
     `telefon`     VARCHAR(50)  NULL,
     `email`       VARCHAR(150) NULL,
@@ -334,16 +358,19 @@ CREATE TABLE `halter` (
     `created_by`  INT UNSIGNED NULL,
     PRIMARY KEY (`id`),
     KEY `idx_halter_name` (`name`),
+    KEY `idx_tenant_id` (`tenant_id`),
+    CONSTRAINT `fk_halter_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_halter_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
 -- Tabelle: zuechter
 -- Eigenständig (ein Züchter ist nicht zwangsläufig auch Halter).
--- User-scoped über created_by.
+-- Multi-Tenant: Züchter sind tenant-spezifisch.
 -- ---------------------------------------------------------------------
 CREATE TABLE `zuechter` (
     `id`                       INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`                INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
     `zuchtname`                VARCHAR(150) NOT NULL,
     `ansprechpartner_vorname`  VARCHAR(100) NULL,
     `ansprechpartner_nachname` VARCHAR(100) NULL,
@@ -361,11 +388,14 @@ CREATE TABLE `zuechter` (
     PRIMARY KEY (`id`),
     KEY `idx_zuechter_zuchtname` (`zuchtname`),
     KEY `idx_zuechter_created_by` (`created_by`),
+    KEY `idx_tenant_id` (`tenant_id`),
+    CONSTRAINT `fk_zuechter_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_zuechter_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `dogs` (
     `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`       INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
     `name`            VARCHAR(120) NOT NULL,
     `geburtsdatum`    DATE NULL,
     `farbe`           VARCHAR(255) NULL,
@@ -382,6 +412,8 @@ CREATE TABLE `dogs` (
     KEY `idx_dog_breed` (`breed_id`),
     KEY `idx_dog_zuechter` (`zuechter_id`),
     KEY `idx_dog_created_by` (`created_by`),
+    KEY `idx_tenant_id` (`tenant_id`),
+    CONSTRAINT `fk_dogs_tenant`    FOREIGN KEY (`tenant_id`)   REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_dogs_breed`      FOREIGN KEY (`breed_id`)    REFERENCES `breeds` (`id`)   ON DELETE SET NULL,
     CONSTRAINT `fk_dogs_zuechter`   FOREIGN KEY (`zuechter_id`) REFERENCES `zuechter` (`id`)  ON DELETE SET NULL,
     CONSTRAINT `fk_dogs_created_by` FOREIGN KEY (`created_by`)  REFERENCES `users` (`id`)     ON DELETE SET NULL
@@ -403,14 +435,20 @@ CREATE TABLE `dog_halter` (
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
+-- Initialer Default-Tenant
+-- =====================================================================
+INSERT INTO `tenants` (`id`, `name`, `subdomain`, `is_active`, `created_at`)
+VALUES (1, 'Default', 'default', 1, NOW());
+
+-- =====================================================================
 -- Initialer Admin-User
 -- WICHTIG: '__PASSWORD_HASH_PLACEHOLDER__' MUSS vor dem Import ersetzt
 -- werden durch einen echten Hash, erzeugt z.B. mit:
 --   php -r "echo password_hash('DeinSicheresPasswort123!', PASSWORD_DEFAULT);"
 -- Niemals Klartext-Passwörter in die Datenbank schreiben!
 -- =====================================================================
-INSERT INTO `users` (`username`, `password_hash`, `role`, `is_active`)
-VALUES ('admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1);
+INSERT INTO `users` (`tenant_id`, `username`, `password_hash`, `role`, `is_active`)
+VALUES (1, 'admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1);
 
 -- ---------------------------------------------------------------------
 -- Beispiel-Tags (optional, kann gelöscht/erweitert werden)

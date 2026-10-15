@@ -28,7 +28,7 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, tenant_id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
         $stmt->execute([':username' => $username]);
         $user = $stmt->fetch();
 
@@ -59,7 +59,7 @@ class User
      * Legt einen neuen Benutzer an (nur durch Admin).
      * @return array{success: bool, message: string}
      */
-    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId, bool $canManageBreeds = false, bool $canManageTests = false): array
+    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId, int $tenantId, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
         $username = clean_input($username);
 
@@ -77,18 +77,19 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username LIMIT 1');
-        $checkStmt->execute([':username' => $username]);
+        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND tenant_id = :tenant_id LIMIT 1');
+        $checkStmt->execute([':username' => $username, ':tenant_id' => $tenantId]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Dieser Benutzername ist bereits vergeben.'];
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $insertStmt = $pdo->prepare(
-            'INSERT INTO users (username, password_hash, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by)
-             VALUES (:username, :hash, :role, :can_manage_breeds, :can_manage_tests, 1, NOW(), :created_by)'
+            'INSERT INTO users (tenant_id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by)
+             VALUES (:tenant_id, :username, :hash, :role, :can_manage_breeds, :can_manage_tests, 1, NOW(), :created_by)'
         );
         $insertStmt->execute([
+            ':tenant_id'         => $tenantId,
             ':username'          => $username,
             ':hash'              => $hash,
             ':role'              => $role,
@@ -108,7 +109,7 @@ class User
      * implizit immer (siehe config/auth.php).
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, string $username, string $role, int $currentAdminId, bool $canManageBreeds = false, bool $canManageTests = false): array
+    public static function update(int $id, string $username, string $role, int $currentAdminId, int $tenantId, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
         $username = clean_input($username);
 
@@ -126,8 +127,8 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND id != :id LIMIT 1');
-        $checkStmt->execute([':username' => $username, ':id' => $id]);
+        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND tenant_id = :tenant_id AND id != :id LIMIT 1');
+        $checkStmt->execute([':username' => $username, ':tenant_id' => $tenantId, ':id' => $id]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Dieser Benutzername ist bereits vergeben.'];
         }

@@ -20,9 +20,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $zuechterId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$zuechter   = $zuechterId ? Zuechter::findByIdForUser($zuechterId, $currentUserId, $isAdmin) : null;
+$zuechter   = $zuechterId ? Zuechter::findByIdForUser($zuechterId, $currentUserId, $isAdmin, $tenantId) : null;
 
 if ($zuechter === null) {
     http_response_code(404);
@@ -34,7 +35,7 @@ if ($zuechter === null) {
     exit;
 }
 
-$dogs = Dog::findByZuechterForUser($zuechterId, $currentUserId, $isAdmin);
+$dogs = Dog::findByZuechterForUser($zuechterId, $currentUserId, $isAdmin, $tenantId);
 
 $ansprechpartner = implode(' ', array_filter([
     $zuechter['ansprechpartner_vorname'],
