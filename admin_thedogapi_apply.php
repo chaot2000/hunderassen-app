@@ -25,7 +25,9 @@ require_once __DIR__ . '/models/BildVerarbeitung.php';
 require_once __DIR__ . '/models/ContentRevision.php';
 
 secure_session_start();
-require_admin();
+// Schreibt in den geteilten Rassenkatalog aller Mandanten, daher nur
+// für den Super-Admin (wie admin_thedogapi_review.php).
+require_super_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     die('Dieses Script wird nur über das Formular aus admin_thedogapi_review.php aufgerufen.');

@@ -196,7 +196,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50">Rassen (geteilter Katalog)</p>
                                 <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rasse anlegen</a>
                                 <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Eigenschaften &amp; Aktivitäten</a>
-                                <?php if (is_admin()): ?>
+                                <?php if (is_super_admin()): ?>
                                     <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">TheDogAPI-Abgleich</a>
                                 <?php endif; ?>
                             <?php endif; ?>
