@@ -43,6 +43,7 @@ class ContentRevision
             'temperament'       => 'Temperament',
             'lebenserwartung'   => 'Lebenserwartung',
             'zuchtzweck'        => 'Zuchtzweck',
+            'thedogapi_id'      => 'TheDogAPI-Zuordnung',
             'quelle_url'        => 'Quelle',
             'quelle_stand'      => 'Stand der Quelle',
             'gliederung'        => 'Gliederung',
