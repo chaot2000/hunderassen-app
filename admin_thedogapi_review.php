@@ -27,9 +27,15 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
 
 secure_session_start();
-require_admin();
+// Schreibt in den geteilten Rassenkatalog aller Mandanten, daher nur
+// für den Super-Admin.
+require_super_admin();
 
-const THEDOGAPI_KEY = ' ***ENTFERNT*** ';
+// API-Schlüssel liegt NICHT im Repo, sondern in der nicht versionierten
+// config/thedogapi.local.php (Vorlage: config/thedogapi.local.example.php).
+$thedogapiConfigDatei = __DIR__ . '/config/thedogapi.local.php';
+$thedogapiConfig = is_file($thedogapiConfigDatei) ? require $thedogapiConfigDatei : [];
+define('THEDOGAPI_KEY', trim((string) ($thedogapiConfig['api_key'] ?? '')));
 const THEDOGAPI_URL  = 'https://api.thedogapi.com/v1/breeds';
 const CACHE_DATEI    = __DIR__ . '/cache_thedogapi_breeds.json';
 const CACHE_MAX_ALTER_SEK = 86400; // 1 Tag – TheDogAPI ändert sich selten
@@ -172,6 +178,11 @@ function ladeTheDogApiBreeds(): array
         if (is_array($daten)) {
             return $daten;
         }
+    }
+
+    if (THEDOGAPI_KEY === '') {
+        http_response_code(503);
+        die('Kein TheDogAPI-Schlüssel hinterlegt. Lege config/thedogapi.local.php nach der Vorlage config/thedogapi.local.example.php an.');
     }
 
     $ch = curl_init(THEDOGAPI_URL);

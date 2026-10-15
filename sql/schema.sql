@@ -127,11 +127,17 @@ CREATE TABLE `breeds` (
     `farben`          VARCHAR(255) NULL,        -- z.B. "schwarz, braun, gestromt"
     `fci_klasse`      TINYINT UNSIGNED NULL,    -- 1-10, NULL = keine FCI-Klasse
     `fci_nr`          VARCHAR(20) NULL,         -- offizielle FCI-Standardnummer, z.B. "166"
+    `fci_sektion`     VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- z. B. "1" oder "1.1"
+    `fci_sektion_name` VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- z. B. "Pinscher und Schnauzer"
+    `arbeitspruefung` ENUM('mit', 'ohne', 'fakultativ') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     `beschreibung`    TEXT NULL,
     `beschreibung_original` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Stand beim Anlegen bzw. bei Einführung der Versionierung, wird nie überschrieben
     `temperament`     VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar
     `lebenserwartung` VARCHAR(50)  NULL,        -- aus TheDogAPI-Abgleich übernehmbar
     `zuchtzweck`      VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar (bred_for)
+    `quelle_url`      VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- Herkunft des Textes, z. B. VDH-Rasselexikon
+    `quelle_stand`    DATE NULL,                -- Stand der Quelle
+    `gliederung`      ENUM('keine', 'automatisch', 'geprueft') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'keine', -- siehe admin_rassentexte.php
     `thedogapi_id`    VARCHAR(20)  NULL,        -- verknüpfte TheDogAPI-Rasse, falls abgeglichen
     `thedogapi_stand` DATETIME     NULL,        -- Zeitpunkt des letzten Abgleichs
     `bild_blob`        LONGBLOB NULL,            -- verkleinertes Bild (max. 1200px Breite)
@@ -453,7 +459,7 @@ CREATE TABLE `content_revisions` (
     `feld`          VARCHAR(64)  NOT NULL,
     `alter_wert`    MEDIUMTEXT   NULL,
     `neuer_wert`    MEDIUMTEXT   NULL,
-    `anlass`        ENUM('bearbeitung', 'import', 'loeschung', 'wiederherstellung') NOT NULL,
+    `anlass`        ENUM('bearbeitung', 'import', 'loeschung', 'wiederherstellung', 'umstrukturierung') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
     `geaendert_von` INT UNSIGNED NULL,
     `geaendert_am`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -479,7 +485,7 @@ VALUES (1, 'Default', 'default', 1, NOW());
 -- Niemals Klartext-Passwörter in die Datenbank schreiben!
 -- =====================================================================
 INSERT INTO `users` (`tenant_id`, `username`, `password_hash`, `role`, `is_super_admin`, `is_active`)
-VALUES (1, 'admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1, 1);
+VALUES (1, 'admin', '__PASSWORD_HASH_PLACEHOLDER__', 'admin', 1, 1);
 
 -- ---------------------------------------------------------------------
 -- Beispiel-Tags (optional, kann gelöscht/erweitert werden)
