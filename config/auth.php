@@ -57,6 +57,15 @@ function is_super_admin(): bool
 }
 
 /**
+ * Mandanten-Scope für die Benutzerverwaltung: Super-Admins sehen alle
+ * Mandanten (null), normale Admins nur den eigenen.
+ */
+function user_admin_scope(): ?int
+{
+    return is_super_admin() ? null : current_tenant_id();
+}
+
+/**
  * Portal-Recht "Rassen verwalten". Admins haben es implizit immer,
  * unabhängig vom can_manage_breeds-Flag in der Session.
  */

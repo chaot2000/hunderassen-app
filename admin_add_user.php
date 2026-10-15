@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($targetId === (int) current_user()['id'] && !$newState) {
             $errorMessage = 'Du kannst deinen eigenen Account nicht deaktivieren.';
         } else {
-            User::setActive($targetId, $newState);
+            User::setActive($targetId, $newState, user_admin_scope());
             header('Location: /admin_add_user.php');
             exit;
         }
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$allUsers = User::findAll();
+$allUsers = User::findAll(user_admin_scope());
 
 $pageTitle = 'Benutzer verwalten';
 require __DIR__ . '/views/partials/header.php';
@@ -207,7 +207,8 @@ require __DIR__ . '/views/partials/header.php';
                             <?php endif; ?>
                         </p>
                         <p class="text-xs text-fellDk/50">
-                            <?= $u['role'] === 'admin' ? 'Administrator' : 'Benutzer' ?>
+                            <?php if (is_super_admin()): ?><?= e($u['tenant_name']) ?> &middot; <?php endif; ?>
+                            <?= !empty($u['is_super_admin']) ? 'Super-Admin' : ($u['role'] === 'admin' ? 'Administrator' : 'Benutzer') ?>
                             &middot;
                             <?= (int) $u['is_active'] === 1
                                 ? '<span class="text-tanneDk">Aktiv</span>'
@@ -215,6 +216,7 @@ require __DIR__ . '/views/partials/header.php';
                         </p>
                     </div>
 
+                    <?php if (is_super_admin() || empty($u['is_super_admin'])): ?>
                     <form method="post" action="/admin_add_user.php">
                         <?= csrf_field() ?>
                         <input type="hidden" name="toggle_active_user_id" value="<?= (int) $u['id'] ?>">
@@ -228,6 +230,7 @@ require __DIR__ . '/views/partials/header.php';
                             <?= (int) $u['is_active'] === 1 ? 'Deaktivieren' : 'Aktivieren' ?>
                         </button>
                     </form>
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
