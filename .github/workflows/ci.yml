@@ -164,7 +164,7 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen + Rassenstruktur + Englisch + Sprache: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+      - name: "Textversionen bis Merkmale: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
         # Ausgangspunkt ist das Schema vor den Textversionen (Tag
         # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
         # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
@@ -197,10 +197,18 @@ jobs:
           dump txt_live > /tmp/txt_englisch.sql
           $R txt_live < sql/migrationen/migration_2026_10_18_benutzer_sprache.sql
           $R txt_live < sql/migrationen/migration_2026_10_18_benutzer_sprache.sql
+          dump txt_live > /tmp/txt_sprache.sql
+          $R txt_live < sql/migrationen/migration_2026_10_19_merkmale.sql
+          $R txt_live < sql/migrationen/migration_2026_10_19_merkmale.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM merkmale" | grep -qx 16
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_merkmale.sql
+          $R txt_live < sql/migrationen/rollback_merkmale.sql
+          dump txt_live > /tmp/txt_zurueck_merkmale.sql
+          diff /tmp/txt_sprache.sql /tmp/txt_zurueck_merkmale.sql
           $R txt_live < sql/migrationen/rollback_benutzer_sprache.sql
           $R txt_live < sql/migrationen/rollback_benutzer_sprache.sql
           dump txt_live > /tmp/txt_zurueck_sprache.sql
