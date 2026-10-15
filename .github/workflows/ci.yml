@@ -156,3 +156,28 @@ jobs:
           $DB < sql/migrationen/rollback_multi_tenant.sql
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
+
+      - name: "Textversionen: vom Live-Stand hin (2x), gegen schema.sql vergleichen, zurück (2x)"
+        # Ausgangspunkt ist das Schema, das seit 15.10.2026 live läuft
+        # (Tag prod-2026-10-15-mandanten). Nach der Migration muss das
+        # Schema exakt dem einer Neuinstallation aus sql/schema.sql
+        # entsprechen, nach dem Rollback exakt dem Ausgangsstand.
+        run: |
+          R="mysql -h127.0.0.1 -uroot -proot"
+          $R -e "CREATE DATABASE txt_live CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE DATABASE txt_frisch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          dump() { mysqldump -h127.0.0.1 -uroot -proot --no-data --skip-comments "$1" | sed -E 's/ AUTO_INCREMENT=[0-9]+//'; }
+          git show prod-2026-10-15-mandanten:sql/schema.sql | $R txt_live
+          $R txt_live -e "INSERT INTO breeds (id, name, beschreibung) VALUES (1, 'Mit Text', 'Originaltext'), (2, 'Ohne Text', NULL);"
+          dump txt_live > /tmp/txt_vorher.sql
+          $R txt_live < sql/migrationen/migration_2026_10_15_text_versionen.sql
+          $R txt_live < sql/migrationen/migration_2026_10_15_text_versionen.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE beschreibung_original <=> beschreibung" | grep -qx 2
+          $R txt_live -N -e "SELECT COUNT(*) FROM content_revisions" | grep -qx 0
+          $R txt_frisch < sql/schema.sql
+          dump txt_live > /tmp/txt_migriert.sql
+          dump txt_frisch > /tmp/txt_frisch.sql
+          diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_text_versionen.sql
+          $R txt_live < sql/migrationen/rollback_text_versionen.sql
+          dump txt_live > /tmp/txt_nachher.sql
+          diff /tmp/txt_vorher.sql /tmp/txt_nachher.sql
