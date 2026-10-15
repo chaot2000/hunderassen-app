@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `rasse_texte` (
     CONSTRAINT `fk_rt_breed` FOREIGN KEY (`breed_id`) REFERENCES `breeds` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'breeds' AND COLUMN_NAME = 'daten_stand'), 'DO 0', 'ALTER TABLE `breeds` ADD COLUMN `daten_stand` CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER `thedogapi_stand`');
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'breeds' AND COLUMN_NAME = 'daten_stand'), 'DO 0', 'ALTER TABLE `breeds` ADD COLUMN `daten_stand` CHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL AFTER `thedogapi_stand`');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Merkmale und Werte (INSERT IGNORE: ein zweiter Lauf ändert nichts)
