@@ -335,6 +335,9 @@ class Breed
 
             if ($alt) {
                 ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, [], $geaendertVon, 'loeschung');
+                // Texte und Merkmale gehen per ON DELETE CASCADE mit, vorher sichern
+                require_once __DIR__ . '/RassenDatenSchreiben.php';
+                RassenDatenSchreiben::loeschungProtokollieren($pdo, $breedId, $geaendertVon);
             }
 
             $stmt = $pdo->prepare('DELETE FROM breeds WHERE id = :id');

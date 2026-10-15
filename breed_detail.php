@@ -88,10 +88,15 @@ $textSprachen = array_values(array_unique(array_column($texte, 'sprache')));
 $textSprache  = in_array($sprache, $textSprachen, true) || $textSprachen === [] ? $sprache : $textSprachen[0];
 $textFremd    = $textSprachen !== [] && !in_array($sprache, $textSprachen, true);
 $englisch     = $sprache === 'en';
-// Quelle nur nennen, wenn der englische Text noch genau der aus dem
-// TheDogAPI-Import ist. Selbst geschrieben oder nachbearbeitet: kein Hinweis.
-$textAusTheDogApi = in_array('en', $textSprachen, true)
-    && ContentRevision::stammtAusImport('breeds', $breedId, 'beschreibung_en', $breed['beschreibung_en'], null);
+// Quelle nur nennen, wenn ein gezeigter englischer Abschnitt unverändert aus
+// TheDogAPI stammt. Selbst geschrieben oder nachbearbeitet: Quelle 'hand'.
+$textAusTheDogApi = false;
+$textUngeprueft   = false;
+foreach ($texte as $t) {
+    $textAusTheDogApi = $textAusTheDogApi || ($t['sprache'] === 'en' && $t['quelle'] === 'thedogapi');
+    // Automatisch gegliederter VDH-Text, noch nicht von Hand bearbeitet
+    $textUngeprueft = $textUngeprueft || ($t['sprache'] === 'de' && $t['quelle'] === 'alt' && ($breed['gliederung'] ?? '') === 'automatisch');
+}
 $versionen     = $darfPflegen ? ContentRevision::zaehle('breeds', $breedId, null) : 0;
 
 /** "46–58 cm", "ab 46 cm", "bis 58 cm" oder null; Dezimalzeichen nach Sprache */
@@ -400,7 +405,7 @@ require __DIR__ . '/views/partials/header.php';
             <?php if ($textFremd): ?>
                 <p class="text-sm font-semibold text-fellDk mb-3"><?= e(t('rasse.text_nur_deutsch')) ?></p>
             <?php endif; ?>
-            <?php if ($textSprache === 'de' && ($breed['gliederung'] ?? '') === 'automatisch' && !empty($text['abschnitte'])): ?>
+            <?php if ($textSprache === 'de' && $textUngeprueft && !empty($text['abschnitte'])): ?>
                 <p class="text-sm text-fellDk mb-3"><?= e(t('rasse.ungeprueft')) ?></p>
             <?php endif; ?>
             <?= render_rassentext_sprungleiste($text['abschnitte']) ?>
@@ -413,7 +418,7 @@ require __DIR__ . '/views/partials/header.php';
                 <p class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 text-sm text-fellDk"><?= e(t('rasse.text_thedogapi')) ?></p>
             </footer>
             <?php endif; ?>
-        <?php elseif ($text['kurzportraet'] !== null && (($breed['gliederung'] ?? '') === 'automatisch' || !empty($breed['quelle_url']))): ?>
+        <?php elseif ($text['kurzportraet'] !== null && ($textUngeprueft || !empty($breed['quelle_url']))): ?>
             <footer class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
                 <div class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 space-y-1 text-sm text-fellDk">
                     <?php if (!empty($breed['quelle_url'])): ?>
@@ -422,7 +427,7 @@ require __DIR__ . '/views/partials/header.php';
                             <a href="<?= e($breed['quelle_url']) ?>" target="_blank" rel="noopener noreferrer" class="inline-block py-1 font-semibold text-tanneDk underline underline-offset-4"><?= e(t('rasse.original_vdh')) ?></a>
                         </p>
                     <?php endif; ?>
-                    <?php if (($breed['gliederung'] ?? '') === 'automatisch'): ?>
+                    <?php if ($textUngeprueft): ?>
                         <p><?= e(t('rasse.ungeprueft')) ?></p>
                     <?php endif; ?>
                 </div>

@@ -722,24 +722,35 @@ else
     echo "--- Textversionen (content_versionen.php) ---"
     check_status "Rasse bearbeiten lädt" "$BASE_URL/admin_add_breed.php?id=1" "200"
     check_body_contains "Link auf die Versionen vorhanden" "content_versionen.php?typ=rasse&amp;id=1"
+    check_body_contains "Formular: Steckbrief" "Steckbrief"
+    check_body_contains "Formular: Texte je Abschnitt" 'name="text[de][kurzportraet]"'
+    check_body_contains "Formular: alter Text als Kurzporträt übernommen" "Nur für automatisierte Tests angelegt."
     BREED_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
     # Werte ohne Leerzeichen: extra_curl_args wird per Wortaufteilung übergeben.
-    check_status "Rasse mit geändertem Text speichern (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
-        "-X POST --data-urlencode csrf_token=$BREED_CSRF --data-urlencode name=CI-Testrasse \
-         --data-urlencode ursprungsland=Deutschland --data-urlencode farben=schwarz,braun --data-urlencode fci_klasse=1 \
-         --data-urlencode beschreibung=CI-Versionstext-geaendert \
-         --data-urlencode sizes[0][groesse]=mittel --data-urlencode sizes[0][ruede_min]=40 --data-urlencode sizes[0][ruede_max]=50"
+    check_status "Rasse mit geändertem Kurzporträt und Steckbrief speichern (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$BREED_CSRF --data-urlencode name=CI-Testrasse --data-urlencode fci_klasse=1 \
+         --data-urlencode text[de][kurzportraet]=CI-Versionstext-geaendert \
+         --data-urlencode merkmal[farben][werte][]=braun --data-urlencode merkmal[groessenklasse][werte][]=mittel \
+         --data-urlencode merkmal[schulterhoehe][spanne][ruede][von]=40 --data-urlencode merkmal[schulterhoehe][spanne][ruede][bis]=50 \
+         --data-urlencode merkmal[ursprungsland][land]=DE --data-urlencode merkmal[eignung][werte][]=assistenzhund"
+    check_status "Rassenseite nach dem Speichern" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Neues Kurzporträt sichtbar" "CI-Versionstext-geaendert"
+    check_body_contains "Eignung aus dem Formular" "Assistenzhund"
+    check_body_contains "Schulterhöhe aus dem Formular" "40–50 cm"
+    check_body_not_contains "Kein Ungeprüft-Hinweis nach Bearbeitung" "noch nicht geprüft"
     check_status "Versionen der Rasse laden" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
     check_body_contains "Version mit dem neuen Text" "CI-Versionstext-geaendert"
     check_body_contains "Anlass „Bearbeitet“" "Bearbeitet"
-    check_body_contains "Originaltext wird angeboten" "Original wiederherstellen"
+    check_body_contains "Feldname des Abschnitts" "Text „Kurzporträt“ (deutsch)"
+    check_body_contains "Merkmal als Version" "Merkmal „Geeignet als / für“"
+    check_body_not_contains "Original wird nach der Übernahme nicht mehr angeboten" "Original wiederherstellen"
     VER_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Original wiederherstellen (Redirect)" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "302" \
-        "-X POST --data-urlencode csrf_token=$VER_CSRF --data-urlencode original=1"
+    VER_ID=$(grep -oP 'name="revision_id" value="\K[0-9]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Kurzporträt wiederherstellen (Redirect)" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$VER_CSRF --data-urlencode revision_id=$VER_ID"
     check_status "Versionen nach der Wiederherstellung" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
-    check_body_contains "Erfolgsmeldung der Wiederherstellung" "Beschreibung wurde wiederhergestellt."
+    check_body_contains "Erfolgsmeldung der Wiederherstellung" "wurde wiederhergestellt."
     check_body_contains "Wiederherstellung ist selbst eine Version" "Wiederhergestellt"
-    check_body_not_contains "Original wird nicht mehr angeboten (ist wieder aktuell)" "Original wiederherstellen"
     check_status "Rassendetail nach der Wiederherstellung" "$BASE_URL/breed_detail.php?id=1" "200"
     check_body_contains "Originaltext ist wieder aktiv" "Nur für automatisierte Tests angelegt."
     check_body_not_contains "Geänderter Text ist weg" "CI-Versionstext-geaendert"
@@ -798,7 +809,7 @@ else
     check_status "Versionen zeigen die Korrektur" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
     check_body_contains "TheDogAPI-Zuordnung als Version" "TheDogAPI-Zuordnung"
     check_status "Rasse bearbeiten zeigt englisches Temperament" "$BASE_URL/admin_add_breed.php?id=1" "200"
-    check_body_contains "Feld temperament_en ist gefüllt" 'value="CI-Erstwert"'
+    check_body_contains "Wesen-Begriff aus TheDogAPI im Steckbrief" "CI-Erstwert"
     TDA_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
     check_status "Temperament per Wörterbuch übersetzen (Sammelaktion)" "$BASE_URL/admin_thedogapi_apply.php" "200"         "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode aktion=temperament_uebersetzen"
     check_body_contains "Unbekannter Begriff bleibt unübersetzt" "nicht im Wörterbuch: ci-erstwert"
@@ -815,20 +826,14 @@ else
     check_body_not_contains "Kein VDH-Restsatz" "Hier werden Würfe"
     check_status "Hundeformular mit vorgewählter Rasse" "$BASE_URL/dog_form.php?rasse=1" "200"
     check_body_contains "Rasse 1 ist vorgewählt" 'breedId: "1"'
-    check_status "Rassentexte gliedern lädt (Super-Admin)" "$BASE_URL/admin_rassentexte.php" "200"
-    check_body_contains "Fixture-Rasse ist umstellbar" "umstellbar (1)"
+    check_status "Rassendaten übernehmen lädt (Super-Admin)" "$BASE_URL/admin_rassentexte.php" "200"
+    check_body_contains "Seite Rassendaten übernehmen" "Rassendaten übernehmen"
     GLIED_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Rassentexte umstellen (Redirect)" "$BASE_URL/admin_rassentexte.php" "302" \
-        "-X POST --data-urlencode csrf_token=$GLIED_CSRF --data-urlencode aktion=umstellen"
-    check_status "Ergebnis der Umstellung" "$BASE_URL/admin_rassentexte.php" "200"
-    check_body_contains "Eine Rasse umgestellt" "Umgestellt: 1 Rassen."
-    check_status "Detailseite nach der Umstellung" "$BASE_URL/breed_detail.php?id=1" "200"
-    check_body_contains "Hinweis auf automatische Gliederung" "automatisch zugeordnet"
-    GLIED_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
-    check_status "Umstellung zurücknehmen (Redirect)" "$BASE_URL/admin_rassentexte.php" "302" \
-        "-X POST --data-urlencode csrf_token=$GLIED_CSRF --data-urlencode aktion=rueckgaengig"
-    check_status "Ergebnis der Rücknahme" "$BASE_URL/admin_rassentexte.php" "200"
-    check_body_contains "Eine Rasse zurückgesetzt" "Zurückgesetzt: 1 Rassen."
+    check_status "Alle übernehmen (Redirect)" "$BASE_URL/admin_rassentexte.php" "302" \
+        "-X POST --data-urlencode csrf_token=$GLIED_CSRF --data-urlencode aktion=uebernehmen"
+    check_status "Ergebnis der Übernahme" "$BASE_URL/admin_rassentexte.php" "200"
+    check_body_contains "Meldung der Übernahme" "Übernommen:"
+    check_body_contains "Danach nichts mehr offen" "Alle Rassen sind übernommen"
 
     echo ""
     echo "--- Eigenes Passwort ändern (account.php) ---"

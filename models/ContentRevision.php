@@ -224,8 +224,50 @@ class ContentRevision
 
     public static function istWiederherstellbar(string $tabelle, string $feld): bool
     {
+        if ($tabelle === 'breeds' && str_starts_with($feld, 'text_')) {
+            require_once __DIR__ . '/RassenDatenSchreiben.php';
+            return RassenDatenSchreiben::textFeld($feld) !== null;
+        }
         return isset(self::FELDER[$tabelle][$feld])
             && !in_array($feld, self::NUR_LESBAR[$tabelle] ?? [], true);
+    }
+
+    /**
+     * Beschriftung eines Feldes für die Versionsseite. Kennt auch die
+     * Felder des Merkmalsmodells (text_de_wesen, merkmal_farben …).
+     */
+    public static function feldLabel(string $tabelle, string $feld): string
+    {
+        if (isset(self::FELDER[$tabelle][$feld])) {
+            return self::FELDER[$tabelle][$feld];
+        }
+        if ($tabelle === 'breeds') {
+            require_once __DIR__ . '/RassenDatenSchreiben.php';
+            return RassenDatenSchreiben::feldLabel($feld) ?? $feld;
+        }
+        return $feld;
+    }
+
+    /**
+     * Eine Version für ein einzelnes Feld, das nicht in FELDER steht
+     * (Merkmalsmodell). Schreibt nur, wenn sich der Wert ändert, Zeilenende
+     * nicht mitgezählt. Muss in der Transaktion der Änderung laufen.
+     */
+    public static function protokolliereFeld(PDO $pdo, string $tabelle, int $datensatzId, string $feld, ?string $alt, ?string $neu, ?int $geaendertVon, string $anlass, ?int $tenantId = null): void
+    {
+        if (!isset(self::ANLAESSE[$anlass])) {
+            throw new InvalidArgumentException("Unbekannter Anlass: {$anlass}");
+        }
+        if (str_replace("\r", '', (string) $alt) === str_replace("\r", '', (string) $neu) && ($alt === null) === ($neu === null)) {
+            return;
+        }
+        $pdo->prepare(
+            'INSERT INTO content_revisions (tenant_id, tabelle, datensatz_id, feld, alter_wert, neuer_wert, anlass, geaendert_von)
+             VALUES (:tenant_id, :tabelle, :datensatz_id, :feld, :alter_wert, :neuer_wert, :anlass, :geaendert_von)'
+        )->execute([
+            ':tenant_id' => $tenantId, ':tabelle' => $tabelle, ':datensatz_id' => $datensatzId, ':feld' => $feld,
+            ':alter_wert' => $alt, ':neuer_wert' => $neu, ':anlass' => $anlass, ':geaendert_von' => $geaendertVon,
+        ]);
     }
 
     /**
@@ -288,6 +330,10 @@ class ContentRevision
     {
         if (!self::istWiederherstellbar($tabelle, $feld)) {
             return ['success' => false, 'message' => 'Dieses Feld lässt sich nicht automatisch wiederherstellen.'];
+        }
+        // Textabschnitte des Merkmalsmodells stehen nicht in breeds
+        if ($tabelle === 'breeds' && str_starts_with($feld, 'text_')) {
+            return RassenDatenSchreiben::textWiederherstellen($datensatzId, $feld, $wert, $userId);
         }
 
         $pruefung = self::pruefeWert($pdo, $tabelle, $datensatzId, $tenantId, $feld, $wert);

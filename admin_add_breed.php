@@ -3,9 +3,14 @@
  * admin_add_breed.php
  *
  * Formular zum Anlegen einer neuen Rasse ODER (bei ?id=...) zum
- * Bearbeiten einer bestehenden Rasse. Erlaubt das Hinzufügen
- * mehrerer Größenklassen pro Rasse (z.B. "klein" UND "mittel" als
- * Varianten), inkl. Tag- und Aktivitäten-Auswahl.
+ * Bearbeiten einer bestehenden Rasse: Bild, Stammdaten (breeds),
+ * Steckbrief und Texte je Abschnitt (Merkmalsmodell, PLAN.md
+ * Abschnitt 10, models/RassenDatenSchreiben.php).
+ *
+ * Die alten Felder (breed_sizes, Tags, Aktivitäten, beschreibung,
+ * Temperament …) bearbeitet dieses Formular nicht mehr. Sie werden beim
+ * Speichern unverändert durchgereicht und nach der Bewährung des neuen
+ * Modells entfernt (Schritt 5).
  */
 
 declare(strict_types=1);
@@ -13,10 +18,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/Breed.php';
-require_once __DIR__ . '/models/Tag.php';
-require_once __DIR__ . '/models/Activity.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
-require_once __DIR__ . '/models/Uebersetzung.php';
+require_once __DIR__ . '/models/RassenDaten.php';
+require_once __DIR__ . '/models/RassenDatenSchreiben.php';
+require_once __DIR__ . '/views/partials/rasse_formular.php';
 
 secure_session_start();
 require_manage_breeds();
@@ -31,115 +36,83 @@ if ($editingId !== null && $existing === null) {
 }
 
 $errorMessage   = null;
-$successMessage = null;
+
+// Steckbrief und Texte: vorhandene Rasse vorher ins neue Modell übernehmen
+if ($isEditMode) {
+    RassenDaten::uebernehmenWennNoetig($editingId);
+}
+$definitionen = RassenDatenSchreiben::definitionen();
+$merkmalWerte = $isEditMode ? RassenDatenSchreiben::formularWerte($editingId) : [];
+$texte        = $isEditMode ? RassenDaten::alleTexte($editingId) : ['de' => [], 'en' => []];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid();
 
-    $breedData = [
-        'name'               => $_POST['name'] ?? '',
-        'alternative_namen'  => $_POST['alternative_namen'] ?? '',
-        'namenszusatz'       => $_POST['namenszusatz'] ?? '',
-        'ursprungsland'      => $_POST['ursprungsland'] ?? '',
-        'farben'             => $_POST['farben'] ?? '',
-        'fci_klasse'         => $_POST['fci_klasse'] ?? '',
-        'fci_nr'             => $_POST['fci_nr'] ?? '',
-        'fci_sektion'        => $_POST['fci_sektion'] ?? '',
-        'fci_sektion_name'   => $_POST['fci_sektion_name'] ?? '',
-        'arbeitspruefung'    => $_POST['arbeitspruefung'] ?? '',
-        'beschreibung'       => $_POST['beschreibung'] ?? '',
-        'gliederung'         => $_POST['gliederung'] ?? 'keine',
-    ];
-    foreach (Breed::INHALT_FELDER as $feld) {
-        $breedData[$feld] = $_POST[$feld] ?? '';
+    $breedData = [];
+    foreach (['name', 'name_en', 'alternative_namen', 'namenszusatz', 'fci_klasse', 'fci_nr', 'fci_sektion', 'fci_sektion_name'] as $feld) {
+        $breedData[$feld] = (string) ($_POST[$feld] ?? '');
     }
-
-    // Größenklassen aus dem dynamisch erzeugten Formular-Array einlesen.
-    // Erwartetes POST-Format: sizes[0][groesse], sizes[0][ruede_min], ...
-    $sizes = [];
-    foreach (($_POST['sizes'] ?? []) as $row) {
-        if (empty($row['groesse'])) {
-            continue; // leere/nicht ausgefüllte Zeile überspringen
-        }
-        $sizes[] = [
-            'groesse'             => $row['groesse'],
-            'ruede_min'           => $row['ruede_min']           ?? '',
-            'ruede_max'           => $row['ruede_max']           ?? '',
-            'haendin_min'         => $row['haendin_min']         ?? '',
-            'haendin_max'         => $row['haendin_max']         ?? '',
-            'gewicht_ruede_min'   => $row['gewicht_ruede_min']   ?? '',
-            'gewicht_ruede_max'   => $row['gewicht_ruede_max']   ?? '',
-            'gewicht_haendin_min' => $row['gewicht_haendin_min'] ?? '',
-            'gewicht_haendin_max' => $row['gewicht_haendin_max'] ?? '',
-        ];
+    // Alte Felder unverändert durchreichen (siehe Kopfkommentar)
+    foreach (array_merge(['ursprungsland', 'farben', 'arbeitspruefung', 'beschreibung', 'gliederung'], array_diff(Breed::INHALT_FELDER, ['name_en'])) as $feld) {
+        $breedData[$feld] = (string) ($existing[$feld] ?? '');
     }
+    $sizes = array_map(fn($s) => [
+        'groesse'             => $s['groesse'],
+        'ruede_min'           => $s['schulterhoehe_ruede_min_cm'] ?? '',
+        'ruede_max'           => $s['schulterhoehe_ruede_max_cm'] ?? '',
+        'haendin_min'         => $s['schulterhoehe_haendin_min_cm'] ?? '',
+        'haendin_max'         => $s['schulterhoehe_haendin_max_cm'] ?? '',
+        'gewicht_ruede_min'   => $s['gewicht_ruede_min_kg'] ?? '',
+        'gewicht_ruede_max'   => $s['gewicht_ruede_max_kg'] ?? '',
+        'gewicht_haendin_min' => $s['gewicht_haendin_min_kg'] ?? '',
+        'gewicht_haendin_max' => $s['gewicht_haendin_max_kg'] ?? '',
+    ], $existing['sizes'] ?? []);
+    $tagIds      = array_map(fn($t) => (int) $t['id'], $existing['tags'] ?? []);
+    $activityIds = array_map(fn($a) => (int) $a['id'], $existing['activities'] ?? []);
 
-    $tagIds      = array_map('intval', $_POST['tags'] ?? []);
-    $activityIds = array_map('intval', $_POST['activities'] ?? []);
+    $eingabe      = RassenDatenSchreiben::ausEingabe(is_array($_POST['merkmal'] ?? null) ? $_POST['merkmal'] : []);
+    $merkmalWerte = $eingabe['werte'];
+    $texte        = RassenDatenSchreiben::texteAusEingabe(is_array($_POST['text'] ?? null) ? $_POST['text'] : []);
 
     // Bild-Upload verarbeiten (validiert Typ/Größe und verkleinert
-    // serverseitig auf max. 1200px Breite). Bei Validierungsfehlern
-    // (z.B. falsches Format) wird die Rasse NICHT gespeichert, damit
-    // ein fehlgeschlagener Bild-Upload nicht stillschweigend ignoriert
-    // wird, sondern der Admin den Fehler sieht und korrigieren kann.
+    // serverseitig auf max. 1200px Breite). Bei Validierungsfehlern wird
+    // die Rasse NICHT gespeichert, damit der Fehler sichtbar bleibt.
     $imageResult = BildVerarbeitung::verarbeiteUpload($_FILES['bild'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
-    if (!$imageResult['success']) {
+    if ($eingabe['fehler']) {
+        $errorMessage = implode(' ', $eingabe['fehler']);
+    } elseif (!$imageResult['success']) {
         $errorMessage = $imageResult['message'];
     } else {
         $image       = $imageResult['blob'] !== null ? ['blob' => $imageResult['blob'], 'mime' => $imageResult['mime']] : null;
         $removeImage = isset($_POST['bild_entfernen']) && $_POST['bild_entfernen'] === '1';
+        $userId      = (int) current_user()['id'];
 
-        if ($isEditMode) {
-            $result = Breed::update($editingId, $breedData, $sizes, $tagIds, $activityIds, $image, $removeImage, (int) current_user()['id']);
-        } else {
-            $result = Breed::create($breedData, $sizes, $tagIds, $activityIds, (int) current_user()['id'], $image);
-        }
+        $result = $isEditMode
+            ? Breed::update($editingId, $breedData, $sizes, $tagIds, $activityIds, $image, $removeImage, $userId)
+            : Breed::create($breedData, $sizes, $tagIds, $activityIds, $userId, $image);
 
         if ($result['success']) {
-            header('Location: /rassen.php');
-            exit;
+            $breedId = $isEditMode ? $editingId : (int) $result['breed_id'];
+            try {
+                RassenDatenSchreiben::speichern($breedId, $merkmalWerte, $texte, $userId);
+                header('Location: /breed_detail.php?id=' . $breedId);
+                exit;
+            } catch (Throwable $e) {
+                error_log('Steckbrief/Texte speichern, Rasse ' . $breedId . ': ' . $e->getMessage());
+                $errorMessage = 'Die Stammdaten sind gespeichert, Steckbrief und Texte aber nicht. Bitte erneut speichern.';
+                if (!$isEditMode) {
+                    header('Location: /admin_add_breed.php?id=' . $breedId);
+                    exit;
+                }
+            }
+        } else {
+            $errorMessage = $result['message'];
         }
-
-        $errorMessage = $result['message'];
     }
 
-    // Bei Validierungsfehler die eingegebenen Werte für erneute
-    // Anzeige im Formular vorhalten (statt sie zu verlieren).
-    $existing = $existing ?? [];
-    $existing = array_merge($existing, $breedData);
-    $existing['sizes']      = array_map(fn($s) => [
-        'groesse'                       => $s['groesse'],
-        'schulterhoehe_ruede_min_cm'    => $s['ruede_min'],
-        'schulterhoehe_ruede_max_cm'    => $s['ruede_max'],
-        'schulterhoehe_haendin_min_cm'  => $s['haendin_min'],
-        'schulterhoehe_haendin_max_cm'  => $s['haendin_max'],
-        'gewicht_ruede_min_kg'          => $s['gewicht_ruede_min'],
-        'gewicht_ruede_max_kg'          => $s['gewicht_ruede_max'],
-        'gewicht_haendin_min_kg'        => $s['gewicht_haendin_min'],
-        'gewicht_haendin_max_kg'        => $s['gewicht_haendin_max'],
-    ], $sizes);
-    $existing['tags']       = array_map(fn($id) => ['id' => $id], $tagIds);
-    $existing['activities'] = array_map(fn($id) => ['id' => $id], $activityIds);
+    // Bei einem Fehler die Eingaben im Formular behalten
+    $existing = array_merge($existing ?? [], $breedData);
 }
-
-$tagGroups     = Tag::findAllGroupedByCategory();
-$allActivities = Activity::findAll();
-
-$selectedTagIds = array_map(fn($t) => (int) $t['id'], $existing['tags'] ?? []);
-$selectedActIds = array_map(fn($a) => (int) $a['id'], $existing['activities'] ?? []);
-$existingSizes  = $existing['sizes'] ?? [];
-
-// Für Alpine.js als JSON vorbereiten, damit die dynamische Größenklassen-
-// Liste beim Laden mit vorhandenen Werten vorbefüllt werden kann.
-$initialSizesForJs = !empty($existingSizes) ? $existingSizes : [
-    [
-        'groesse' => '',
-        'schulterhoehe_ruede_min_cm' => '', 'schulterhoehe_ruede_max_cm' => '',
-        'schulterhoehe_haendin_min_cm' => '', 'schulterhoehe_haendin_max_cm' => '',
-        'gewicht_ruede_min_kg' => '', 'gewicht_ruede_max_kg' => '',
-        'gewicht_haendin_min_kg' => '', 'gewicht_haendin_max_kg' => '',
-    ],
-];
 
 $pageTitle = $isEditMode ? 'Rasse bearbeiten' : 'Rasse anlegen';
 require __DIR__ . '/views/partials/header.php';
@@ -279,6 +252,16 @@ require __DIR__ . '/views/partials/header.php';
             </div>
 
             <div>
+                <label for="name_en" class="block text-sm font-semibold mb-1">Name (englisch)</label>
+                <input
+                    type="text" id="name_en" name="name_en" maxlength="120" lang="en"
+                    placeholder="wie bei TheDogAPI, z. B. Great Dane"
+                    value="<?= e($existing['name_en'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+
+            <div>
                 <label for="alternative_namen" class="block text-sm font-semibold mb-1">Alternative Bezeichnungen</label>
                 <input
                     type="text" id="alternative_namen" name="alternative_namen" maxlength="500"
@@ -294,15 +277,6 @@ require __DIR__ . '/views/partials/header.php';
                     type="text" id="namenszusatz" name="namenszusatz" maxlength="255"
                     placeholder="z. B. Kurzhaar, Langhaar, Zuchtlinie"
                     value="<?= e($existing['namenszusatz'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-
-            <div>
-                <label for="ursprungsland" class="block text-sm font-semibold mb-1">Ursprungsland</label>
-                <input
-                    type="text" id="ursprungsland" name="ursprungsland" maxlength="100"
-                    value="<?= e($existing['ursprungsland'] ?? '') ?>"
                     class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                 >
             </div>
@@ -354,380 +328,12 @@ require __DIR__ . '/views/partials/header.php';
                 </div>
             </div>
 
-            <div>
-                <label for="arbeitspruefung" class="block text-sm font-semibold mb-1">Arbeitsprüfung</label>
-                <select
-                    id="arbeitspruefung" name="arbeitspruefung"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-                    <?php foreach (['' => 'keine Angabe', 'mit' => 'mit Arbeitsprüfung', 'ohne' => 'ohne Arbeitsprüfung', 'fakultativ' => 'fakultativ'] as $wert => $label): ?>
-                        <option value="<?= $wert ?>" <?= (string) ($existing['arbeitspruefung'] ?? '') === $wert ? 'selected' : '' ?>><?= e($label) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="md:col-span-2">
-                <label for="farben" class="block text-sm font-semibold mb-1">Farben</label>
-                <input
-                    type="text" id="farben" name="farben" maxlength="255"
-                    placeholder="z. B. schwarz, braun, gestromt"
-                    value="<?= e($existing['farben'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-
-            <div class="md:col-span-2">
-                <label for="beschreibung" class="block text-sm font-semibold mb-1">Beschreibung</label>
-                <p id="beschreibung-hinweis" class="text-sm text-fellDk/80 mb-2">
-                    Der erste Absatz ist das Kurzporträt oben auf der Rassenseite. Eine Zeile, die mit <code class="font-mono">## </code> beginnt, wird zur Abschnittsüberschrift, z. B. <code class="font-mono">## Wesen</code>. Absätze mit einer Leerzeile trennen.
-                </p>
-                <textarea
-                    id="beschreibung" name="beschreibung" rows="18" aria-describedby="beschreibung-hinweis"
-                    class="w-full rounded-lg border border-sand px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-tanne"
-                ><?= e($existing['beschreibung'] ?? '') ?></textarea>
-            </div>
-
-            <div>
-                <label for="gliederung" class="block text-sm font-semibold mb-1">Gliederung der Beschreibung</label>
-                <select
-                    id="gliederung" name="gliederung"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-                    <?php foreach (['keine' => 'keine Abschnitte', 'automatisch' => 'automatisch zugeordnet, ungeprüft', 'geprueft' => 'geprüft'] as $wert => $label): ?>
-                        <option value="<?= $wert ?>" <?= (string) ($existing['gliederung'] ?? 'keine') === $wert ? 'selected' : '' ?>><?= e($label) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
         </div>
     </div>
 
-    <!-- Charakter, deutsch und englisch. Englisch kommt meist aus TheDogAPI. -->
-    <div
-        x-data='{ wb: <?= json_encode(Uebersetzung::woerterbuch(), JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) ?>, unbekannt: [],
-            uebersetzen() {
-                const en = this.$refs.tempEn.value.split(",").map(b => b.trim().toLowerCase()).filter(b => b);
-                this.unbekannt = en.filter(b => !this.wb[b]);
-                if (this.unbekannt.length === 0 && en.length) {
-                    this.$refs.tempDe.value = [...new Set(en.map(b => this.wb[b]))].join(", ");
-                }
-            } }'
-        class="bg-white/80 rounded-2xl shadow border border-sand p-6"
-    >
-        <h2 class="text-lg font-bold text-fellDk mb-1">Charakter und Englisch</h2>
-        <p class="text-sm text-fellDk/80 mb-4">Links deutsch, rechts englisch.</p>
+    <?php render_steckbrief_formular($definitionen, $merkmalWerte); ?>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="md:col-start-2">
-                <label for="name_en" class="block text-sm font-semibold mb-1">Name (englisch)</label>
-                <input
-                    type="text" id="name_en" name="name_en" maxlength="120" lang="en"
-                    value="<?= e($existing['name_en'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-
-            <div>
-                <label for="temperament" class="block text-sm font-semibold mb-1">Temperament</label>
-                <input
-                    type="text" id="temperament" name="temperament" maxlength="255" x-ref="tempDe"
-                    placeholder="z. B. selbstbewusst, aufmerksam"
-                    value="<?= e($existing['temperament'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-            <div>
-                <label for="temperament_en" class="block text-sm font-semibold mb-1">Temperament (englisch)</label>
-                <input
-                    type="text" id="temperament_en" name="temperament_en" maxlength="255" lang="en" x-ref="tempEn"
-                    value="<?= e($existing['temperament_en'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-                <button type="button" @click="uebersetzen()" class="mt-2 min-h-[44px] px-3 rounded-lg border-2 border-tanne text-tanne font-semibold hover:bg-tanne hover:text-creme">
-                    Ins Deutsche übersetzen (Wörterbuch)
-                </button>
-                <p x-show="unbekannt.length" x-cloak class="text-sm text-fell mt-1" role="status">
-                    Nicht im Wörterbuch: <span x-text="unbekannt.join(', ')"></span>. Bitte von Hand übersetzen.
-                </p>
-            </div>
-
-            <div>
-                <label for="zuchtzweck" class="block text-sm font-semibold mb-1">Zuchtzweck</label>
-                <input
-                    type="text" id="zuchtzweck" name="zuchtzweck" maxlength="255"
-                    value="<?= e($existing['zuchtzweck'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-            <div>
-                <label for="zuchtzweck_en" class="block text-sm font-semibold mb-1">Zuchtzweck (englisch)</label>
-                <input
-                    type="text" id="zuchtzweck_en" name="zuchtzweck_en" maxlength="255" lang="en"
-                    value="<?= e($existing['zuchtzweck_en'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-
-            <div>
-                <label for="lebenserwartung" class="block text-sm font-semibold mb-1">Lebenserwartung in Jahren</label>
-                <input
-                    type="text" id="lebenserwartung" name="lebenserwartung" maxlength="50"
-                    placeholder="z. B. 12–15"
-                    value="<?= e($existing['lebenserwartung'] ?? '') ?>"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
-                >
-            </div>
-
-            <div class="md:col-span-2">
-                <label for="beschreibung_en" class="block text-sm font-semibold mb-1">Beschreibung (englisch)</label>
-                <textarea
-                    id="beschreibung_en" name="beschreibung_en" rows="6" lang="en"
-                    class="w-full rounded-lg border border-sand px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-tanne"
-                ><?= e($existing['beschreibung_en'] ?? '') ?></textarea>
-            </div>
-        </div>
-    </div>
-
-    <!-- Größenklassen (dynamisch, mehrere pro Rasse möglich) -->
-    <div
-        x-data='{ sizes: <?= json_encode($initialSizesForJs, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) ?> }'
-        class="bg-white/80 rounded-2xl shadow border border-sand p-6"
-    >
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-fellDk">Größenklassen</h2>
-            <button
-                type="button"
-                @click="sizes.push({groesse: '', schulterhoehe_ruede_min_cm: '', schulterhoehe_ruede_max_cm: '', schulterhoehe_haendin_min_cm: '', schulterhoehe_haendin_max_cm: '', gewicht_ruede_min_kg: '', gewicht_ruede_max_kg: '', gewicht_haendin_min_kg: '', gewicht_haendin_max_kg: ''})"
-                class="text-sm bg-pfote/10 text-fell font-semibold px-3 py-1.5 rounded-full hover:bg-pfote/20 transition-colors"
-            >
-                + Größenklasse hinzufügen
-            </button>
-        </div>
-        <p class="text-xs text-fellDk/50 mb-4">
-            Manche Rassen werden mit mehreren Größenklassen geführt (z. B. „klein: 30–40 cm“ und „mittel: 40–50 cm“). Schulterhöhe in ganzen cm, Gewicht in kg.
-        </p>
-
-        <template x-for="(size, index) in sizes" :key="index">
-            <div class="border border-sand rounded-lg p-4 mb-3">
-                <div class="flex items-end gap-3 mb-3">
-                    <div class="w-40 shrink-0">
-                        <label class="block text-xs font-semibold mb-1">Größe</label>
-                        <select :name="`sizes[${index}][groesse]`" x-model="size.groesse" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                            <option value="">— wählen —</option>
-                            <option value="klein">Klein</option>
-                            <option value="mittel">Mittel</option>
-                            <option value="gross">Groß</option>
-                            <option value="sehr_gross">Sehr groß</option>
-                        </select>
-                    </div>
-                    <button
-                        type="button"
-                        @click="sizes.splice(index, 1)"
-                        x-show="sizes.length > 1"
-                        class="text-red-500 hover:text-red-700 text-sm font-bold px-2 pb-1.5 ml-auto"
-                        title="Größenklasse entfernen"
-                    >
-                        ✕ Entfernen
-                    </button>
-                </div>
-
-                <p class="text-xs font-semibold text-fellDk/60 mb-1">Schulterhöhe (cm)</p>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                    <div>
-                        <label class="block text-xs mb-1">Rüde min</label>
-                        <input type="number" min="0" max="200" :name="`sizes[${index}][ruede_min]`" x-model="size.schulterhoehe_ruede_min_cm" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Rüde max</label>
-                        <input type="number" min="0" max="200" :name="`sizes[${index}][ruede_max]`" x-model="size.schulterhoehe_ruede_max_cm" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Hündin min</label>
-                        <input type="number" min="0" max="200" :name="`sizes[${index}][haendin_min]`" x-model="size.schulterhoehe_haendin_min_cm" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Hündin max</label>
-                        <input type="number" min="0" max="200" :name="`sizes[${index}][haendin_max]`" x-model="size.schulterhoehe_haendin_max_cm" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                </div>
-
-                <p class="text-xs font-semibold text-fellDk/60 mb-1">Gewicht (kg)</p>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                        <label class="block text-xs mb-1">Rüde min</label>
-                        <input type="number" min="0" max="120" step="0.1" :name="`sizes[${index}][gewicht_ruede_min]`" x-model="size.gewicht_ruede_min_kg" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Rüde max</label>
-                        <input type="number" min="0" max="120" step="0.1" :name="`sizes[${index}][gewicht_ruede_max]`" x-model="size.gewicht_ruede_max_kg" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Hündin min</label>
-                        <input type="number" min="0" max="120" step="0.1" :name="`sizes[${index}][gewicht_haendin_min]`" x-model="size.gewicht_haendin_min_kg" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Hündin max</label>
-                        <input type="number" min="0" max="120" step="0.1" :name="`sizes[${index}][gewicht_haendin_max]`" x-model="size.gewicht_haendin_max_kg" class="w-full rounded-lg border border-sand px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                    </div>
-                </div>
-            </div>
-        </template>
-    </div>
-
-    <!-- Aktivitäten -->
-    <div
-        x-data='{
-            activities: <?= json_encode(array_map(fn($a) => ['id' => (int) $a['id'], 'name' => $a['name']], $allActivities), JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) ?>,
-            selected: <?= json_encode($selectedActIds, JSON_HEX_APOS) ?>,
-            newName: "",
-            saving: false,
-            errorMsg: "",
-            async addActivity() {
-                if (!this.newName.trim()) return;
-                this.saving = true;
-                this.errorMsg = "";
-                try {
-                    const resp = await fetch("/ajax_create_taxonomy.php", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                        body: new URLSearchParams({
-                            csrf_token: document.querySelector("input[name=csrf_token]").value,
-                            type: "activity",
-                            name: this.newName,
-                        }),
-                    });
-                    const data = await resp.json();
-                    if (data.success) {
-                        this.activities.push(data.item);
-                        this.selected.push(data.item.id);
-                        this.newName = "";
-                    } else {
-                        this.errorMsg = data.message;
-                    }
-                } catch (e) {
-                    this.errorMsg = "Verbindungsfehler. Bitte erneut versuchen.";
-                } finally {
-                    this.saving = false;
-                }
-            }
-        }'
-        class="bg-white/80 rounded-2xl shadow border border-sand p-6"
-    >
-        <h2 class="text-lg font-bold text-fellDk mb-4">Geeignete Aktivitäten</h2>
-
-        <div class="flex flex-wrap gap-3 mb-4">
-            <template x-for="activity in activities" :key="activity.id">
-                <label class="flex items-center gap-2 text-sm bg-creme border border-sand rounded-full px-3 py-1.5 cursor-pointer">
-                    <input type="checkbox" name="activities[]" :value="activity.id" x-model.number="selected" class="rounded border-sand text-tanne focus:ring-tanne">
-                    <span x-text="activity.name"></span>
-                </label>
-            </template>
-            <p x-show="activities.length === 0" x-cloak class="text-xs text-fellDk/50">Noch keine Aktivitäten in der Datenbank angelegt.</p>
-        </div>
-
-        <div class="flex items-center gap-2 border-t border-sand pt-4">
-            <input
-                type="text" x-model="newName" @keydown.enter.prevent="addActivity()"
-                placeholder="Neue Aktivität, z. B. Fährtenarbeit"
-                class="flex-1 rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne"
-            >
-            <button
-                type="button" @click="addActivity()" :disabled="saving"
-                class="text-sm bg-pfote/10 text-fell font-semibold px-3 py-1.5 rounded-full hover:bg-pfote/20 transition-colors disabled:opacity-50"
-            >
-                <span x-show="!saving">+ Neu</span>
-                <span x-show="saving" x-cloak>Speichert …</span>
-            </button>
-        </div>
-        <p x-show="errorMsg" x-cloak x-text="errorMsg" class="text-xs text-red-600 mt-2"></p>
-    </div>
-
-    <!-- Eigenschaften / Tags -->
-    <div
-        x-data='{
-            tagsByCategory: <?= json_encode($tagGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) ?>,
-            selected: <?= json_encode($selectedTagIds, JSON_HEX_APOS) ?>,
-            newName: "",
-            newCategory: "",
-            saving: false,
-            errorMsg: "",
-            async addTag() {
-                if (!this.newName.trim()) return;
-                this.saving = true;
-                this.errorMsg = "";
-                try {
-                    const resp = await fetch("/ajax_create_taxonomy.php", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                        body: new URLSearchParams({
-                            csrf_token: document.querySelector("input[name=csrf_token]").value,
-                            type: "tag",
-                            name: this.newName,
-                            category: this.newCategory,
-                        }),
-                    });
-                    const data = await resp.json();
-                    if (data.success) {
-                        const cat = data.item.category || "Sonstiges";
-                        if (!this.tagsByCategory[cat]) this.tagsByCategory[cat] = [];
-                        this.tagsByCategory[cat].push(data.item);
-                        this.selected.push(data.item.id);
-                        this.newName = "";
-                    } else {
-                        this.errorMsg = data.message;
-                    }
-                } catch (e) {
-                    this.errorMsg = "Verbindungsfehler. Bitte erneut versuchen.";
-                } finally {
-                    this.saving = false;
-                }
-            }
-        }'
-        class="bg-white/80 rounded-2xl shadow border border-sand p-6"
-    >
-        <h2 class="text-lg font-bold text-fellDk mb-4">Eigenschaften</h2>
-
-        <template x-for="(tags, category) in tagsByCategory" :key="category">
-            <div class="mb-4">
-                <p class="text-xs font-semibold text-fellDk/60 mb-2" x-text="category"></p>
-                <div class="flex flex-wrap gap-3">
-                    <template x-for="tag in tags" :key="tag.id">
-                        <label class="flex items-center gap-2 text-sm bg-creme border border-sand rounded-full px-3 py-1.5 cursor-pointer">
-                            <input type="checkbox" name="tags[]" :value="tag.id" x-model.number="selected" class="rounded border-sand text-tanne focus:ring-tanne">
-                            <span x-text="tag.name"></span>
-                        </label>
-                    </template>
-                </div>
-            </div>
-        </template>
-        <p x-show="Object.keys(tagsByCategory).length === 0" x-cloak class="text-xs text-fellDk/50">Noch keine Eigenschaften in der Datenbank angelegt.</p>
-
-        <div class="border-t border-sand pt-4 flex flex-col md:flex-row gap-2 items-stretch md:items-center">
-            <input
-                type="text" x-model="newName" @keydown.enter.prevent="addTag()"
-                placeholder="Neue Eigenschaft, z. B. Wasserliebend"
-                class="flex-1 rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne"
-            >
-            <input
-                type="text" x-model="newCategory" @keydown.enter.prevent="addTag()"
-                placeholder="Kategorie (optional)"
-                list="tag_categories_inline"
-                class="w-full md:w-48 rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne"
-            >
-            <datalist id="tag_categories_inline">
-                <?php foreach (array_keys($tagGroups) as $cat): ?>
-                    <option value="<?= e($cat) ?>">
-                <?php endforeach; ?>
-            </datalist>
-            <button
-                type="button" @click="addTag()" :disabled="saving"
-                class="text-sm bg-pfote/10 text-fell font-semibold px-3 py-1.5 rounded-full hover:bg-pfote/20 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-                <span x-show="!saving">+ Neu</span>
-                <span x-show="saving" x-cloak>Speichert …</span>
-            </button>
-        </div>
-        <p x-show="errorMsg" x-cloak x-text="errorMsg" class="text-xs text-red-600 mt-2"></p>
-    </div>
+    <?php render_texte_formular($texte); ?>
 
     <div class="flex gap-3">
         <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold px-8 py-3 rounded-full transition-colors">

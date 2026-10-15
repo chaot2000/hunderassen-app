@@ -219,17 +219,6 @@ require __DIR__ . '/views/partials/header.php';
     <?php endif; ?>
 </div>
 
-<?php
-$ohneDeutsch = (int) $pdo->query("SELECT COUNT(*) FROM breeds WHERE (temperament IS NULL OR temperament = '') AND temperament_en <> ''")->fetchColumn();
-if ($ohneDeutsch > 0): ?>
-<form action="/admin_thedogapi_apply.php" method="post" class="tdapi-pauschal">
-    <?= csrf_field() ?>
-    <input type="hidden" name="aktion" value="temperament_uebersetzen">
-    <p class="mb-2"><?= $ohneDeutsch ?> Rassen haben ein englisches, aber kein deutsches Temperament.</p>
-    <button type="submit">Mit dem Wörterbuch übersetzen</button>
-</form>
-<?php endif; ?>
-
 <form action="/admin_thedogapi_apply.php" method="post" id="tdapi-formular">
 <?= csrf_field() ?>
 
