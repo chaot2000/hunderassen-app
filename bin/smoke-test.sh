@@ -760,6 +760,22 @@ else
     fi
 
     echo ""
+    echo "--- TheDogAPI-Übernahme füllt nur leere Felder ---"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Erste Übernahme: Temperament ist leer und wird ergänzt" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items[1][breed_id]=1 \
+         --data-urlencode items[1][temperament]=CI-Erstwert --data-urlencode items[1][uebernehmen_temperament]=1"
+    check_body_contains "Ergebnis: ergänzt" "Rasse #1: ergänzt"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Zweite Übernahme: vorhandenes Temperament bleibt" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items[1][breed_id]=1 \
+         --data-urlencode items[1][temperament]=CI-Zweitwert --data-urlencode items[1][uebernehmen_temperament]=1"
+    check_body_contains "Ergebnis: nicht überschrieben" "Nicht überschrieben: temperament"
+    check_status "Versionen zeigen den Import" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Erstwert als Import-Version" "CI-Erstwert"
+    check_body_not_contains "Zweitwert nie gespeichert" "CI-Zweitwert"
+
+    echo ""
     echo "--- Rassen-Detailseite und Gliederung der Rassentexte ---"
     check_status "Rassen-Detailseite lädt" "$BASE_URL/breed_detail.php?id=1" "200"
     check_body_contains "FCI-Gruppe als Balken" "Hüte- und Treibhunde"

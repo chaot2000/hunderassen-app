@@ -50,67 +50,102 @@ foreach ($items as $breedId => $daten) {
         continue;
     }
 
+    // Aktuellen Stand lesen: Es werden NUR leere Felder gefüllt, nie
+    // vorhandene Werte oder Bilder überschrieben (Wunsch 16.10.2026).
+    // Ändern lässt sich ein vorhandener Wert über "Rasse bearbeiten".
+    $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck, thedogapi_id, bild_blob IS NOT NULL AS hat_bild FROM breeds WHERE id = :id');
+    $altStmt->execute([':id' => $breedId]);
+    $vorher = $altStmt->fetch();
+    if (!$vorher) {
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (Rasse nicht gefunden)'];
+        continue;
+    }
+    $leer = fn($v): bool => $v === null || trim((string) $v) === '';
+
     $updates = [];
     $params = [':id' => $breedId];
+    $behalten = [];
 
-    if (!empty($daten['uebernehmen_temperament']) && trim((string)($daten['temperament'] ?? '')) !== '') {
-        $updates[] = 'temperament = :temperament';
-        $params[':temperament'] = trim($daten['temperament']);
-    }
-
-    if (!empty($daten['uebernehmen_lebenserwartung']) && trim((string)($daten['lebenserwartung'] ?? '')) !== '') {
-        $updates[] = 'lebenserwartung = :lebenserwartung';
-        $params[':lebenserwartung'] = trim($daten['lebenserwartung']);
-    }
-
-    if (!empty($daten['uebernehmen_zuchtzweck']) && trim((string)($daten['zuchtzweck'] ?? '')) !== '') {
-        $updates[] = 'zuchtzweck = :zuchtzweck';
-        $params[':zuchtzweck'] = trim($daten['zuchtzweck']);
+    foreach (['temperament', 'lebenserwartung', 'zuchtzweck'] as $feld) {
+        $wert = trim((string) ($daten[$feld] ?? ''));
+        if (empty($daten['uebernehmen_' . $feld]) || $wert === '') {
+            continue;
+        }
+        if (!$leer($vorher[$feld])) {
+            $behalten[] = $feld;
+            continue;
+        }
+        $updates[] = "{$feld} = :{$feld}";
+        $params[':' . $feld] = $wert;
     }
 
     $bildStatus = null;
     if (!empty($daten['uebernehmen_bild']) && !empty($daten['bild_url'])) {
-        $bildStatus = uebernehmeBildVonUrl($daten['bild_url']);
-        if ($bildStatus['success']) {
-            $updates[] = 'bild_blob = :bild_blob';
-            $updates[] = 'bild_mime = :bild_mime';
-            $updates[] = 'bild_updated_at = NOW()';
-            $params[':bild_blob'] = $bildStatus['blob'];
-            $params[':bild_mime'] = $bildStatus['mime'];
+        if ($vorher['hat_bild']) {
+            $behalten[] = 'Bild';
+        } else {
+            $bildStatus = uebernehmeBildVonUrl($daten['bild_url']);
+            if ($bildStatus['success']) {
+                // bild_mime VOR bild_blob: MySQL wertet die Zuweisungen von
+                // links nach rechts aus, die IF-Bedingung soll den alten Stand sehen.
+                $updates[] = 'bild_mime = :bild_mime';
+                $updates[] = 'bild_blob = :bild_blob';
+                $updates[] = 'bild_updated_at = NOW()';
+                $params[':bild_blob'] = $bildStatus['blob'];
+                $params[':bild_mime'] = $bildStatus['mime'];
+            }
         }
     }
 
     if (!empty($daten['markieren'])) {
-        $updates[] = 'thedogapi_id = :thedogapi_id';
-        $updates[] = 'thedogapi_stand = NOW()';
-        $params[':thedogapi_id'] = $daten['thedogapi_id'] ?? null;
+        $neueId = trim((string) ($daten['thedogapi_id'] ?? ''));
+        if (!$leer($vorher['thedogapi_id']) && (string) $vorher['thedogapi_id'] !== $neueId) {
+            $behalten[] = 'Zuordnung (schon mit anderer TheDogAPI-Rasse verknüpft)';
+        } elseif ($neueId !== '') {
+            $updates[] = 'thedogapi_id = :thedogapi_id';
+            $updates[] = 'thedogapi_stand = NOW()';
+            $params[':thedogapi_id'] = $neueId;
+        }
     }
 
+    $behaltenText = $behalten ? ' Nicht überschrieben: ' . implode(', ', $behalten) . '.' : '';
+
     if (count($updates) === 0) {
-        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts ausgewählt)'];
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts Neues)' . $behaltenText];
         continue;
     }
 
-    $sql = 'UPDATE breeds SET ' . implode(', ', $updates) . ' WHERE id = :id';
+    // Leer-Bedingungen im UPDATE wiederholen: Hat jemand das Feld
+    // zwischen Lesen und Schreiben gefüllt, bleibt sein Wert stehen.
+    $sets = [];
+    foreach ($updates as $u) {
+        $feld = strtok($u, ' ');
+        $sets[] = match ($feld) {
+            'temperament', 'lebenserwartung', 'zuchtzweck' => "{$feld} = IF({$feld} IS NULL OR {$feld} = '', :{$feld}, {$feld})",
+            'bild_blob' => 'bild_blob = IF(bild_blob IS NULL, :bild_blob, bild_blob)',
+            'bild_mime' => 'bild_mime = IF(bild_blob IS NULL, :bild_mime, bild_mime)',
+            default => $u,
+        };
+    }
+    $sql = 'UPDATE breeds SET ' . implode(', ', $sets) . ' WHERE id = :id';
     $stmt = $pdo->prepare($sql);
 
-    // Textfelder, die der Import überschreibt, als Version sichern.
-    $neueTexte = [];
-    foreach (['temperament', 'lebenserwartung', 'zuchtzweck'] as $feld) {
+    $neueWerte = [];
+    foreach (['temperament', 'lebenserwartung', 'zuchtzweck', 'thedogapi_id'] as $feld) {
         if (array_key_exists(':' . $feld, $params)) {
-            $neueTexte[$feld] = $params[':' . $feld];
+            $neueWerte[$feld] = $params[':' . $feld];
         }
     }
 
     try {
         $pdo->beginTransaction();
-        $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck FROM breeds WHERE id = :id FOR UPDATE');
+        $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck, thedogapi_id FROM breeds WHERE id = :id FOR UPDATE');
         $altStmt->execute([':id' => $breedId]);
         $alt = $altStmt->fetch() ?: [];
         $stmt->execute($params);
-        ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neueTexte, (int) current_user()['id'], 'import');
+        ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neueWerte, (int) current_user()['id'], 'import');
         $pdo->commit();
-        $status = 'aktualisiert';
+        $status = 'ergänzt' . $behaltenText;
         if ($bildStatus !== null && !$bildStatus['success']) {
             $status .= ' (Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'] . ')';
         }
