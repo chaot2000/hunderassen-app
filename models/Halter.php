@@ -155,7 +155,7 @@ class Halter
             ':created_by'      => $createdBy,
         ]);
 
-        return ['success' => true, 'message' => 'Halter "' . $validated['name'] . '" wurde angelegt.', 'halter_id' => (int) $pdo->lastInsertId()];
+        return ['success' => true, 'message' => t('halter.m_angelegt', ['name' => $validated['name']]), 'halter_id' => (int) $pdo->lastInsertId()];
     }
 
     /**
@@ -198,7 +198,7 @@ class Halter
             ':tenant_id' => $tenantId,
         ], $imageParams));
 
-        return ['success' => true, 'message' => 'Halter "' . $validated['name'] . '" wurde aktualisiert.'];
+        return ['success' => true, 'message' => t('halter.m_aktualisiert', ['name' => $validated['name']])];
     }
 
     /**
@@ -224,10 +224,10 @@ class Halter
     {
         $name = clean_input((string) ($data['name'] ?? ''));
         if ($name === '') {
-            return ['success' => false, 'message' => 'Der Name des Halters darf nicht leer sein.'];
+            return ['success' => false, 'message' => t('halter.m_name_leer')];
         }
         if (mb_strlen($name) > 150) {
-            return ['success' => false, 'message' => 'Der Name darf maximal 150 Zeichen lang sein.'];
+            return ['success' => false, 'message' => t('allg.name_max150')];
         }
 
         $telefon = clean_input((string) ($data['telefon'] ?? ''));
@@ -235,7 +235,7 @@ class Halter
 
         $email = clean_input((string) ($data['email'] ?? ''));
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return ['success' => false, 'message' => 'Die E-Mail-Adresse ist ungültig.'];
+            return ['success' => false, 'message' => t('allg.email_ungueltig')];
         }
         $email = $email !== '' ? $email : null;
 

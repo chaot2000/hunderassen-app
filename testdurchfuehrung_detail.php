@@ -30,9 +30,9 @@ $dog             = $ownerDogId !== null ? Dog::findByIdForUser($ownerDogId, $cur
 
 if ($dog === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('allg.nicht_gefunden');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk/50"><p>Diese Testdurchführung wurde nicht gefunden.</p></div>';
+    echo '<div class="text-center py-16 text-fellDk/50"><p>' . e(t('td.nicht_gefunden')) . '</p></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -40,9 +40,9 @@ if ($dog === null) {
 $durchfuehrung = TestDurchfuehrung::findByIdForDog($durchfuehrungId, (int) $dog['id']);
 if ($durchfuehrung === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('allg.nicht_gefunden');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk/50"><p>Diese Testdurchführung wurde nicht gefunden.</p></div>';
+    echo '<div class="text-center py-16 text-fellDk/50"><p>' . e(t('td.nicht_gefunden')) . '</p></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -56,9 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_durchfuehrung_
     exit;
 }
 
-$statusLabels    = ['offen' => 'Offen', 'bestanden' => 'Bestanden', 'nicht_bestanden' => 'Nicht bestanden'];
+$statusLabels    = ['offen' => t('status.offen'), 'bestanden' => t('status.bestanden'), 'nicht_bestanden' => t('status.nicht_bestanden')];
 $statusFarben    = ['offen' => 'bg-sand/50 text-fellDk/70', 'bestanden' => 'bg-tanne/10 text-tanneDk', 'nicht_bestanden' => 'bg-red-50 text-red-700'];
-$kategorieLabels = ['bestanden' => 'Bestanden', 'neutral' => 'Neutral', 'nicht_bestanden' => 'Nicht bestanden'];
+$kategorieLabels = ['bestanden' => t('status.bestanden'), 'neutral' => t('status.neutral'), 'nicht_bestanden' => t('status.nicht_bestanden')];
 $kategorieFarben = ['bestanden' => 'bg-tanne/10 text-tanneDk', 'neutral' => 'bg-pfote/20 text-fellDk/70', 'nicht_bestanden' => 'bg-red-50 text-red-700'];
 
 $pageTitle = $durchfuehrung['test_name'];
@@ -66,7 +66,7 @@ require __DIR__ . '/views/partials/header.php';
 ?>
 
 <a href="/dog_detail.php?id=<?= (int) $dog['id'] ?>" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
-    ← Zurück zu <?= e($dog['name']) ?>
+    ← <?= e(t('td.zurueck_zu')) ?> <?= e($dog['name']) ?>
 </a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 max-w-2xl">
@@ -74,18 +74,18 @@ require __DIR__ . '/views/partials/header.php';
         <div>
             <h1 class="text-2xl font-extrabold text-fellDk break-words"><?= e($durchfuehrung['test_name']) ?></h1>
             <p class="text-sm text-fellDk/60 mt-1">
-                Durchgeführt am <?= e(date('d.m.Y', strtotime($durchfuehrung['durchfuehrungsdatum']))) ?> bei <?= e($dog['name']) ?>
+                <?= e(t('td.durchgefuehrt_am')) ?> <?= e(date('d.m.Y', strtotime($durchfuehrung['durchfuehrungsdatum']))) ?> <?= e(t('td.bei')) ?> <?= e($dog['name']) ?>
             </p>
         </div>
         <div class="flex gap-2 shrink-0">
             <a href="/testdurchfuehrung_form.php?id=<?= (int) $durchfuehrung['id'] ?>" class="bg-pfote/10 text-fell font-semibold text-sm px-4 py-2 rounded-full hover:bg-pfote/20 transition-colors whitespace-nowrap">
-                Bearbeiten
+                <?= e(t('allg.bearbeiten')) ?>
             </a>
-            <form method="post" action="/testdurchfuehrung_detail.php?id=<?= (int) $durchfuehrung['id'] ?>" onsubmit="return confirm('Diese Testdurchführung wirklich löschen?');">
+            <form method="post" action="/testdurchfuehrung_detail.php?id=<?= (int) $durchfuehrung['id'] ?>" onsubmit="return confirm(<?= e(json_encode(t('td.loeschen_frage'), JSON_UNESCAPED_UNICODE)) ?>);">
                 <?= csrf_field() ?>
                 <input type="hidden" name="delete_durchfuehrung_id" value="<?= (int) $durchfuehrung['id'] ?>">
                 <button type="submit" class="bg-red-50 text-red-700 font-semibold text-sm px-4 py-2 rounded-full hover:bg-red-100 transition-colors whitespace-nowrap">
-                    Löschen
+                    <?= e(t('allg.loeschen')) ?>
                 </button>
             </form>
         </div>
@@ -93,21 +93,21 @@ require __DIR__ . '/views/partials/header.php';
 
     <div class="mt-4">
         <span class="inline-block text-sm font-semibold px-3 py-1 rounded-full <?= $statusFarben[$durchfuehrung['status']] ?? 'bg-sand/50 text-fellDk/70' ?>">
-            Gesamtstatus: <?= e($statusLabels[$durchfuehrung['status']] ?? $durchfuehrung['status']) ?>
+            <?= e(t('td.gesamtstatus')) ?> <?= e($statusLabels[$durchfuehrung['status']] ?? $durchfuehrung['status']) ?>
         </span>
     </div>
 
     <?php if (!empty($durchfuehrung['notizen'])): ?>
         <div class="mt-4">
-            <h2 class="font-bold text-fellDk text-sm mb-1">Notizen</h2>
+            <h2 class="font-bold text-fellDk text-sm mb-1"><?= e(t('allg.notizen')) ?></h2>
             <p class="text-sm text-fellDk/70 whitespace-pre-line"><?= e($durchfuehrung['notizen']) ?></p>
         </div>
     <?php endif; ?>
 
     <div class="mt-6">
-        <h2 class="font-bold text-fellDk mb-3">Aufgaben-Ergebnisse</h2>
+        <h2 class="font-bold text-fellDk mb-3"><?= e(t('td.aufgaben_ergebnisse')) ?></h2>
         <?php if (empty($durchfuehrung['ergebnisse'])): ?>
-            <p class="text-sm text-fellDk/50">Für diese Durchführung wurden keine Aufgaben-Ergebnisse erfasst.</p>
+            <p class="text-sm text-fellDk/50"><?= e(t('td.keine_ergebnisse')) ?></p>
         <?php else: ?>
             <div class="space-y-3">
                 <?php foreach ($durchfuehrung['ergebnisse'] as $ergebnis): ?>
@@ -120,7 +120,7 @@ require __DIR__ . '/views/partials/header.php';
                         </div>
                         <p class="text-sm text-fellDk/70 mt-1"><?= e($ergebnis['ergebnis_bezeichnung']) ?></p>
                         <?php if (!empty($ergebnis['notizen'])): ?>
-                            <p class="text-xs text-fellDk/50 mt-2 whitespace-pre-line">Notiz: <?= e($ergebnis['notizen']) ?></p>
+                            <p class="text-xs text-fellDk/50 mt-2 whitespace-pre-line"><?= e(t('td.notiz')) ?> <?= e($ergebnis['notizen']) ?></p>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>

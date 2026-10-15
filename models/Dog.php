@@ -309,11 +309,11 @@ class Dog
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Hund "' . $validated['name'] . '" wurde angelegt.', 'dog_id' => $dogId];
+            return ['success' => true, 'message' => t('hunde.m_angelegt', ['name' => $validated['name']]), 'dog_id' => $dogId];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Anlegen eines Hundes: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Daten gespeichert.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_daten')];
         }
     }
 
@@ -327,7 +327,7 @@ class Dog
     public static function update(int $id, int $tenantId, int $userId, bool $isAdmin, array $data, array $halterIds, ?array $image = null, bool $removeImage = false): array
     {
         if (self::findByIdForUser($id, $userId, $isAdmin, $tenantId) === null) {
-            return ['success' => false, 'message' => 'Der Hund wurde nicht gefunden.'];
+            return ['success' => false, 'message' => t('hunde.m_nicht_gefunden')];
         }
 
         $validated = self::validate($data, $halterIds, $tenantId, $userId, $isAdmin, $id);
@@ -373,11 +373,11 @@ class Dog
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Hund "' . $validated['name'] . '" wurde aktualisiert.'];
+            return ['success' => true, 'message' => t('hunde.m_aktualisiert', ['name' => $validated['name']])];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Aktualisieren eines Hundes: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Änderungen übernommen.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_aenderungen')];
         }
     }
 
@@ -430,10 +430,10 @@ class Dog
     {
         $name = clean_input((string) ($data['name'] ?? ''));
         if ($name === '') {
-            return ['success' => false, 'message' => 'Der Name des Hundes darf nicht leer sein.'];
+            return ['success' => false, 'message' => t('hunde.m_name_leer')];
         }
         if (mb_strlen($name) > 120) {
-            return ['success' => false, 'message' => 'Der Name darf maximal 120 Zeichen lang sein.'];
+            return ['success' => false, 'message' => t('allg.name_max120')];
         }
 
         $geburtsdatumRaw = clean_input((string) ($data['geburtsdatum'] ?? ''));
@@ -441,10 +441,10 @@ class Dog
         if ($geburtsdatumRaw !== '') {
             $parsed = DateTime::createFromFormat('Y-m-d', $geburtsdatumRaw);
             if ($parsed === false || $parsed->format('Y-m-d') !== $geburtsdatumRaw) {
-                return ['success' => false, 'message' => 'Das Geburtsdatum ist ungültig (Format: JJJJ-MM-TT).'];
+                return ['success' => false, 'message' => t('hunde.m_geburt_format')];
             }
             if ($parsed > new DateTime('today')) {
-                return ['success' => false, 'message' => 'Das Geburtsdatum darf nicht in der Zukunft liegen.'];
+                return ['success' => false, 'message' => t('hunde.m_geburt_zukunft')];
             }
             $geburtsdatum = $geburtsdatumRaw;
         }
@@ -452,7 +452,7 @@ class Dog
         $farbe = clean_input((string) ($data['farbe'] ?? ''));
         $farbe = $farbe !== '' ? $farbe : null;
         if ($farbe !== null && mb_strlen($farbe) > 255) {
-            return ['success' => false, 'message' => 'Die Farbe darf maximal 255 Zeichen lang sein.'];
+            return ['success' => false, 'message' => t('hunde.m_farbe_lang')];
         }
 
         $breedId = isset($data['breed_id']) && $data['breed_id'] !== '' ? (int) $data['breed_id'] : null;
@@ -461,7 +461,7 @@ class Dog
             $check = $pdo->prepare('SELECT id FROM breeds WHERE id = :id LIMIT 1');
             $check->execute([':id' => $breedId]);
             if (!$check->fetch()) {
-                return ['success' => false, 'message' => 'Die ausgewählte Rasse wurde nicht gefunden.'];
+                return ['success' => false, 'message' => t('hunde.m_rasse')];
             }
         }
 
@@ -475,7 +475,7 @@ class Dog
                 $erlaubt = array_merge($erlaubt, array_map('intval', array_column(self::getHalters($dogId), 'id')));
             }
             if (array_diff($cleanHalterIds, $erlaubt) !== []) {
-                return ['success' => false, 'message' => 'Mindestens einer der ausgewählten Halter wurde nicht gefunden.'];
+                return ['success' => false, 'message' => t('hunde.m_halter')];
             }
         }
 
@@ -483,7 +483,7 @@ class Dog
         if ($zuechterId !== null) {
             $erlaubt = self::allowedIds('zuechter', [$zuechterId], $tenantId, $userId, $isAdmin);
             if ($erlaubt === [] && !($dogId !== null && self::currentZuechterId($dogId) === $zuechterId)) {
-                return ['success' => false, 'message' => 'Der ausgewählte Züchter wurde nicht gefunden.'];
+                return ['success' => false, 'message' => t('hunde.m_zuechter')];
             }
         }
 

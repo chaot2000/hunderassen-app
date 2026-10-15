@@ -145,11 +145,11 @@ class TestDurchfuehrung
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Testdurchführung wurde erfasst.', 'durchfuehrung_id' => $durchfuehrungId];
+            return ['success' => true, 'message' => t('td.m_erfasst'), 'durchfuehrung_id' => $durchfuehrungId];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Anlegen einer Testdurchführung: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Daten gespeichert.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_daten')];
         }
     }
 
@@ -169,7 +169,7 @@ class TestDurchfuehrung
         $row->execute([':id' => $id, ':dog_id' => $dogId]);
         $testId = $row->fetchColumn();
         if ($testId === false) {
-            return ['success' => false, 'message' => 'Die Testdurchführung wurde nicht gefunden.'];
+            return ['success' => false, 'message' => t('td.m_nicht_gefunden')];
         }
 
         $validated = self::validate((int) $testId, $tenantId, $durchfuehrungData, $ergebnisse);
@@ -197,11 +197,11 @@ class TestDurchfuehrung
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Testdurchführung wurde aktualisiert.'];
+            return ['success' => true, 'message' => t('td.m_aktualisiert')];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Aktualisieren einer Testdurchführung: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Änderungen übernommen.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_aenderungen')];
         }
     }
 
@@ -236,16 +236,16 @@ class TestDurchfuehrung
     {
         $test = Test::findById($testId, $tenantId);
         if ($test === null) {
-            return ['success' => false, 'message' => 'Der ausgewählte Test wurde nicht gefunden.'];
+            return ['success' => false, 'message' => t('td.m_test')];
         }
         if (empty($test['aufgaben'])) {
-            return ['success' => false, 'message' => 'Der ausgewählte Test hat keine Aufgaben und kann nicht durchgeführt werden.'];
+            return ['success' => false, 'message' => t('td.m_ohne_aufgaben')];
         }
 
         $datumRaw = clean_input((string) ($durchfuehrungData['durchfuehrungsdatum'] ?? ''));
         $datum = DateTime::createFromFormat('Y-m-d', $datumRaw);
         if ($datum === false || $datum->format('Y-m-d') !== $datumRaw) {
-            return ['success' => false, 'message' => 'Das Durchführungsdatum ist ungültig (Format: JJJJ-MM-TT).'];
+            return ['success' => false, 'message' => t('td.m_datum_format')];
         }
         // Reiner Datums-String-Vergleich statt DateTime-Objekt-Vergleich:
         // DateTime::createFromFormat('Y-m-d', ...) übernimmt für die nicht
@@ -255,12 +255,12 @@ class TestDurchfuehrung
         // und der Vergleich hätte fälschlich schon das heutige Datum als
         // Zukunft abgelehnt.
         if ($datumRaw > date('Y-m-d')) {
-            return ['success' => false, 'message' => 'Das Durchführungsdatum darf nicht in der Zukunft liegen.'];
+            return ['success' => false, 'message' => t('td.m_datum_zukunft')];
         }
 
         $status = (string) ($durchfuehrungData['status'] ?? '');
         if (!in_array($status, self::VALID_STATUS, true)) {
-            return ['success' => false, 'message' => 'Ungültiger Gesamtstatus.'];
+            return ['success' => false, 'message' => t('td.m_status')];
         }
 
         $notizen = clean_input((string) ($durchfuehrungData['notizen'] ?? ''));
@@ -288,12 +288,12 @@ class TestDurchfuehrung
         $cleanedErgebnisse = [];
         foreach ($erlaubteErgebnisseByAufgabe as $aufgabeId => $erlaubteIds) {
             if (!isset($ergebnisseByAufgabe[$aufgabeId])) {
-                return ['success' => false, 'message' => 'Für jede Aufgabe muss ein Ergebnis ausgewählt werden.'];
+                return ['success' => false, 'message' => t('td.m_ergebnis_fehlt')];
             }
 
             $gewaehlt = $ergebnisseByAufgabe[$aufgabeId];
             if (!in_array($gewaehlt['ergebnis_id'], array_map('intval', $erlaubteIds), true)) {
-                return ['success' => false, 'message' => 'Das ausgewählte Ergebnis passt nicht zur zugehörigen Aufgabe.'];
+                return ['success' => false, 'message' => t('td.m_ergebnis_passt')];
             }
 
             $cleanedErgebnisse[] = [

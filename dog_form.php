@@ -43,7 +43,7 @@ $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
     http_response_code(404);
-    die('Der angeforderte Hund wurde nicht gefunden.');
+    die(e(t('hunde.angefordert')));
 }
 
 // Neuer Hund aus der Rassen-Detailseite ("Hund dieser Rasse anlegen"):
@@ -102,15 +102,15 @@ $allBreeds   = Breed::search('', [], [], []); // Rassen sind geteilte Katalogdat
 $allHalter   = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 $allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 
-$pageTitle = $isEditMode ? 'Hund bearbeiten' : 'Hund anlegen';
+$pageTitle = $isEditMode ? t('hunde.bearbeiten') : t('hunde.anlegen');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; Zurück zur Übersicht</a>
+<a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; <?= e(t('allg.zurueck_uebersicht')) ?></a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
     <h1 class="text-xl font-extrabold text-fellDk mb-4">
-        <?= $isEditMode ? 'Hund bearbeiten' : 'Neuen Hund anlegen' ?>
+        <?= e($isEditMode ? t('hunde.bearbeiten') : t('hunde.neu')) ?>
     </h1>
 
     <?php if ($errorMessage !== null): ?>
@@ -135,19 +135,19 @@ require __DIR__ . '/views/partials/header.php';
                     <span x-show="!previewUrl" x-cloak class="text-3xl text-fellDk/20" aria-hidden="true">🐾</span>
                 </div>
                 <div class="flex-1 w-full space-y-2">
-                    <label for="bild" class="block text-sm font-semibold">Foto</label>
+                    <label for="bild" class="block text-sm font-semibold"><?= e(t('bild.foto')) ?></label>
                     <input
                         type="file" id="bild" accept="image/jpeg,image/png,image/webp"
                         x-ref="fileInput" @change="onFileSelected($event)"
                         class="block w-full text-sm text-fellDk file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-pfote/10 file:text-fell file:font-semibold hover:file:bg-pfote/20 file:cursor-pointer cursor-pointer">
-                    <p class="text-xs text-fellDk/50">JPG, PNG oder WebP. Nach der Auswahl kannst du den Bildausschnitt per Ziehen festlegen.</p>
+                    <p class="text-xs text-fellDk/50"><?= e(t('bild.hinweis')) ?></p>
 
                     <div class="flex gap-3">
                         <button type="button" @click="reopenCropper()" x-show="previewUrl" class="text-xs text-tanne hover:text-tanneDk font-semibold">
-                            Ausschnitt ändern
+                            <?= e(t('bild.ausschnitt_aendern')) ?>
                         </button>
                         <button type="button" @click="removeImage()" x-show="previewUrl" class="text-xs text-red-500 hover:text-red-700 font-semibold">
-                            Bild entfernen
+                            <?= e(t('bild.entfernen')) ?>
                         </button>
                     </div>
 
@@ -159,8 +159,8 @@ require __DIR__ . '/views/partials/header.php';
             <!-- Crop-Modal: erscheint nach Dateiauswahl, blockt die restliche Seite ab -->
             <div x-show="cropperOpen" x-cloak class="fixed inset-0 bg-fellDk/60 z-50 flex items-center justify-center p-4" style="display: none;">
                 <div class="bg-creme rounded-2xl shadow-xl p-6 w-full max-w-md">
-                    <h3 class="text-lg font-bold text-fellDk mb-1">Bildausschnitt wählen</h3>
-                    <p class="text-xs text-fellDk/60 mb-4">Zum Verschieben ziehen, mit dem Regler zoomen.</p>
+                    <h3 class="text-lg font-bold text-fellDk mb-1"><?= e(t('bild.ausschnitt_waehlen')) ?></h3>
+                    <p class="text-xs text-fellDk/60 mb-4"><?= e(t('bild.ziehen')) ?></p>
 
                     <div
                         x-ref="cropStage"
@@ -178,10 +178,10 @@ require __DIR__ . '/views/partials/header.php';
 
                     <div class="flex gap-3 mt-5">
                         <button type="button" @click="confirmCrop()" class="flex-1 bg-tanne hover:bg-tanneDk text-creme font-bold px-4 py-2.5 rounded-full transition-colors">
-                            Übernehmen
+                            <?= e(t('bild.uebernehmen')) ?>
                         </button>
                         <button type="button" @click="cancelCrop()" class="text-fellDk/60 hover:text-fellDk font-semibold px-4 py-2.5">
-                            Abbrechen
+                            <?= e(t('allg.abbrechen')) ?>
                         </button>
                     </div>
                 </div>
@@ -189,14 +189,14 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="name" class="block text-sm font-semibold mb-1">Name *</label>
+            <label for="name" class="block text-sm font-semibold mb-1"><?= e(t('allg.name_pflicht')) ?></label>
             <input type="text" id="name" name="name" required maxlength="120"
                 value="<?= e($existing['name'] ?? '') ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
         </div>
 
         <div>
-            <label for="geburtsdatum" class="block text-sm font-semibold mb-1">Geburtsdatum</label>
+            <label for="geburtsdatum" class="block text-sm font-semibold mb-1"><?= e(t('allg.geburtsdatum')) ?></label>
             <input type="date" id="geburtsdatum" name="geburtsdatum"
                 value="<?= e($existing['geburtsdatum'] ?? '') ?>"
                 max="<?= e(date('Y-m-d')) ?>"
@@ -204,10 +204,10 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="breed_id" class="block text-sm font-semibold mb-1">Rasse</label>
+            <label for="breed_id" class="block text-sm font-semibold mb-1"><?= e(t('allg.rasse')) ?></label>
             <select id="breed_id" name="breed_id" x-model="breedId" @change="updateColorSuggestions"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                <option value="">— unbekannt / Mischling —</option>
+                <option value="">— <?= e(t('allg.unbekannt_mischling')) ?> —</option>
                 <?php foreach ($allBreeds as $breed): ?>
                     <option value="<?= (int) $breed['id'] ?>"
                         data-farben="<?= e($breed['farben'] ?? '') ?>"
@@ -219,23 +219,23 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="farbe" class="block text-sm font-semibold mb-1">Farbe</label>
+            <label for="farbe" class="block text-sm font-semibold mb-1"><?= e(t('allg.farbe')) ?></label>
             <input type="text" id="farbe" name="farbe" maxlength="255" list="farben_vorschlaege"
                 value="<?= e($existing['farbe'] ?? '') ?>"
-                placeholder="z. B. schwarz-loh"
+                placeholder="<?= e(t('hunde.farbe_platzhalter')) ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
             <datalist id="farben_vorschlaege">
                 <template x-for="f in colorSuggestions" :key="f">
                     <option :value="f"></option>
                 </template>
             </datalist>
-            <p class="text-xs text-fellDk/50 mt-1">Vorschläge stammen aus den Rassefarben, du kannst aber frei eintragen.</p>
+            <p class="text-xs text-fellDk/50 mt-1"><?= e(t('hunde.farbe_hinweis')) ?></p>
         </div>
 
         <div>
-            <label class="block text-sm font-semibold mb-1">Halter (Familie)</label>
+            <label class="block text-sm font-semibold mb-1"><?= e(t('hunde.halter_familie')) ?></label>
             <?php if (empty($allHalter)): ?>
-                <p class="text-sm text-fellDk/50">Noch keine Halter angelegt.</p>
+                <p class="text-sm text-fellDk/50"><?= e(t('hunde.keine_halter')) ?></p>
             <?php else: ?>
                 <div class="border border-sand rounded-lg divide-y divide-sand max-h-48 overflow-y-auto">
                     <?php foreach ($allHalter as $halter): ?>
@@ -247,18 +247,18 @@ require __DIR__ . '/views/partials/header.php';
                         </label>
                     <?php endforeach; ?>
                 </div>
-                <p class="text-xs text-fellDk/50 mt-1">Mehrfachauswahl möglich — z. B. für eine ganze Familie als gemeinsame Halter.</p>
+                <p class="text-xs text-fellDk/50 mt-1"><?= e(t('hunde.mehrfach')) ?></p>
             <?php endif; ?>
             <p class="text-xs text-fellDk/50 mt-1">
-                Halter fehlt? <a href="/halter_form.php" class="text-tanne hover:text-tanneDk underline">Neuen Halter anlegen</a>
+                <?= e(t('hunde.halter_fehlt')) ?> <a href="/halter_form.php" class="text-tanne hover:text-tanneDk underline"><?= e(t('hunde.halter_neu')) ?></a>
             </p>
         </div>
 
         <div>
-            <label for="zuechter_id" class="block text-sm font-semibold mb-1">Züchter</label>
+            <label for="zuechter_id" class="block text-sm font-semibold mb-1"><?= e(t('allg.zuechter')) ?></label>
             <select id="zuechter_id" name="zuechter_id"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-                <option value="">— kein Züchter hinterlegt —</option>
+                <option value="">— <?= e(t('hunde.kein_zuechter')) ?> —</option>
                 <?php foreach ($allZuechter as $zuechter): ?>
                     <option value="<?= (int) $zuechter['id'] ?>"
                         <?= (int) ($existing['zuechter_id'] ?? 0) === (int) $zuechter['id'] ? 'selected' : '' ?>>
@@ -267,15 +267,15 @@ require __DIR__ . '/views/partials/header.php';
                 <?php endforeach; ?>
             </select>
             <p class="text-xs text-fellDk/50 mt-1">
-                Züchter fehlt? <a href="/zuechter_form.php" class="text-tanne hover:text-tanneDk underline">Neuen Züchter anlegen</a>
+                <?= e(t('hunde.zuechter_fehlt')) ?> <a href="/zuechter_form.php" class="text-tanne hover:text-tanneDk underline"><?= e(t('hunde.zuechter_neu')) ?></a>
             </p>
         </div>
 
         <div class="flex flex-col sm:flex-row gap-3 pt-2">
             <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-6 py-2.5 rounded-full transition-colors">
-                <?= $isEditMode ? 'Speichern' : 'Hund anlegen' ?>
+                <?= e($isEditMode ? t('allg.speichern') : t('hunde.anlegen')) ?>
             </button>
-            <a href="/dogs.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk">Abbrechen</a>
+            <a href="/dogs.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk"><?= e(t('allg.abbrechen')) ?></a>
         </div>
     </form>
 </div>
@@ -342,7 +342,7 @@ require __DIR__ . '/views/partials/header.php';
                     this.drawNext();
                 };
                 img.onerror = () => {
-                    alert('Dieses Bild konnte nicht gelesen werden. Bitte eine andere Datei wählen.');
+                    alert(<?= json_encode(t('bild.js_lesen'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                 };
                 this.releasePreviousObjectUrl();
                 img.src = URL.createObjectURL(file);
@@ -366,7 +366,7 @@ require __DIR__ . '/views/partials/header.php';
                         this.drawNext();
                     };
                     img.onerror = () => {
-                        alert('Das gespeicherte Bild konnte nicht geladen werden. Bitte ein neues Bild hochladen.');
+                        alert(<?= json_encode(t('bild.js_laden'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                     };
                     img.crossOrigin = 'anonymous';
                     img.src = this.previewUrl;
@@ -470,7 +470,7 @@ require __DIR__ . '/views/partials/header.php';
 
                 ausgabeCanvas.toBlob((blob) => {
                     if (!blob) {
-                        alert('Der Bildausschnitt konnte nicht verarbeitet werden. Bitte erneut versuchen.');
+                        alert(<?= json_encode(t('bild.js_ausschnitt'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                         return;
                     }
 

@@ -27,10 +27,10 @@ $zuechter   = $zuechterId ? Zuechter::findByIdForUser($zuechterId, $currentUserI
 
 if ($zuechter === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('allg.nicht_gefunden');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk/50"><p>Dieser Züchter wurde nicht gefunden.</p>
-          <a href="/zuechter.php" class="text-tanne underline">Zurück zur Übersicht</a></div>';
+    echo '<div class="text-center py-16 text-fellDk/50"><p>' . e(t('zuechter.nicht_gefunden')) . '</p>
+          <a href="/zuechter.php" class="text-tanne underline">' . e(t('allg.zurueck_uebersicht')) . '</a></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -46,13 +46,13 @@ $pageTitle = $zuechter['zuchtname'];
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<a href="/zuechter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; Zurück zur Übersicht</a>
+<a href="/zuechter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; <?= e(t('allg.zurueck_uebersicht')) ?></a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
     <div class="flex flex-col sm:flex-row gap-4 items-start">
         <?php if (!empty($zuechter['hat_bild'])): ?>
             <img src="/zuechterbild.php?id=<?= (int) $zuechter['id'] ?>&v=<?= urlencode((string) ($zuechter['bild_updated_at'] ?? '')) ?>"
-                 alt="Foto von <?= e($zuechter['zuchtname']) ?>"
+                 alt="<?= e(t('bild.foto_von', ['name' => $zuechter['zuchtname']])) ?>"
                  class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-xl border border-sand shrink-0 mx-auto sm:mx-0">
         <?php else: ?>
             <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl border border-sand bg-creme flex items-center justify-center shrink-0 mx-auto sm:mx-0" aria-hidden="true">
@@ -64,31 +64,31 @@ require __DIR__ . '/views/partials/header.php';
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <h1 class="text-2xl font-extrabold text-fellDk break-words"><?= e($zuechter['zuchtname']) ?></h1>
                 <a href="/zuechter_form.php?id=<?= (int) $zuechter['id'] ?>" class="bg-pfote/10 text-fell font-semibold text-sm px-4 py-2 rounded-full hover:bg-pfote/20 transition-colors whitespace-nowrap">
-                    Bearbeiten
+                    <?= e(t('allg.bearbeiten')) ?>
                 </a>
             </div>
 
             <dl class="mt-4 space-y-2 text-sm">
         <?php if ($ansprechpartner !== ''): ?>
             <div class="flex gap-2">
-                <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Ansprechpartner</dt>
+                <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.ansprechpartner')) ?></dt>
                 <dd><?= e($ansprechpartner) ?></dd>
             </div>
         <?php endif; ?>
         <div class="flex gap-2">
-            <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Adresse</dt>
+            <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.adresse')) ?></dt>
             <dd><?= $zuechter['adresse'] ? e($zuechter['adresse']) : '—' ?></dd>
         </div>
         <div class="flex gap-2">
-            <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Telefon</dt>
+            <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.telefon')) ?></dt>
             <dd><?= $zuechter['telefon'] ? e($zuechter['telefon']) : '—' ?></dd>
         </div>
         <div class="flex gap-2">
-            <dt class="font-semibold text-fellDk/70 w-32 shrink-0">E-Mail</dt>
+            <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.email')) ?></dt>
             <dd><?= $zuechter['email'] ? e($zuechter['email']) : '—' ?></dd>
         </div>
         <div class="flex gap-2">
-            <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Webseite</dt>
+            <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.webseite')) ?></dt>
             <dd>
                 <?php if (!empty($zuechter['webseite'])): ?>
                     <a href="<?= e($zuechter['webseite']) ?>" target="_blank" rel="noopener noreferrer"
@@ -106,7 +106,7 @@ require __DIR__ . '/views/partials/header.php';
         </div>
         <?php if (!empty($zuechter['notizen'])): ?>
             <div class="flex gap-2">
-                <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Notizen</dt>
+                <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.notizen')) ?></dt>
                 <dd class="whitespace-pre-line"><?= e($zuechter['notizen']) ?></dd>
             </div>
         <?php endif; ?>
@@ -117,12 +117,12 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="mt-6">
     <h2 class="text-lg font-bold text-fellDk mb-3">
-        Hunde von <?= e($zuechter['zuchtname']) ?>
+        <?= e(t('halter.hunde_von')) ?> <?= e($zuechter['zuchtname']) ?>
         <span class="text-sm font-normal text-fellDk/50">(<?= count($dogs) ?>)</span>
     </h2>
 
     <?php if (empty($dogs)): ?>
-        <p class="text-fellDk/50 text-sm">Diesem Züchter sind aktuell keine Hunde zugeordnet.</p>
+        <p class="text-fellDk/50 text-sm"><?= e(t('zuechter.keine_hunde')) ?></p>
     <?php else: ?>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <?php foreach ($dogs as $dog): ?>

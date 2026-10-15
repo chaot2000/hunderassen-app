@@ -37,33 +37,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_dog_id'])) {
 $searchTerm = clean_input($_GET['q'] ?? '');
 $dogs       = Dog::search($searchTerm, $currentUserId, $isAdmin, $tenantId);
 
-$pageTitle = $isAdmin ? 'Alle Hunde' : 'Meine Hunde';
+$pageTitle = $isAdmin ? t('hunde.alle') : t('hunde.meine');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <a href="/dashboard.php" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
-    ← Zur Übersicht
+    ← <?= e(t('allg.zur_uebersicht')) ?>
 </a>
 
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
     <h1 class="text-2xl font-extrabold text-fellDk">
-        <?= $isAdmin ? 'Alle Hunde' : 'Meine Hunde' ?>
+        <?= $isAdmin ? t('hunde.alle') : t('hunde.meine') ?>
     </h1>
     <a href="/dog_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap text-center">
-        + Hund anlegen
+        + <?= e(t('hunde.anlegen')) ?>
     </a>
 </div>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 mb-6">
     <form method="get" action="/dogs.php" class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <input type="text" name="q" value="<?= e($searchTerm) ?>" placeholder="Hund suchen…"
+        <input type="text" name="q" value="<?= e($searchTerm) ?>" placeholder="<?= e(t('hunde.suche')) ?>"
             class="flex-1 rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
         <div class="flex gap-2">
             <button type="submit" class="flex-1 sm:flex-none bg-pfote hover:bg-fell text-white font-semibold text-sm px-4 py-2.5 rounded-full transition-colors">
-                Suchen
+                <?= e(t('allg.suchen')) ?>
             </button>
             <?php if ($searchTerm !== ''): ?>
-                <a href="/dogs.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk">Zurücksetzen</a>
+                <a href="/dogs.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk"><?= e(t('allg.zuruecksetzen')) ?></a>
             <?php endif; ?>
         </div>
     </form>
@@ -71,7 +71,7 @@ require __DIR__ . '/views/partials/header.php';
 
 <?php if (empty($dogs)): ?>
     <p class="text-center py-16 text-fellDk/50">
-        <?= $isAdmin ? 'Es wurden noch keine Hunde angelegt.' : 'Du hast noch keine Hunde angelegt.' ?>
+        <?= e(t($isAdmin ? 'dash.leer_admin' : 'dash.leer_user')) ?>
     </p>
 <?php else: ?>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -93,20 +93,20 @@ require __DIR__ . '/views/partials/header.php';
                     <div class="flex items-start justify-between gap-2">
                         <h2 class="font-bold text-fellDk text-lg"><?= e($dog['name']) ?></h2>
                         <?php if ($isAdmin && (int) $dog['created_by'] !== $currentUserId): ?>
-                            <span class="text-xs text-fellDk/40 shrink-0 pt-1">fremder Eintrag</span>
+                            <span class="text-xs text-fellDk/40 shrink-0 pt-1"><?= e(t('allg.fremder_eintrag')) ?></span>
                         <?php endif; ?>
                     </div>
                     <p class="text-sm text-fellDk/70 mt-1">
-                        <?= $dog['breed_name'] ? e($dog['breed_name']) : 'Rasse unbekannt' ?>
+                        <?= $dog['breed_name'] ? e(in_sprache($dog['breed_name'], $dog['breed_name_en'] ?? null)) : e(t('dash.rasse_unbekannt')) ?>
                     </p>
                     <?php if (!empty($dog['geburtsdatum'])): ?>
-                        <p class="text-xs text-fellDk/50 mt-2">geboren am <?= e(date('d.m.Y', strtotime($dog['geburtsdatum']))) ?></p>
+                        <p class="text-xs text-fellDk/50 mt-2"><?= e(t('hunde.geboren_am')) ?> <?= e(date('d.m.Y', strtotime($dog['geburtsdatum']))) ?></p>
                     <?php endif; ?>
                     <?php if (!empty($dog['farbe'])): ?>
-                        <p class="text-xs text-fellDk/50">Farbe: <?= e($dog['farbe']) ?></p>
+                        <p class="text-xs text-fellDk/50"><?= e(t('hunde.farbe_label')) ?> <?= e($dog['farbe']) ?></p>
                     <?php endif; ?>
                     <p class="text-xs text-fellDk/50 mt-1">
-                        Halter: <?= $dog['halter_namen'] ? e($dog['halter_namen']) : '—' ?>
+                        <?= e(t('hunde.halter_label')) ?> <?= $dog['halter_namen'] ? e($dog['halter_namen']) : '—' ?>
                     </p>
                 </div>
             </a>
