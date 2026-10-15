@@ -44,6 +44,19 @@ function is_admin(): bool
 }
 
 /**
+ * Super-Admin: mandantenübergreifende Rolle. Nur sie darf Mandanten
+ * anlegen/abschalten und beim Anlegen von Benutzern den Mandanten
+ * wählen. Wird nicht über die Oberfläche vergeben, sondern per SQL
+ * (users.is_super_admin = 1), siehe DEPLOYMENT_MULTI_TENANT.md.
+ * Ein Super-Admin ist immer auch Admin (role = 'admin').
+ */
+function is_super_admin(): bool
+{
+    $user = current_user();
+    return is_admin() && !empty($user['is_super_admin']);
+}
+
+/**
  * Portal-Recht "Rassen verwalten". Admins haben es implizit immer,
  * unabhängig vom can_manage_breeds-Flag in der Session.
  */
@@ -94,6 +107,19 @@ function require_admin(): void
     if (!is_admin()) {
         http_response_code(403);
         die('Zugriff verweigert: Diese Aktion ist nur für Administratoren verfügbar.');
+    }
+}
+
+/**
+ * Erzwingt die Super-Admin-Rolle (Mandantenverwaltung).
+ */
+function require_super_admin(): void
+{
+    require_login();
+
+    if (!is_super_admin()) {
+        http_response_code(403);
+        die('Zugriff verweigert: Diese Aktion ist nur für Super-Admins verfügbar.');
     }
 }
 

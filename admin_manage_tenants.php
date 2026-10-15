@@ -3,7 +3,7 @@
  * admin_manage_tenants.php
  *
  * Verwaltung von Mandanten (Tenants) für Multi-Tenancy.
- * Nur für globale Administratoren zugänglich.
+ * Nur für Super-Admins zugänglich (siehe is_super_admin() in config/auth.php).
  */
 
 declare(strict_types=1);
@@ -14,8 +14,7 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
 
 secure_session_start();
-require_login();
-require_admin();
+require_super_admin();
 
 $pdo = Database::getConnection();
 
