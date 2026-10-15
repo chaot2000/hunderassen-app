@@ -18,6 +18,50 @@ class Breed
 {
     private const VALID_GROESSEN = ['klein', 'mittel', 'gross', 'sehr_gross'];
 
+    /** FCI-Gruppen nach der FCI-Nomenklatur, für Anzeige und Filter. */
+    public const FCI_GRUPPEN = [
+        1  => 'Hüte- und Treibhunde',
+        2  => 'Pinscher und Schnauzer, Molosser, Schweizer Sennenhunde',
+        3  => 'Terrier',
+        4  => 'Dachshunde',
+        5  => 'Spitze und Hunde vom Urtyp',
+        6  => 'Laufhunde, Schweißhunde und verwandte Rassen',
+        7  => 'Vorstehhunde',
+        8  => 'Apportierhunde, Stöberhunde, Wasserhunde',
+        9  => 'Gesellschafts- und Begleithunde',
+        10 => 'Windhunde',
+    ];
+
+    /**
+     * Neue Strukturfelder aus dem Formular, bereinigt. Ungültige
+     * Auswahlwerte werden zu null bzw. 'keine'.
+     *
+     * @return array{fci_sektion: ?string, fci_sektion_name: ?string, arbeitspruefung: ?string, gliederung: string}
+     */
+    private static function strukturFelder(array $breedData): array
+    {
+        $ap = (string) ($breedData['arbeitspruefung'] ?? '');
+        $gl = (string) ($breedData['gliederung'] ?? 'keine');
+        return [
+            'fci_sektion'      => clean_input($breedData['fci_sektion'] ?? '') ?: null,
+            'fci_sektion_name' => clean_input($breedData['fci_sektion_name'] ?? '') ?: null,
+            'arbeitspruefung'  => in_array($ap, ['mit', 'ohne', 'fakultativ'], true) ? $ap : null,
+            'gliederung'       => in_array($gl, ['keine', 'automatisch', 'geprueft'], true) ? $gl : 'keine',
+        ];
+    }
+
+    /**
+     * Teilt "Originalname, deutscher Name" (so kommen viele Namen aus dem
+     * VDH-Import) für die Anzeige auf. Ändert keine Daten.
+     *
+     * @return array{haupt: string, zweit: ?string}
+     */
+    public static function namensteile(string $name): array
+    {
+        $teile = explode(', ', $name, 2);
+        return ['haupt' => trim($teile[0]), 'zweit' => isset($teile[1]) && trim($teile[1]) !== '' ? trim($teile[1]) : null];
+    }
+
     // -------------------------------------------------------------
     // Gewichte für getSimilar() — als benannte Konstanten ausgelagert,
     // damit sie ohne Logik-Eingriff experimentell angepasst werden
@@ -76,11 +120,16 @@ class Breed
             // beschreibung_original = Text beim Anlegen, wird danach nie
             // mehr überschrieben (siehe ContentRevision).
             $insertBreed = $pdo->prepare(
-                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung, beschreibung_original, bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
-                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :beschreibung, :beschreibung_original, :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
+                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung, beschreibung_original, gliederung, bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
+                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :fci_sektion, :fci_sektion_name, :arbeitspruefung, :beschreibung, :beschreibung_original, :gliederung, :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
             );
             $beschreibung = clean_input($breedData['beschreibung'] ?? '') ?: null;
+            $struktur = self::strukturFelder($breedData);
             $insertBreed->execute([
+                ':fci_sektion'       => $struktur['fci_sektion'],
+                ':fci_sektion_name'  => $struktur['fci_sektion_name'],
+                ':arbeitspruefung'   => $struktur['arbeitspruefung'],
+                ':gliederung'        => $struktur['gliederung'],
                 ':name'              => $name,
                 ':alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
                 ':namenszusatz'      => clean_input($breedData['namenszusatz'] ?? '') ?: null,
@@ -172,13 +221,14 @@ class Breed
             }
 
             $altStmt = $pdo->prepare(
-                'SELECT name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung
+                'SELECT name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr,
+                        fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung, gliederung
                  FROM breeds WHERE id = :id FOR UPDATE'
             );
             $altStmt->execute([':id' => $breedId]);
             $alt = $altStmt->fetch() ?: [];
 
-            $neu = [
+            $neu = self::strukturFelder($breedData) + [
                 'name'              => $name,
                 'alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
                 'namenszusatz'      => clean_input($breedData['namenszusatz'] ?? '') ?: null,
@@ -194,10 +244,16 @@ class Breed
                  SET name = :name, alternative_namen = :alternative_namen, namenszusatz = :namenszusatz,
                      ursprungsland = :ursprungsland, farben = :farben,
                      fci_klasse = :fci_klasse, fci_nr = :fci_nr, beschreibung = :beschreibung,
+                     fci_sektion = :fci_sektion, fci_sektion_name = :fci_sektion_name,
+                     arbeitspruefung = :arbeitspruefung, gliederung = :gliederung,
                      updated_at = NOW()' . $imageSql . '
                  WHERE id = :id'
             );
             $updateBreed->execute(array_merge([
+                ':fci_sektion'       => $neu['fci_sektion'],
+                ':fci_sektion_name'  => $neu['fci_sektion_name'],
+                ':arbeitspruefung'   => $neu['arbeitspruefung'],
+                ':gliederung'        => $neu['gliederung'],
                 ':name'              => $neu['name'],
                 ':alternative_namen' => $neu['alternative_namen'],
                 ':namenszusatz'      => $neu['namenszusatz'],
@@ -277,7 +333,9 @@ class Breed
         $pdo = Database::getConnection();
 
         $stmt = $pdo->prepare(
-            'SELECT id, name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung,
+            'SELECT id, name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr,
+                    fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung,
+                    quelle_url, quelle_stand, gliederung,
                     (bild_blob IS NOT NULL) AS hat_bild, bild_updated_at,
                     created_at, updated_at, created_by
              FROM breeds WHERE id = :id LIMIT 1'

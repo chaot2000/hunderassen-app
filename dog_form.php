@@ -46,6 +46,12 @@ if ($editingId !== null && $existing === null) {
     die('Der angeforderte Hund wurde nicht gefunden.');
 }
 
+// Neuer Hund aus der Rassen-Detailseite ("Hund dieser Rasse anlegen"):
+// Rasse vorauswählen, wenn es sie gibt.
+if (!$isEditMode && isset($_GET['rasse']) && Breed::findById((int) $_GET['rasse']) !== null) {
+    $existing = ['breed_id' => (int) $_GET['rasse']];
+}
+
 // Bereits zugeordnete Halter-IDs, für die Checkbox-Vorauswahl. Bei
 // einem fehlgeschlagenen POST werden sie unten überschrieben, damit
 // die zuletzt abgeschickte Auswahl erhalten bleibt (nicht der alte DB-Stand).

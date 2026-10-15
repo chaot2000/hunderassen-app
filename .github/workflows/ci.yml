@@ -90,6 +90,9 @@ jobs:
             sleep 1
           done
 
+      - name: Unit-Tests (ohne Datenbank)
+        run: php tests/RassentextGliederungTest.php
+
       - name: Rauchtest ausführen
         run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!
 
@@ -157,14 +160,16 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen: vom Live-Stand hin (2x), gegen schema.sql vergleichen, zurück (2x)"
-        # Ausgangspunkt ist das Schema, das seit 15.10.2026 live läuft
-        # (Tag prod-2026-10-15-mandanten). Nach der Migration muss das
-        # Schema exakt dem einer Neuinstallation aus sql/schema.sql
-        # entsprechen, nach dem Rollback exakt dem Ausgangsstand.
+      - name: "Textversionen + Rassenstruktur: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+        # Ausgangspunkt ist das Schema vor den Textversionen (Tag
+        # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
+        # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
+        # entsprechen. Zwischenstand nach den Textversionen muss exakt dem
+        # Live-Tag prod-2026-10-15-textversionen entsprechen. Rollbacks in
+        # umgekehrter Reihenfolge führen exakt zum Ausgangsstand.
         run: |
           R="mysql -h127.0.0.1 -uroot -proot"
-          $R -e "CREATE DATABASE txt_live CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE DATABASE txt_frisch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          $R -e "CREATE DATABASE txt_live CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE DATABASE txt_frisch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE DATABASE txt_tag CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
           dump() { mysqldump -h127.0.0.1 -uroot -proot --no-data --skip-comments "$1" | sed -E 's/ AUTO_INCREMENT=[0-9]+//'; }
           git show prod-2026-10-15-mandanten:sql/schema.sql | $R txt_live
           $R txt_live -e "INSERT INTO breeds (id, name, beschreibung) VALUES (1, 'Mit Text', 'Originaltext'), (2, 'Ohne Text', NULL);"
@@ -173,10 +178,21 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_15_text_versionen.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE beschreibung_original <=> beschreibung" | grep -qx 2
           $R txt_live -N -e "SELECT COUNT(*) FROM content_revisions" | grep -qx 0
+          git show prod-2026-10-15-textversionen:sql/schema.sql | $R txt_tag
+          dump txt_live > /tmp/txt_zwischen.sql
+          dump txt_tag > /tmp/txt_tag.sql
+          diff /tmp/txt_zwischen.sql /tmp/txt_tag.sql
+          $R txt_live < sql/migrationen/migration_2026_10_16_rassen_struktur.sql
+          $R txt_live < sql/migrationen/migration_2026_10_16_rassen_struktur.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE gliederung = 'keine'" | grep -qx 2
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_rassen_struktur.sql
+          $R txt_live < sql/migrationen/rollback_rassen_struktur.sql
+          dump txt_live > /tmp/txt_zurueck1.sql
+          diff /tmp/txt_zwischen.sql /tmp/txt_zurueck1.sql
           $R txt_live < sql/migrationen/rollback_text_versionen.sql
           $R txt_live < sql/migrationen/rollback_text_versionen.sql
           dump txt_live > /tmp/txt_nachher.sql
