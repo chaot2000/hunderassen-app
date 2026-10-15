@@ -479,7 +479,7 @@ VALUES (1, 'Default', 'default', 1, NOW());
 -- Niemals Klartext-Passwörter in die Datenbank schreiben!
 -- =====================================================================
 INSERT INTO `users` (`tenant_id`, `username`, `password_hash`, `role`, `is_super_admin`, `is_active`)
-VALUES (1, 'admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1, 1);
+VALUES (1, 'admin', '__PASSWORD_HASH_PLACEHOLDER__', 'admin', 1, 1);
 
 -- ---------------------------------------------------------------------
 -- Beispiel-Tags (optional, kann gelöscht/erweitert werden)
