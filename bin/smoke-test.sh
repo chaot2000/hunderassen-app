@@ -8,7 +8,10 @@
 # falscher require_once-Pfad -> Fatal Error -> Seite lädt gar nicht.
 #
 # Nutzung lokal (Laragon):
-#   bash bin/smoke-test.sh http://hunderassen-app.test admin DeinPasswort123!
+#   bash bin/smoke-test.sh http://hunderassen-app.test admin DeinPasswort123! ci-b admin PasswortVonB
+#
+# Argumente 4-6 sind Kürzel, Benutzer und Passwort des Admins von
+# Mandant B aus sql/fixtures/ci_seed.sql (Isolations-Checks).
 #
 # Nutzung in CI: siehe .github/workflows/ci.yml (übergibt automatisch
 # die dort erzeugten Test-Zugangsdaten).
@@ -20,6 +23,9 @@ set -uo pipefail
 BASE_URL="${1:-http://127.0.0.1:8000}"
 ADMIN_USER="${2:-admin}"
 ADMIN_PASS="${3:-}"
+B_TENANT="${4:-ci-b}"
+B_USER="${5:-admin}"
+B_PASS="${6:-}"
 
 if [ -z "$ADMIN_PASS" ]; then
     echo "FEHLER: Kein Admin-Passwort übergeben. Aufruf: smoke-test.sh <base_url> <user> <passwort>"
@@ -64,6 +70,36 @@ check_body_contains() {
     fi
 }
 
+# -----------------------------------------------------------------
+# check_body_not_contains: Gegenstück, z. B. für Mandanten-Isolation.
+# -----------------------------------------------------------------
+check_body_not_contains() {
+    local description="$1" needle="$2"
+    if grep -qF "$needle" /tmp/smoke_last_response.html; then
+        echo "FAIL Inhalt DARF NICHT vorkommen: $description"
+        FAILED=1
+    else
+        echo "OK   Inhalt fehlt wie erwartet: $description"
+    fi
+}
+
+# -----------------------------------------------------------------
+# login_as: meldet sich im aktuellen $COOKIE_JAR an (vorher frische
+# Session). Erfolg prüft der Aufrufer über eine geschützte Seite.
+# -----------------------------------------------------------------
+login_as() {
+    local mandant="$1" user="$2" pass="$3" token
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/logout.php" -o /dev/null
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_login_form.html
+    token=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html || true)
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" -o /dev/null \
+        --data-urlencode "csrf_token=$token" \
+        --data-urlencode "mandant=$mandant" \
+        --data-urlencode "username=$user" \
+        --data-urlencode "password=$pass" \
+        "$BASE_URL/login.php"
+}
+
 echo "=== Rauchtest gegen $BASE_URL ==="
 echo ""
 
@@ -82,6 +118,7 @@ echo ""
 echo "--- Login-Seite lädt ---"
 check_status "login.php lädt" "$BASE_URL/login.php" "200"
 check_body_contains "Login-Formular vorhanden" "Anmelden"
+check_body_contains "Login-Formular hat Feld Mandant (mehrere Mandanten aktiv)" 'name="mandant"'
 
 echo ""
 echo "--- CSRF-Token aus dem Login-Formular extrahieren ---"
@@ -446,6 +483,145 @@ else
                  --data-urlencode ergebnisse[1][ergebnis_id]=1 \
                  --data-urlencode ergebnisse[2][ergebnis_id]=4"
         fi
+    fi
+
+    echo ""
+    echo "--- Mandanten-Isolation (Mandant B darf nichts aus Mandant 1 sehen) ---"
+    if [ -z "$B_PASS" ]; then
+        echo "FAIL Kein Passwort für Mandant B übergeben — Isolations-Checks werden übersprungen."
+        FAILED=1
+    else
+        A_COOKIE_JAR="$COOKIE_JAR"
+        B_COOKIE_JAR="$(mktemp)"
+        COOKIE_JAR="$B_COOKIE_JAR"
+
+        # Gleicher Benutzername, falsches Mandanten-Kürzel: Login muss scheitern.
+        # Achtung: dieser Block erzeugt pro Lauf zwei absichtliche
+        # Fehlversuche. Die Login-Sperre zählt auch pro IP (5 in 15 Min.),
+        # lokal also nach dem zweiten Lauf login_attempts leeren.
+        login_as "" "$B_USER" "$B_PASS"
+        check_status "Login B-Admin ohne Kürzel (landet in Mandant 1) schlägt fehl" "$BASE_URL/dashboard.php" "302"
+        login_as "gibt-es-nicht" "$B_USER" "$B_PASS"
+        check_status "Login mit unbekanntem Kürzel schlägt fehl" "$BASE_URL/dashboard.php" "302"
+
+        login_as "$B_TENANT" "$B_USER" "$B_PASS"
+        check_status "Login B-Admin mit Kürzel $B_TENANT" "$BASE_URL/dashboard.php" "200"
+
+        check_status "B: eigener Hund lädt" "$BASE_URL/dog_detail.php?id=2" "200"
+        check_body_contains "B: eigener Hund wird angezeigt" "CI-B-Hund"
+        check_status "B: Hundeliste" "$BASE_URL/dogs.php" "200"
+        check_body_not_contains "B: Hundeliste zeigt keinen Hund aus Mandant 1" "CI-Testhund"
+        check_status "B: Halterliste" "$BASE_URL/halter.php" "200"
+        check_body_not_contains "B: Halterliste zeigt keinen Halter aus Mandant 1" "CI-Test-Halter"
+        check_status "B: Züchterliste" "$BASE_URL/zuechter.php" "200"
+        check_body_not_contains "B: Züchterliste zeigt keinen Züchter aus Mandant 1" "CI-Test-Zucht"
+        check_status "B: Hundeformular" "$BASE_URL/dog_form.php" "200"
+        check_body_not_contains "B: Halter-Auswahl im Hundeformular ohne Mandant 1" "CI-Test-Halter"
+
+        check_status "B: Hund aus Mandant 1 -> 404" "$BASE_URL/dog_detail.php?id=1" "404"
+        check_status "B: Hund aus Mandant 1 bearbeiten -> 404" "$BASE_URL/dog_form.php?id=1" "404"
+        check_status "B: Hundebild aus Mandant 1 -> 404" "$BASE_URL/hundebild.php?id=1" "404"
+        check_status "B: Halter aus Mandant 1 -> 404" "$BASE_URL/halter_detail.php?id=1" "404"
+        check_status "B: Halter aus Mandant 1 bearbeiten -> 404" "$BASE_URL/halter_form.php?id=1" "404"
+        check_status "B: Züchter aus Mandant 1 -> 404" "$BASE_URL/zuechter_detail.php?id=1" "404"
+        check_status "B: Züchter aus Mandant 1 bearbeiten -> 404" "$BASE_URL/zuechter_form.php?id=1" "404"
+        check_status "B: Test aus Mandant 1 bearbeiten -> 404" "$BASE_URL/test_form.php?id=1" "404"
+        check_status "B: Testdurchführung aus Mandant 1 -> 404" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "404"
+        check_status "B: Testdurchführung aus Mandant 1 bearbeiten -> 404" "$BASE_URL/testdurchfuehrung_form.php?id=1" "404"
+        check_status "B: Testdurchführung für Hund aus Mandant 1 anlegen -> 404" "$BASE_URL/testdurchfuehrung_form.php?dog_id=1" "404"
+
+        check_status "B: eigener Test lädt" "$BASE_URL/test_form.php?id=2" "200"
+        check_body_contains "B: eigene Aufgabe wird angezeigt" "CI-B-Aufgabe"
+        check_status "B: Testauswahl beim eigenen Hund" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200"
+        check_body_not_contains "B: Testauswahl enthält keine Aufgabe aus Mandant 1" "CI-Aufgabe 1"
+        B_TDF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: Testdurchführung mit Test aus Mandant 1 wird abgelehnt" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200" \
+            "-X POST --data-urlencode csrf_token=$B_TDF_CSRF --data-urlencode test_id=1 \
+             --data-urlencode durchfuehrungsdatum=2026-07-01 --data-urlencode status=offen \
+             --data-urlencode ergebnisse[1][ergebnis_id]=1 --data-urlencode ergebnisse[2][ergebnis_id]=4"
+        check_body_contains "B: Fehlermeldung 'Test nicht gefunden'" "nicht gefunden"
+
+        check_status "B: Mandantenverwaltung ist nur für Super-Admins (403)" "$BASE_URL/admin_manage_tenants.php" "403"
+        check_status "B: Benutzerverwaltung lädt" "$BASE_URL/admin_manage_users.php" "200"
+        check_body_not_contains "B: Benutzerliste zeigt den Super-Admin aus Mandant 1 nicht" "Super-Admin"
+
+        # Fremde Halter-ID ins Hundeformular schreiben -> abgelehnt.
+        check_status "B: Hundeformular für Halter-Manipulation" "$BASE_URL/dog_form.php?id=2" "200"
+        B_DOG_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: Hund mit Halter aus Mandant 1 speichern wird abgelehnt" "$BASE_URL/dog_form.php?id=2" "200" \
+            "-X POST --data-urlencode csrf_token=$B_DOG_CSRF --data-urlencode name=CI-B-Hund \
+             --data-urlencode breed_id=1 --data-urlencode zuechter_id=2 --data-urlencode halter_ids[]=1"
+        check_body_contains "B: Fehlermeldung zum fremden Halter" "Halter wurde nicht gefunden"
+        check_status "B: Hund mit Züchter aus Mandant 1 speichern wird abgelehnt" "$BASE_URL/dog_form.php?id=2" "200" \
+            "-X POST --data-urlencode csrf_token=$B_DOG_CSRF --data-urlencode name=CI-B-Hund \
+             --data-urlencode breed_id=1 --data-urlencode zuechter_id=1 --data-urlencode halter_ids[]=2"
+        check_body_contains "B: Fehlermeldung zum fremden Züchter" "Züchter wurde nicht gefunden"
+
+        # Löschversuche auf fremde IDs dürfen nichts bewirken. Das
+        # CSRF-Token gilt pro Session, also das aus dem Hundeformular.
+        B_DEL_CSRF="$B_DOG_CSRF"
+        check_status "B: Löschversuch Hund aus Mandant 1" "$BASE_URL/dogs.php" "302" \
+            "-X POST --data-urlencode csrf_token=$B_DEL_CSRF --data-urlencode delete_dog_id=1"
+        check_status "B: Löschversuch Halter aus Mandant 1" "$BASE_URL/halter.php" "302" \
+            "-X POST --data-urlencode csrf_token=$B_DEL_CSRF --data-urlencode delete_halter_id=1"
+        check_status "B: Löschversuch Testdurchführung aus Mandant 1" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "404" \
+            "-X POST --data-urlencode csrf_token=$B_DEL_CSRF --data-urlencode delete_durchfuehrung_id=1"
+        check_status "B: Test-Verwaltung für Lösch-Token" "$BASE_URL/admin_manage_tests.php" "200"
+        B_TEST_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: Löschversuch Test aus Mandant 1" "$BASE_URL/admin_manage_tests.php" "200" \
+            "-X POST --data-urlencode csrf_token=$B_TEST_CSRF --data-urlencode delete_test_id=1"
+        check_body_contains "B: Test aus Mandant 1 wurde nicht gefunden" "nicht gefunden"
+
+        # Ein gepostetes tenant_id muss für normale Admins ignoriert werden.
+        check_status "B: Benutzer anlegen lädt" "$BASE_URL/admin_add_user.php" "200"
+        check_body_not_contains "B: kein Mandanten-Feld für normale Admins" 'name="tenant_id"'
+        B_ADD_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        B_NEW_USER="ci-b-tenantpost-$(date +%s)"
+        B_NEW_PASS="Tenant-Post-Test-123!"
+        check_status "B: Benutzer mit gepostetem tenant_id=1 anlegen" "$BASE_URL/admin_add_user.php" "200" \
+            "--data-urlencode csrf_token=$B_ADD_CSRF --data-urlencode username=$B_NEW_USER \
+             --data-urlencode password=$B_NEW_PASS --data-urlencode password_confirm=$B_NEW_PASS \
+             --data-urlencode role=admin --data-urlencode tenant_id=1"
+        check_body_contains "B: Benutzer angelegt" "erfolgreich angelegt"
+
+        NEW_JAR="$(mktemp)"
+        COOKIE_JAR="$NEW_JAR"
+        login_as "" "$B_NEW_USER" "$B_NEW_PASS"
+        check_status "Neuer Benutzer ist NICHT in Mandant 1 gelandet" "$BASE_URL/dashboard.php" "302"
+        login_as "$B_TENANT" "$B_NEW_USER" "$B_NEW_PASS"
+        check_status "Neuer Benutzer ist in Mandant B gelandet" "$BASE_URL/dashboard.php" "200"
+        rm -f "$NEW_JAR"
+
+        COOKIE_JAR="$B_COOKIE_JAR"
+        check_status "B: Benutzerverwaltung (Aufräumen)" "$BASE_URL/admin_manage_users.php" "200"
+        B_CLEAN_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        B_NEW_USER_ID=$(grep -ozP "(?s)$B_NEW_USER.*?name=\"user_id\" value=\"\K[0-9]+" /tmp/smoke_last_response.html | tr -d '\0' || true)
+        if [ -n "$B_NEW_USER_ID" ]; then
+            check_status "B: Testbenutzer wieder löschen" "$BASE_URL/admin_manage_users.php" "302" \
+                "-X POST --data-urlencode csrf_token=$B_CLEAN_CSRF --data-urlencode action=delete_user --data-urlencode user_id=$B_NEW_USER_ID"
+        else
+            echo "FAIL Konnte user_id für $B_NEW_USER nicht ermitteln — manuelles Aufräumen nötig."
+            FAILED=1
+        fi
+
+        # B versucht, den Super-Admin (id 1) zu ändern -> nichts passiert.
+        check_status "B: Passwort-Reset für Benutzer aus Mandant 1" "$BASE_URL/admin_manage_users.php" "200" \
+            "-X POST --data-urlencode csrf_token=$B_CLEAN_CSRF --data-urlencode action=reset_password \
+             --data-urlencode user_id=1 --data-urlencode new_password=Uebernommen-12345"
+        check_body_contains "B: Benutzer aus Mandant 1 wurde nicht gefunden" "Benutzer nicht gefunden"
+
+        rm -f "$B_COOKIE_JAR"
+        COOKIE_JAR="$A_COOKIE_JAR"
+
+        echo ""
+        echo "--- Mandant 1 nach den Versuchen aus Mandant B unverändert ---"
+        check_status "A: Hund 1 existiert noch" "$BASE_URL/dog_detail.php?id=1" "200"
+        check_body_contains "A: Testhund wird angezeigt" "CI-Testhund"
+        check_status "A: Halter 1 existiert noch" "$BASE_URL/halter_detail.php?id=1" "200"
+        check_status "A: Testdurchführung 1 existiert noch" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "200"
+        check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
+        check_status "A: Mandantenverwaltung für Super-Admin" "$BASE_URL/admin_manage_tenants.php" "200"
+        check_body_contains "A: Mandant B wird gelistet" "CI-Mandant B"
     fi
 
     echo ""
