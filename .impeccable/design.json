@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T12:00:00Z",
+  "title": "Design System: Hunderassen-Verwaltung",
+  "extensions": {
+    "colorMeta": {
+      "tanne":   { "role": "primary",   "displayName": "Tanne",           "canonical": "oklch(43.8% 0.054 145)", "tonalRamp": ["#011001", "#162D17", "#334D33", "#546E53", "#789177", "#9DB69D", "#C1D8C1", "#E0F6DF"] },
+      "tanneDk": { "role": "primary",   "displayName": "Dunkle Tanne",    "canonical": "oklch(35.2% 0.040 150)", "tonalRamp": ["#020F04", "#192C1C", "#364B3A", "#586C5B", "#7C8F7F", "#A1B4A4", "#C5D6C8", "#E3F4E6"] },
+      "fell":    { "role": "secondary", "displayName": "Leder-Rost",      "canonical": "oklch(55.5% 0.140 39)",  "tonalRamp": ["#2A0000", "#510000", "#7A2300", "#A44423", "#CC6949", "#F09172", "#FFB799", "#FFD6BA"] },
+      "pfote":   { "role": "tertiary",  "displayName": "Tennisball",      "canonical": "oklch(83.5% 0.180 116)", "tonalRamp": ["#0B0D00", "#262B00", "#434C00", "#636E00", "#869300", "#AABA01", "#CCDE3C", "#E9FC6C"] },
+      "creme":   { "role": "neutral",   "displayName": "Salbei-Pergament","canonical": "oklch(96.5% 0.015 119)", "tonalRamp": ["#0B0C08", "#262722", "#444640", "#656760", "#888A82", "#ADAFA6", "#D0D2C8", "#EDF0E5"] },
+      "sand":    { "role": "neutral",   "displayName": "Sand",            "canonical": "oklch(89.9% 0.030 94)",  "tonalRamp": ["#0D0B04", "#29261C", "#484539", "#6A6657", "#8E8978", "#B3AE9B", "#D7D1BC", "#F5EFD9"] },
+      "fellDk":  { "role": "neutral",   "displayName": "Ink",             "canonical": "oklch(28.7% 0.015 85)",  "tonalRamp": ["#0E0B05", "#2A261E", "#49453C", "#6A665E", "#8C8981", "#B1ADA6", "#D4D1CA", "#F1EEE8"] }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "Display",  "purpose": "Rassenname im Kopfmodul, Nunito Black." },
+      "headline": { "displayName": "Headline", "purpose": "Überschrift im farbigen Abschnittsblock." },
+      "title":    { "displayName": "Title",    "purpose": "Faktenabschnitte und FCI-Gruppenbalken." },
+      "body":     { "displayName": "Body",     "purpose": "Rassentext, maximal 60ch." },
+      "label":    { "displayName": "Label",    "purpose": "Buttons, Sprunglinks, Begriffe in Definitionslisten." },
+      "mono":     { "displayName": "Mono",     "purpose": "Nur Zahlen und Maße, JetBrains Mono 500." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "balken-ein", "value": "clip-path inset(0 35% 0 0) -> inset(0); 650ms cubic-bezier(0.16, 1, 0.3, 1); 90ms Versatz je Balken", "purpose": "Einziger Auftritt: FCI-Balken beim Laden. Aus bei prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primärbutton",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Einzige Hauptaktion einer Seite, z.B. Hund dieser Rasse anlegen.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Hund dieser Rasse anlegen</a>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; min-height: 44px; background: #3F5A3F; color: #F2F5EA; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 0.875rem; padding: 8px 20px; border-radius: 8px; text-decoration: none; transition: background-color 150ms; } .ds-btn-primary:hover { background: #2C4130; } .ds-btn-primary:focus-visible { outline: 3px solid #C4D62A; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline-Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Zweitaktion wie Bearbeiten.",
+      "html": "<a class=\"ds-btn-outline\" href=\"#\">Bearbeiten</a>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; min-height: 44px; border: 2px solid #2E2A22; color: #2E2A22; background: transparent; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 0.875rem; padding: 8px 20px; border-radius: 8px; text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-btn-outline:hover { background: #2E2A22; color: #F2F5EA; } .ds-btn-outline:focus-visible { outline: 3px solid #C4D62A; outline-offset: 2px; }"
+    },
+    {
+      "name": "FCI-Balken",
+      "kind": "custom",
+      "refersTo": "fci-balken-gruppe",
+      "description": "Drei versetzte Streifen mit FCI-Gruppe, Sektion, Arbeitsprüfung und Standardnummer.",
+      "html": "<div class=\"ds-balken-stapel\"><p class=\"ds-balken ds-balken-gruppe\">FCI <span class=\"ds-mono\">1</span> Hüte- und Treibhunde</p><p class=\"ds-balken ds-balken-sektion\">Sektion <span class=\"ds-mono\">1</span> Schäferhunde</p><p class=\"ds-balken ds-balken-standard\"><span>mit Arbeitsprüfung</span><span>Standard Nr. <span class=\"ds-mono\">166</span></span></p></div>",
+      "css": ".ds-balken-stapel { display: flex; flex-direction: column; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; } .ds-balken { margin: 0; animation: ds-balken-ein 650ms cubic-bezier(0.16, 1, 0.3, 1) both; } .ds-balken:nth-child(2) { animation-delay: 90ms; } .ds-balken:nth-child(3) { animation-delay: 180ms; } @keyframes ds-balken-ein { from { clip-path: inset(0 35% 0 0); } to { clip-path: inset(0 0 0 0); } } @media (prefers-reduced-motion: reduce) { .ds-balken { animation: none; } } .ds-balken-gruppe { align-self: flex-start; width: 78%; background: #B5502E; color: #F2F5EA; padding: 16px 40px; font-size: 1.25rem; font-weight: 900; } .ds-balken-sektion { align-self: flex-end; width: 56%; margin-right: 22%; background: #C4D62A; color: #2E2A22; padding: 12px 32px; font-size: 1.125rem; font-weight: 700; } .ds-balken-standard { align-self: flex-start; width: 48%; margin-left: 8%; background: #2E2A22; color: #F2F5EA; padding: 12px 32px; font-size: 1rem; font-weight: 700; display: flex; flex-wrap: wrap; gap: 4px 24px; } .ds-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 500; }"
+    },
+    {
+      "name": "Maßbalken",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "Spanne auf fester Skala 0 bis 90, Wert in Mono daneben.",
+      "html": "<div class=\"ds-mass\"><div class=\"ds-mass-label\">Schulterhöhe Rüde<span class=\"ds-mass-wert\">60–65 cm</span></div><div class=\"ds-mass-skala\"><span class=\"ds-mass-strich\" style=\"left:33.33%\"></span><span class=\"ds-mass-strich\" style=\"left:66.67%\"></span><div class=\"ds-mass-spanne\" style=\"left:66.67%;width:5.56%\"></div></div></div>",
+      "css": ".ds-mass { display: grid; grid-template-columns: 8.5rem 1fr; align-items: center; gap: 12px; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; color: #2E2A22; font-size: 0.875rem; } .ds-mass-wert { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 500; } .ds-mass-skala { position: relative; height: 12px; background: rgba(228, 222, 200, 0.6); border-radius: 2px; } .ds-mass-strich { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(46, 42, 34, 0.3); } .ds-mass-spanne { position: absolute; top: 0; bottom: 0; min-width: 6px; background: #3F5A3F; border-radius: 2px; }"
+    },
+    {
+      "name": "Abschnittsblock",
+      "kind": "custom",
+      "refersTo": "abschnitt-block-wesen",
+      "description": "Farbblock als Überschrift eines Textabschnitts, Farbe fest je Abschnitt.",
+      "html": "<section class=\"ds-abschnitt\"><h2 class=\"ds-abschnitt-block\">Wesen</h2><p class=\"ds-abschnitt-text\">Aufmerksam, lernfreudig und ausgeglichen.</p></section>",
+      "css": ".ds-abschnitt { display: grid; grid-template-columns: 1fr 2fr; gap: 40px; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; } .ds-abschnitt-block { margin: 0; align-self: start; background: #3F5A3F; color: #F2F5EA; font-size: 1.5rem; font-weight: 900; line-height: 1.25; padding: 16px 20px; border-radius: 2px; } .ds-abschnitt-text { margin: 0; color: #2E2A22; font-size: 1.0625rem; line-height: 1.75; max-width: 60ch; }"
+    },
+    {
+      "name": "Sprungleiste",
+      "kind": "nav",
+      "refersTo": "sprunglink",
+      "description": "Sprunglinks zu den Textabschnitten in den festen Abschnittsfarben.",
+      "html": "<nav class=\"ds-sprung\" aria-label=\"Abschnitte\"><a href=\"#\" class=\"ds-sprung-link ds-wesen\">Wesen</a><a href=\"#\" class=\"ds-sprung-link ds-haltung\">Haltung und Erziehung</a><a href=\"#\" class=\"ds-sprung-link ds-pflege\">Pflege</a><a href=\"#\" class=\"ds-sprung-link ds-aussehen\">Aussehen</a><a href=\"#\" class=\"ds-sprung-link ds-herkunft\">Herkunft und Geschichte</a></nav>",
+      "css": ".ds-sprung { display: flex; flex-wrap: wrap; gap: 8px; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; } .ds-sprung-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; font-size: 0.875rem; font-weight: 700; border-radius: 2px; text-decoration: none; } .ds-sprung-link:hover { text-decoration: underline; text-underline-offset: 4px; } .ds-sprung-link:focus-visible { outline: 3px solid #2E2A22; outline-offset: 2px; } .ds-wesen { background: #3F5A3F; color: #F2F5EA; } .ds-haltung { background: #B5502E; color: #F2F5EA; } .ds-pflege { background: #C4D62A; color: #2E2A22; } .ds-aussehen { background: #2E2A22; color: #F2F5EA; } .ds-herkunft { background: #E4DEC8; color: #2E2A22; }"
+    },
+    {
+      "name": "Eigenschafts-Chip",
+      "kind": "chip",
+      "refersTo": "chip-eigenschaft",
+      "description": "Anzeige von Eigenschaften und Aktivitäten, ohne Auswahlzustand.",
+      "html": "<ul class=\"ds-chips\"><li class=\"ds-chip\">wachsam</li><li class=\"ds-chip ds-chip-aktiv\">Agility</li></ul>",
+      "css": ".ds-chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; } .ds-chip { background: #E4DEC8; color: #2E2A22; font-size: 0.875rem; font-weight: 600; padding: 4px 12px; border-radius: 2px; } .ds-chip-aktiv { background: rgba(63, 90, 63, 0.1); color: #2C4130; }"
+    },
+    {
+      "name": "Faktenabschnitt",
+      "kind": "card",
+      "refersTo": "",
+      "description": "Abschnitt mit 4px Ink-Linie oben und Definitionsliste.",
+      "html": "<section class=\"ds-fakten\"><h2 class=\"ds-fakten-titel\">Merkmale</h2><dl class=\"ds-fakten-liste\"><div><dt>Farben</dt><dd>schwarz mit braunen Abzeichen</dd></div><div><dt>Ursprungsland</dt><dd class=\"ds-leer\">keine Angabe</dd></div></dl></section>",
+      "css": ".ds-fakten { border-top: 4px solid #2E2A22; padding-top: 16px; font-family: Nunito, ui-sans-serif, system-ui, sans-serif; color: #2E2A22; } .ds-fakten-titel { margin: 0; font-size: 1.25rem; font-weight: 900; } .ds-fakten-liste { margin: 12px 0 0; } .ds-fakten-liste > div { display: grid; grid-template-columns: 10rem 1fr; gap: 16px; padding: 12px 0; border-top: 1px solid #E4DEC8; font-size: 0.875rem; } .ds-fakten-liste > div:first-child { border-top: 0; } .ds-fakten-liste dt { font-weight: 700; } .ds-fakten-liste dd { margin: 0; } .ds-leer { color: rgba(46, 42, 34, 0.8); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Der gesteckte Steckbrief",
+    "overview": "Eine Rasse ist ein Stapel Fakten, die ineinandergreifen. Farbbalken tragen die FCI-Einordnung über das Foto, Maße sind echte Balken auf einer festen Skala, und jeder Textabschnitt hat einen festen Farbblock, damit „Wesen“ bei jeder Rasse gleich aussieht. Die Form heißt „Bildbetonte Kachel“ und ist von den modularen Balken bei Studio Dumbar angeregt.\n\nDie Fläche ist Salbei-Pergament. Darauf liegen Blöcke in Tanne, Leder-Rost, Tennisball und Ink. Ecken sind klein (2 bis 8px), Schatten gibt es nicht. Faktenabschnitte beginnen unter einer dicken Ink-Linie. Abgelehnt ist die übliche Karte mit Bild oben und langem Textblock darunter.\n\nDie Form stammt aus einer ausdrücklichen Entscheidung des Betreibers in der Entscheidungsrunde vom 15.10.2026. Der Concept-Seed-Wurf (Schlüssel `e0018f54`) hatte eine andere Struktur zugewiesen („Standardblatt“). Der Betreiber hat stattdessen den Herausforderer „Bildbetonte Kachel“ gewählt, im Wissen, dass 381 von 382 Rassen kein Foto haben. Für diese Form gibt es keinen eigenen Seed-Schlüssel. Deshalb muss die Fläche ohne Foto genauso tragen wie mit.\n\nErste Umsetzung ist die Rassen-Detailseite (`breed_detail.php`, `views/partials/rassentext.php`). Alle anderen Seiten zeigen noch den alten Look und gelten als Altbestand, nicht als System.",
+    "keyCharacteristics": [
+      "Gesetzte Farbblöcke statt Karten, keine Schatten",
+      "Feste Farbzuordnung je Faktenart und je Textabschnitt",
+      "Zahlen und Maße in Mono, alles andere in Nunito",
+      "Dicke Ink-Linie (4px) über jedem Faktenabschnitt",
+      "Lücken werden benannt, nicht versteckt"
+    ],
+    "rules": [
+      { "name": "The Feste-Farbe Rule", "body": "Die Farbe hängt am Abschnitt, nie an der Rasse. Wesen = Tanne/Creme, Haltung und Erziehung = Rost/Creme, Pflege = Tennisball/Ink, Aussehen = Ink/Creme, Herkunft und Geschichte = Sand/Ink, Angaben aus dem Standard = Sand/Ink, alles andere = dunkle Tanne/Creme.", "section": "colors" },
+      { "name": "The Ink-auf-Tennisball Rule", "body": "Auf Tennisball steht immer Ink. Weiß oder Creme auf Tennisball fällt durch den Kontrast.", "section": "colors" },
+      { "name": "The Rost-nur-fett Rule", "body": "Creme auf Leder-Rost liegt bei etwa 4,6:1. Das reicht nur für fetten oder großen Text. Kleiner normaler Text auf Rost ist verboten.", "section": "colors" },
+      { "name": "The Zahlen-in-Mono Rule", "body": "JetBrains Mono nur für Zahlen und Maße. Kein Fließtext, keine Überschrift in Mono.", "section": "typography" },
+      { "name": "The Feste-Skala Rule", "body": "Maßbalken liegen auf 0 bis 90 cm und 0 bis 90 kg, Striche alle 30 Einheiten. Die Skala wächst nur bei Ausreißern. Der Wert steht immer auch als Text daneben.", "section": "layout" },
+      { "name": "The Flach-und-gesteckt Rule", "body": "Ebenen entstehen durch Überlappen und Farbe, nie durch Schatten oder Unschärfe.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do jede Faktenart in ihrer festen Farbe setzen, nach der Feste-Farbe Rule.",
+      "Do Zahlen und Maße in JetBrains Mono 500 setzen.",
+      "Do Faktenabschnitte mit 4px Ink-Linie beginnen.",
+      "Do alle Ziele mindestens 44px hoch machen und WCAG 2.1 AA halten.",
+      "Do fehlende Daten benennen („keine Angabe“) statt Felder auszublenden.",
+      "Do die Fläche ohne Foto mit dunkler Tanne, Gruppennummer und Signet füllen."
+    ],
+    "donts": [
+      "Don't Schatten einsetzen.",
+      "Don't Ecken über 8px oder Pillenformen verwenden.",
+      "Don't Creme oder Weiß auf Tennisball setzen.",
+      "Don't kleinen normalen Text auf Leder-Rost setzen.",
+      "Don't Emoji als Icons verwenden. Icons sind Inline-SVG.",
+      "Don't auf die Karte mit Bild oben und langem Textblock zurückfallen.",
+      "Don't Bewegung außer dem einen Balkenauftritt einbauen."
+    ]
+  }
+}
