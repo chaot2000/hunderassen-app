@@ -879,6 +879,14 @@ else
     check_body_contains "FCI-Gruppe englisch" "Sheepdogs and Cattledogs"
     check_body_contains "Maße-Überschrift englisch" "Size and weight"
     check_body_not_contains "Kein deutscher Gruppenname" "Hüte- und Treibhunde"
+    check_body_contains "Ohne englischen Text: Hinweis" "only available in German"
+    check_body_not_contains "Ohne englischen Text: keine TheDogAPI-Quelle" "Text: TheDogAPI."
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Englische Beschreibung importieren" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"beschreibung_en\":\"CI-English-description\",\"uebernehmen_beschreibung_en\":\"1\"}}"
+    check_status "Rassenseite mit importiertem Text" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Englischer Text wird gezeigt" "CI-English-description"
+    check_body_contains "Importierter Text nennt TheDogAPI" "Text: TheDogAPI."
     check_status "Hundeliste auf Englisch" "$BASE_URL/dogs.php" "200"
     check_body_contains "Hundeliste: Knopf englisch" "Add dog"
     check_status "Halterliste auf Englisch" "$BASE_URL/halter.php" "200"

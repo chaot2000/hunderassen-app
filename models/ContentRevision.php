@@ -196,6 +196,32 @@ class ContentRevision
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Stammt der aktuelle Wert eines Feldes aus einem Import? Verglichen
+     * wird mit dem zuletzt importierten Wert (ohne \r), nicht mit dem
+     * Anlass der letzten Version: Ein Speichern ohne inhaltliche Änderung
+     * oder eine Wiederherstellung ändert die Herkunft nicht.
+     */
+    public static function stammtAusImport(string $tabelle, int $datensatzId, string $feld, ?string $aktuell, ?int $tenantId): bool
+    {
+        if ($aktuell === null || trim($aktuell) === '') {
+            return false;
+        }
+        $sql = "SELECT neuer_wert FROM content_revisions WHERE tabelle = :tabelle AND datensatz_id = :id AND feld = :feld AND anlass = 'import'";
+        $params = [':tabelle' => $tabelle, ':id' => $datensatzId, ':feld' => $feld];
+        if ($tenantId === null) {
+            $sql .= ' AND tenant_id IS NULL';
+        } else {
+            $sql .= ' AND tenant_id = :tenant_id';
+            $params[':tenant_id'] = $tenantId;
+        }
+        $stmt = Database::getConnection()->prepare($sql . ' ORDER BY id DESC LIMIT 1');
+        $stmt->execute($params);
+        $importiert = $stmt->fetchColumn();
+        return $importiert !== false
+            && trim(str_replace("\r", '', (string) $importiert)) === trim(str_replace("\r", '', $aktuell));
+    }
+
     public static function istWiederherstellbar(string $tabelle, string $feld): bool
     {
         return isset(self::FELDER[$tabelle][$feld])
