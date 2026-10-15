@@ -30,6 +30,7 @@ class ContentRevision
     public const FELDER = [
         'breeds' => [
             'name'              => 'Name',
+            'name_en'           => 'Name (englisch)',
             'alternative_namen' => 'Alternative Namen',
             'namenszusatz'      => 'Namenszusatz',
             'ursprungsland'     => 'Ursprungsland',
@@ -40,9 +41,12 @@ class ContentRevision
             'fci_sektion_name'  => 'Name der Sektion',
             'arbeitspruefung'   => 'Arbeitsprüfung',
             'beschreibung'      => 'Beschreibung',
+            'beschreibung_en'   => 'Beschreibung (englisch)',
             'temperament'       => 'Temperament',
+            'temperament_en'    => 'Temperament (englisch)',
             'lebenserwartung'   => 'Lebenserwartung',
             'zuchtzweck'        => 'Zuchtzweck',
+            'zuchtzweck_en'     => 'Zuchtzweck (englisch)',
             'thedogapi_id'      => 'TheDogAPI-Zuordnung',
             'quelle_url'        => 'Quelle',
             'quelle_stand'      => 'Stand der Quelle',
@@ -116,7 +120,10 @@ class ContentRevision
                     continue;
                 }
                 $neuerWert = self::alsText($neu[$feld]);
-                if ($alterWert === $neuerWert) {
+                // Unterschied nur im Zeilenende (\r\n gegen \n) ist keine Änderung.
+                if ($alterWert === $neuerWert
+                    || ($alterWert !== null && $neuerWert !== null
+                        && str_replace("\r", '', $alterWert) === str_replace("\r", '', $neuerWert))) {
                     continue;
                 }
             }

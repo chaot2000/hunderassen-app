@@ -91,7 +91,9 @@ jobs:
           done
 
       - name: Unit-Tests (ohne Datenbank)
-        run: php tests/RassentextGliederungTest.php
+        run: |
+          php tests/RassentextGliederungTest.php
+          php tests/UebersetzungTest.php
 
       - name: Rauchtest ausführen
         run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!
@@ -160,7 +162,7 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen + Rassenstruktur: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+      - name: "Textversionen + Rassenstruktur + Englisch: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
         # Ausgangspunkt ist das Schema vor den Textversionen (Tag
         # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
         # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
@@ -185,10 +187,20 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_16_rassen_struktur.sql
           $R txt_live < sql/migrationen/migration_2026_10_16_rassen_struktur.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE gliederung = 'keine'" | grep -qx 2
+          dump txt_live > /tmp/txt_struktur.sql
+          $R txt_live -e "UPDATE breeds SET temperament = 'Calm, loyal' WHERE id = 1;"
+          $R txt_live < sql/migrationen/migration_2026_10_17_rassen_englisch.sql
+          $R txt_live < sql/migrationen/migration_2026_10_17_rassen_englisch.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE id = 1 AND temperament IS NULL AND temperament_en = 'Calm, loyal'" | grep -qx 1
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_rassen_englisch.sql
+          $R txt_live < sql/migrationen/rollback_rassen_englisch.sql
+          $R txt_live -N -e "SELECT temperament FROM breeds WHERE id = 1" | grep -qx 'Calm, loyal'
+          dump txt_live > /tmp/txt_zurueck0.sql
+          diff /tmp/txt_struktur.sql /tmp/txt_zurueck0.sql
           $R txt_live < sql/migrationen/rollback_rassen_struktur.sql
           $R txt_live < sql/migrationen/rollback_rassen_struktur.sql
           dump txt_live > /tmp/txt_zurueck1.sql

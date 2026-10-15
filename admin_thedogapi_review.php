@@ -25,6 +25,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/models/TheDogApiFelder.php';
+require_once __DIR__ . '/models/Uebersetzung.php';
 
 secure_session_start();
 // Schreibt in den geteilten Rassenkatalog aller Mandanten, daher nur
@@ -302,7 +304,7 @@ function findeBestesMatch(string $vdhName, array $apiBreeds): ?array
 $pdo = Database::getConnection();
 
 $nurOffene = !isset($_GET['alle']);
-$sql = 'SELECT id, name, beschreibung, temperament, lebenserwartung, zuchtzweck, bild_blob IS NOT NULL AS hat_bild
+$sql = 'SELECT id, name, name_en, beschreibung, beschreibung_en, temperament, temperament_en, lebenserwartung, zuchtzweck, zuchtzweck_en, bild_blob IS NOT NULL AS hat_bild
         FROM breeds';
 if ($nurOffene) {
     $sql .= ' WHERE thedogapi_id IS NULL';
@@ -368,7 +370,7 @@ require __DIR__ . '/views/partials/header.php';
     .tdapi-grid h4 { margin: 0 0 .4rem 0; font-size: .75rem; text-transform: uppercase; color: #888; }
     .tdapi-feld { margin-bottom: .5rem; }
     .tdapi-feld label { display: block; font-size: .75rem; color: #666; margin-bottom: .15rem; }
-    .tdapi-feld input[type=text] { width: 100%; box-sizing: border-box; font-family: inherit; font-size: .85rem; padding: .3rem; border: 1px solid #ccc; border-radius: 4px; }
+    .tdapi-feld input[type=text], .tdapi-feld textarea { width: 100%; box-sizing: border-box; font-family: inherit; font-size: .85rem; padding: .3rem; border: 1px solid #ccc; border-radius: 4px; }
     .tdapi-checkboxen { display: flex; gap: 1rem; margin-top: .5rem; flex-wrap: wrap; }
     .tdapi-checkboxen label { font-size: .8rem; display: flex; align-items: center; gap: .3rem; }
     .tdapi-card img.thumb { max-width: 100%; border-radius: 4px; margin-bottom: .4rem; }
@@ -405,27 +407,33 @@ require __DIR__ . '/views/partials/header.php';
     <?php endif; ?>
 </div>
 
+<?php
+$ohneDeutsch = (int) $pdo->query("SELECT COUNT(*) FROM breeds WHERE (temperament IS NULL OR temperament = '') AND temperament_en <> ''")->fetchColumn();
+if ($ohneDeutsch > 0): ?>
+<form action="/admin_thedogapi_apply.php" method="post" class="tdapi-pauschal">
+    <?= csrf_field() ?>
+    <input type="hidden" name="aktion" value="temperament_uebersetzen">
+    <p class="mb-2"><?= $ohneDeutsch ?> Rassen haben ein englisches, aber kein deutsches Temperament.</p>
+    <button type="submit">Mit dem Wörterbuch übersetzen</button>
+</form>
+<?php endif; ?>
+
 <form action="/admin_thedogapi_apply.php" method="post" id="tdapi-formular">
 <?= csrf_field() ?>
 
 <?php
 // Pauschal-Auswahl pro Feld. Zählt, wie viele Rassen das Feld bekommen
 // könnten: TheDogAPI hat einen Wert und bei uns ist es noch leer.
-$pauschalFelder = [
-    'bild' => 'Bild',
-    'temperament' => 'Temperament',
-    'lebenserwartung' => 'Lebenserwartung',
-    'zuchtzweck' => 'Zuchtzweck',
-    'markieren' => 'Als „abgeglichen“ markieren',
-];
-$apiFeld = ['temperament' => 'temperament', 'lebenserwartung' => 'life_span', 'zuchtzweck' => 'bred_for'];
+$pauschalFelder = ['bild' => 'Bild']
+    + array_replace(TheDogApiFelder::TEXT, ['temperament_en' => 'Temperament (englisch, deutsch per Wörterbuch)'])
+    + ['markieren' => 'Als „abgeglichen“ markieren'];
 $moeglich = array_fill_keys(array_keys($pauschalFelder), ['alle' => 0, 'sicher' => 0]);
 foreach ($treffer as $t) {
     foreach ($pauschalFelder as $feld => $_) {
         $geht = match ($feld) {
             'bild' => $t['api']['_bild_url'] !== '' && !$t['vdh']['hat_bild'],
             'markieren' => true,
-            default => trim((string) ($t['api'][$apiFeld[$feld]] ?? '')) !== '' && trim((string) ($t['vdh'][$feld] ?? '')) === '',
+            default => TheDogApiFelder::wert($t['api'], $feld) !== '' && trim((string) ($t['vdh'][$feld] ?? '')) === '',
         };
         if ($geht) {
             $moeglich[$feld]['alle']++;
@@ -438,7 +446,8 @@ foreach ($treffer as $t) {
     <h2 id="tdapi-pauschal-titel" class="font-bold mb-1">Pauschal auswählen</h2>
     <p style="font-size:.85rem;color:#555;" class="mb-2">
         Setzt oder entfernt die Häkchen in allen Rassen unten. Felder, die bei uns schon gefüllt sind, bleiben gesperrt.
-        Die Texte von TheDogAPI sind englisch.
+        TheDogAPI ist englisch, die Texte landen in den englischen Feldern. Das deutsche Temperament wird
+        über das Wörterbuch gefüllt, Zuchtzweck und Beschreibung übersetzt du in „Rasse bearbeiten“.
     </p>
     <table>
         <thead><tr><th>Feld</th><th>Möglich (sicher / alle)</th><th>Auswählen</th></tr></thead>
@@ -478,17 +487,18 @@ foreach ($treffer as $t) {
 
     <div class="tdapi-grid">
         <div>
-            <h4>Aktuell in der DB</h4>
+            <h4>Aktuell bei uns</h4>
             <?php if ($vdh['hat_bild']): ?>
                 <img class="thumb" src="/bildausgabe.php?id=<?= $rowId ?>" alt="">
             <?php else: ?>
-                <p style="color:#999;font-size:.8rem;">Kein Bild vorhanden</p>
+                <p style="color:#666;font-size:.8rem;">Kein Bild vorhanden</p>
             <?php endif; ?>
             <p style="font-size:.8rem;"><?= nl2br(e(mb_substr((string)$vdh['beschreibung'], 0, 300))) ?>…</p>
-            <p style="font-size:.8rem;color:#666;">
-                Temperament: <?= e((string)($vdh['temperament'] ?? '—')) ?><br>
-                Lebenserwartung: <?= e((string)($vdh['lebenserwartung'] ?? '—')) ?><br>
-                Zuchtzweck: <?= e((string)($vdh['zuchtzweck'] ?? '—')) ?>
+            <p style="font-size:.8rem;color:#555;">
+                Temperament: <?= e((string)($vdh['temperament'] ?: '—')) ?><br>
+                <?php foreach (TheDogApiFelder::TEXT as $feld => $feldLabel): ?>
+                    <?= e($feldLabel) ?>: <?= e(mb_strimwidth((string)($vdh[$feld] ?: '—'), 0, 120, '…')) ?><br>
+                <?php endforeach; ?>
             </p>
         </div>
         <div>
@@ -496,29 +506,32 @@ foreach ($treffer as $t) {
             <?php if ($api['_bild_url'] !== ''): ?>
                 <img class="thumb" src="<?= e($api['_bild_url']) ?>" alt="">
             <?php endif; ?>
+            <?php foreach (TheDogApiFelder::TEXT as $feld => $feldLabel): $wert = TheDogApiFelder::wert($api, $feld); ?>
             <div class="tdapi-feld">
-                <label>Temperament (übernehmbar)</label>
-                <input type="text" name="items[<?= $rowId ?>][temperament]" value="<?= e((string)($api['temperament'] ?? '')) ?>">
+                <label for="f-<?= $rowId ?>-<?= $feld ?>"><?= e($feldLabel) ?></label>
+                <?php if ($feld === 'beschreibung_en'): ?>
+                    <textarea id="f-<?= $rowId ?>-<?= $feld ?>" lang="en" rows="3" name="items[<?= $rowId ?>][<?= $feld ?>]"><?= e($wert) ?></textarea>
+                <?php else: ?>
+                    <input type="text" id="f-<?= $rowId ?>-<?= $feld ?>" lang="en" name="items[<?= $rowId ?>][<?= $feld ?>]" value="<?= e($wert) ?>">
+                <?php endif; ?>
+                <?php if ($feld === 'temperament_en' && $wert !== ''): $de = Uebersetzung::temperament($wert); ?>
+                    <p style="font-size:.75rem;color:#555;margin-top:.15rem;">
+                        Deutsch: <?= $de['text'] !== null ? e($de['text']) : 'nicht im Wörterbuch: ' . e(implode(', ', $de['unbekannt'])) ?>
+                    </p>
+                <?php endif; ?>
             </div>
-            <div class="tdapi-feld">
-                <label>Lebenserwartung (übernehmbar)</label>
-                <input type="text" name="items[<?= $rowId ?>][lebenserwartung]" value="<?= e((string)($api['life_span'] ?? '')) ?>">
-            </div>
-            <div class="tdapi-feld">
-                <label>Zuchtzweck / bred_for (übernehmbar)</label>
-                <input type="text" name="items[<?= $rowId ?>][zuchtzweck]" value="<?= e((string)($api['bred_for'] ?? '')) ?>">
-            </div>
+            <?php endforeach; ?>
         </div>
     </div>
 
     <div class="tdapi-checkboxen">
-        <?php foreach (['temperament' => 'Temperament', 'lebenserwartung' => 'Lebenserwartung', 'zuchtzweck' => 'Zuchtzweck'] as $feld => $feldLabel): $hatWert = trim((string) ($vdh[$feld] ?? '')) !== ''; ?>
+        <?php foreach (TheDogApiFelder::TEXT as $feld => $feldLabel): $hatWert = trim((string) ($vdh[$feld] ?? '')) !== ''; ?>
             <label<?= $hatWert ? ' style="color:#666"' : '' ?>><input type="checkbox" data-feld="<?= $feld ?>" name="items[<?= $rowId ?>][uebernehmen_<?= $feld ?>]" value="1" <?= $hatWert ? 'disabled' : '' ?>>
-                <?= $feldLabel ?> übernehmen<?= $hatWert ? ' (schon vorhanden, bleibt)' : '' ?></label>
+                <?= e($feldLabel) ?><?= $hatWert ? ' (schon vorhanden, bleibt)' : '' ?></label>
         <?php endforeach; ?>
         <?php if ($api['_bild_url'] !== ''): ?>
         <label<?= $vdh['hat_bild'] ? ' style="color:#666"' : '' ?>><input type="checkbox" data-feld="bild" name="items[<?= $rowId ?>][uebernehmen_bild]" value="1" <?= $vdh['hat_bild'] ? 'disabled' : ($sicher ? 'checked' : '') ?>>
-            Bild übernehmen <?= $vdh['hat_bild'] ? '(Bild vorhanden, bleibt)' : '(noch kein Bild vorhanden)' ?>
+            Bild <?= $vdh['hat_bild'] ? '(Bild vorhanden, bleibt)' : '(noch kein Bild vorhanden)' ?>
         </label>
         <input type="hidden" name="items[<?= $rowId ?>][bild_url]" value="<?= e($api['_bild_url']) ?>">
         <?php endif; ?>
@@ -552,7 +565,7 @@ foreach ($treffer as $t) {
                 if (!box || box.disabled) return;
                 if (umfang === 'keine') { box.checked = false; return; }
                 // Ohne Wert von TheDogAPI gibt es nichts zu übernehmen.
-                var text = karte.querySelector('input[type=text][name$="[' + feld + ']"]');
+                var text = karte.querySelector('[name$="[' + feld + ']"]:not([type=checkbox])');
                 if (text && text.value.trim() === '') return;
                 if (umfang === 'alle' || karte.dataset.sicher === '1') box.checked = true;
             });
@@ -567,7 +580,7 @@ foreach ($treffer as $t) {
         var auswahl = {};
         karten.filter(hatAuswahl).forEach(function (karte) {
             var daten = {};
-            karte.querySelectorAll('input[name^="items["]').forEach(function (feld) {
+            karte.querySelectorAll('input[name^="items["], textarea[name^="items["]').forEach(function (feld) {
                 var schluessel = feld.name.slice(feld.name.lastIndexOf('[') + 1, -1);
                 if (feld.type === 'checkbox') {
                     if (feld.checked && !feld.disabled) daten[schluessel] = '1';
@@ -582,7 +595,7 @@ foreach ($treffer as $t) {
             alert('Es ist nichts ausgewählt.');
             return;
         }
-        formular.querySelectorAll('input[name^="items["]').forEach(function (feld) { feld.disabled = true; });
+        formular.querySelectorAll('input[name^="items["], textarea[name^="items["]').forEach(function (feld) { feld.disabled = true; });
         var json = document.createElement('input');
         json.type = 'hidden';
         json.name = 'items_json';
