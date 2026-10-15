@@ -20,8 +20,12 @@
 
 SET NAMES utf8mb4;
 
+-- Mandant C (ci-c) hat keine Benutzer. Der Rauchtest provoziert dort
+-- die Login-Sperre und prüft, dass Mandant 1 davon unberührt bleibt.
 INSERT INTO `tenants` (`id`, `name`, `subdomain`, `is_active`)
-VALUES (2, 'CI-Mandant B', 'ci-b', 1);
+VALUES
+    (2, 'CI-Mandant B', 'ci-b', 1),
+    (3, 'CI-Mandant C', 'ci-c', 1);
 
 -- Platzhalter-Hash, wird in CI per UPDATE ersetzt (siehe ci.yml).
 INSERT INTO `users` (`id`, `tenant_id`, `username`, `password_hash`, `role`, `is_super_admin`, `is_active`, `created_by`)

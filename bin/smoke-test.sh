@@ -497,8 +497,9 @@ else
 
         # Gleicher Benutzername, falsches Mandanten-Kürzel: Login muss scheitern.
         # Achtung: dieser Block erzeugt pro Lauf zwei absichtliche
-        # Fehlversuche. Die Login-Sperre zählt auch pro IP (5 in 15 Min.),
-        # lokal also nach dem zweiten Lauf login_attempts leeren.
+        # Fehlversuche in Mandant 1. Die Login-Sperre zählt pro Mandant
+        # auch pro IP (5 in 15 Min.), lokal also nach dem zweiten Lauf
+        # login_attempts leeren.
         login_as "" "$B_USER" "$B_PASS"
         check_status "Login B-Admin ohne Kürzel (landet in Mandant 1) schlägt fehl" "$BASE_URL/dashboard.php" "302"
         login_as "gibt-es-nicht" "$B_USER" "$B_PASS"
@@ -622,6 +623,24 @@ else
         check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
         check_status "A: Mandantenverwaltung für Super-Admin" "$BASE_URL/admin_manage_tenants.php" "200"
         check_body_contains "A: Mandant B wird gelistet" "CI-Mandant B"
+
+        echo ""
+        echo "--- Login-Sperre zählt pro Mandant ---"
+        LOCK_JAR="$(mktemp)"
+        COOKIE_JAR="$LOCK_JAR"
+        for i in 1 2 3 4 5; do
+            login_as "ci-c" "sperrtest" "falsches-passwort-$i"
+        done
+        curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_login_form.html
+        LOCK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html || true)
+        check_status "C: sechster Fehlversuch" "$BASE_URL/login.php" "200" \
+            "-X POST --data-urlencode csrf_token=$LOCK_CSRF --data-urlencode mandant=ci-c \
+             --data-urlencode username=sperrtest --data-urlencode password=falsch"
+        check_body_contains "C: Mandant C ist für diese IP gesperrt" "Zu viele fehlgeschlagene Login-Versuche"
+        login_as "" "$ADMIN_USER" "$ADMIN_PASS"
+        check_status "A: Login von derselben IP klappt trotz Sperre in Mandant C" "$BASE_URL/dashboard.php" "200"
+        rm -f "$LOCK_JAR"
+        COOKIE_JAR="$A_COOKIE_JAR"
     fi
 
     echo ""
