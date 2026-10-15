@@ -19,9 +19,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $halterId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$image    = $halterId ? Halter::findImageByIdForUser($halterId, $currentUserId, $isAdmin) : null;
+$image    = $halterId ? Halter::findImageByIdForUser($halterId, $currentUserId, $isAdmin, $tenantId) : null;
 
 if ($image === null) {
     http_response_code(404);

@@ -21,20 +21,21 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_halter_id'])) {
     csrf_require_valid();
     $hid    = (int) $_POST['delete_halter_id'];
-    $halter = Halter::findByIdForUser($hid, $currentUserId, $isAdmin);
+    $halter = Halter::findByIdForUser($hid, $currentUserId, $isAdmin, $tenantId);
     if ($halter !== null) {
-        Halter::delete($hid);
+        Halter::delete($hid, $tenantId);
     }
     header('Location: /halter.php');
     exit;
 }
 
-$allHalter = Halter::findAllForUser($currentUserId, $isAdmin);
-$dogCounts = Halter::getDogCounts($currentUserId, $isAdmin);
+$allHalter = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
+$dogCounts = Halter::getDogCounts($currentUserId, $isAdmin, $tenantId);
 
 $pageTitle = 'Halter';
 require __DIR__ . '/views/partials/header.php';

@@ -9,12 +9,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/models/User.php';
 
 secure_session_start();
 require_admin();
 
 $currentAdminId = (int) current_user()['id'];
+$userScope      = user_admin_scope();
 $errorMessage   = null;
 $successMessage = null;
 
@@ -30,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_POST['username'] ?? '',
                 $_POST['role'] ?? '',
                 $currentAdminId,
+                $userScope,
                 isset($_POST['can_manage_breeds']),
                 isset($_POST['can_manage_tests'])
             );
@@ -39,7 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'reset_password':
             $result = User::resetPassword(
                 (int) ($_POST['user_id'] ?? 0),
-                $_POST['new_password'] ?? ''
+                $_POST['new_password'] ?? '',
+                $userScope
             );
             $result['success'] ? $successMessage = $result['message'] : $errorMessage = $result['message'];
             break;
@@ -47,12 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'toggle_active':
             $userId = (int) ($_POST['user_id'] ?? 0);
             $active = ($_POST['active'] ?? '0') === '1';
-            User::setActive($userId, $active);
+            User::setActive($userId, $active, $userScope);
             header('Location: /admin_manage_users.php');
             exit;
 
         case 'delete_user':
-            $result = User::delete((int) ($_POST['user_id'] ?? 0), $currentAdminId);
+            $result = User::delete((int) ($_POST['user_id'] ?? 0), $currentAdminId, $userScope);
             if ($result['success']) {
                 header('Location: /admin_manage_users.php');
                 exit;
@@ -65,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users = User::findAll();
+$users = User::findAll($userScope);
 
 $pageTitle = 'Benutzerverwaltung';
 require __DIR__ . '/views/partials/header.php';
@@ -90,6 +94,8 @@ require __DIR__ . '/views/partials/header.php';
         $uid      = (int) $user['id'];
         $isSelf   = $uid === $currentAdminId;
         $isActive = (int) $user['is_active'] === 1;
+        // Super-Admin-Konten darf nur ein Super-Admin bearbeiten.
+        $isProtected = $userScope !== null && !empty($user['is_super_admin']);
         // Alle Daten als JS-Literale vorbereiten — sicher mit JSON_HEX_APOS,
         // da x-data in einfachen Anführungszeichen steht.
         // @click-Attribute werden ebenfalls in einfachen Anführungszeichen
@@ -118,6 +124,12 @@ require __DIR__ . '/views/partials/header.php';
                         <span class="text-xs px-2 py-0.5 rounded-full font-semibold <?= $user['role'] === 'admin' ? 'bg-pfote/20 text-fell' : 'bg-sand text-fellDk/70' ?>">
                             <?= $user['role'] === 'admin' ? 'Admin' : 'Benutzer' ?>
                         </span>
+                        <?php if (!empty($user['is_super_admin'])): ?>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-pfote/30 text-fell font-semibold">Super-Admin</span>
+                        <?php endif; ?>
+                        <?php if ($userScope === null): ?>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-sand text-fellDk/70 font-semibold"><?= e($user['tenant_name']) ?></span>
+                        <?php endif; ?>
                         <?php if (!$isActive): ?>
                             <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">Deaktiviert</span>
                         <?php endif; ?>
@@ -136,6 +148,7 @@ require __DIR__ . '/views/partials/header.php';
                         Erstellt: <?= date('d.m.Y', strtotime($user['created_at'])) ?>
                     </p>
 
+                    <?php if (!$isProtected): ?>
                     <div class="flex gap-2 flex-wrap">
                         <button type="button" @click="editMode = true"
                             class="text-xs bg-pfote/10 text-fell font-semibold px-3 py-1.5 rounded-full hover:bg-pfote/20 transition-colors">
@@ -170,9 +183,11 @@ require __DIR__ . '/views/partials/header.php';
                             </form>
                         <?php endif; ?>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
+            <?php if (!$isProtected): ?>
             <!-- Bearbeitungs-Modus -->
             <form x-show="editMode" x-cloak method="post" action="/admin_manage_users.php" class="space-y-3">
                 <?= csrf_field() ?>
@@ -253,6 +268,7 @@ require __DIR__ . '/views/partials/header.php';
                     </button>
                 </div>
             </form>
+            <?php endif; ?>
         </div>
     <?php endforeach; ?>
 

@@ -1,0 +1,10 @@
+# Im Repo einheitlich LF. Devin hat LF geschrieben, Windows-Checkouts mit
+# core.autocrlf=true bekommen trotzdem CRLF im Arbeitsordner.
+* text=auto
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary

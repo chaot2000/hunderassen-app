@@ -14,42 +14,51 @@ require_once __DIR__ . '/../config/security.php';
 class User
 {
     /**
-     * Versucht einen Login durchzuführen.
+     * Versucht einen Login im angegebenen Mandanten durchzuführen.
+     * Der Benutzername ist nur pro Mandant eindeutig (uq_tenant_username),
+     * deshalb wird immer mit Mandant gesucht. Deaktivierte Mandanten
+     * lassen keinen Login zu.
      * @return array{success: bool, message: string, user?: array}
      */
-    public static function attemptLogin(string $username, string $password): array
+    public static function attemptLogin(string $username, string $password, int $tenantId): array
     {
         $username = clean_input($username);
 
-        $lockoutSeconds = get_lockout_remaining_seconds($username);
+        $lockoutSeconds = get_lockout_remaining_seconds($username, $tenantId);
         if ($lockoutSeconds > 0) {
             $minutes = (int) ceil($lockoutSeconds / 60);
             return ['success' => false, 'message' => 'Zu viele fehlgeschlagene Login-Versuche. Bitte warten Sie noch ca. ' . $minutes . ' Minute(n).'];
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
-        $stmt->execute([':username' => $username]);
+        $stmt = $pdo->prepare(
+            'SELECT u.id, u.tenant_id, u.username, u.password_hash, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests, u.is_active
+             FROM users u
+             INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
+             WHERE u.username = :username AND u.tenant_id = :tenant_id
+             LIMIT 1'
+        );
+        $stmt->execute([':username' => $username, ':tenant_id' => $tenantId]);
         $user = $stmt->fetch();
 
         $genericError = 'Benutzername oder Passwort ist falsch.';
 
         if (!$user) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => $genericError];
         }
 
         if ((int) $user['is_active'] !== 1) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => 'Dieser Account wurde deaktiviert. Bitte wenden Sie sich an einen Administrator.'];
         }
 
         if (!password_verify($password, $user['password_hash'])) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => $genericError];
         }
 
-        log_login_attempt($username, true);
+        log_login_attempt($username, true, $tenantId);
         unset($user['password_hash']);
 
         return ['success' => true, 'message' => 'Login erfolgreich.', 'user' => $user];
@@ -59,7 +68,7 @@ class User
      * Legt einen neuen Benutzer an (nur durch Admin).
      * @return array{success: bool, message: string}
      */
-    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId, bool $canManageBreeds = false, bool $canManageTests = false): array
+    public static function createByAdmin(string $username, string $password, string $role, int $createdByUserId, int $tenantId, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
         $username = clean_input($username);
 
@@ -77,18 +86,19 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username LIMIT 1');
-        $checkStmt->execute([':username' => $username]);
+        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND tenant_id = :tenant_id LIMIT 1');
+        $checkStmt->execute([':username' => $username, ':tenant_id' => $tenantId]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Dieser Benutzername ist bereits vergeben.'];
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $insertStmt = $pdo->prepare(
-            'INSERT INTO users (username, password_hash, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by)
-             VALUES (:username, :hash, :role, :can_manage_breeds, :can_manage_tests, 1, NOW(), :created_by)'
+            'INSERT INTO users (tenant_id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by)
+             VALUES (:tenant_id, :username, :hash, :role, :can_manage_breeds, :can_manage_tests, 1, NOW(), :created_by)'
         );
         $insertStmt->execute([
+            ':tenant_id'         => $tenantId,
             ':username'          => $username,
             ':hash'              => $hash,
             ':role'              => $role,
@@ -106,10 +116,18 @@ class User
      * unabhängig von der Rolle gespeichert, sind aber nur bei role='user'
      * wirksam — ein Admin hat can_manage_breeds/can_manage_tests ohnehin
      * implizit immer (siehe config/auth.php).
+     *
+     * @param int|null $tenantScope Mandant des handelnden Admins, null nur
+     *        für Super-Admins (siehe user_admin_scope() in config/auth.php)
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, string $username, string $role, int $currentAdminId, bool $canManageBreeds = false, bool $canManageTests = false): array
+    public static function update(int $id, string $username, string $role, int $currentAdminId, ?int $tenantScope, bool $canManageBreeds = false, bool $canManageTests = false): array
     {
+        $target = self::findManageable($id, $tenantScope);
+        if ($target === null) {
+            return ['success' => false, 'message' => 'Benutzer nicht gefunden.'];
+        }
+
         $username = clean_input($username);
 
         if ($username === '') {
@@ -126,8 +144,8 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND id != :id LIMIT 1');
-        $checkStmt->execute([':username' => $username, ':id' => $id]);
+        $checkStmt = $pdo->prepare('SELECT id FROM users WHERE username = :username AND tenant_id = :tenant_id AND id != :id LIMIT 1');
+        $checkStmt->execute([':username' => $username, ':tenant_id' => (int) $target['tenant_id'], ':id' => $id]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Dieser Benutzername ist bereits vergeben.'];
         }
@@ -150,8 +168,11 @@ class User
      * Setzt das Passwort eines Benutzers zurück (Admin-Funktion).
      * @return array{success: bool, message: string}
      */
-    public static function resetPassword(int $id, string $newPassword): array
+    public static function resetPassword(int $id, string $newPassword, ?int $tenantScope): array
     {
+        if (self::findManageable($id, $tenantScope) === null) {
+            return ['success' => false, 'message' => 'Benutzer nicht gefunden.'];
+        }
         if (mb_strlen($newPassword) < 10) {
             return ['success' => false, 'message' => 'Das neue Passwort muss mindestens 10 Zeichen lang sein.'];
         }
@@ -212,40 +233,111 @@ class User
      * Löscht einen Benutzer. Admin kann sich nicht selbst löschen.
      * @return array{success: bool, message: string}
      */
-    public static function delete(int $id, int $currentAdminId): array
+    public static function delete(int $id, int $currentAdminId, ?int $tenantScope): array
     {
         if ($id === $currentAdminId) {
             return ['success' => false, 'message' => 'Du kannst deinen eigenen Account nicht löschen.'];
+        }
+        if (self::findManageable($id, $tenantScope) === null) {
+            return ['success' => false, 'message' => 'Benutzer nicht gefunden.'];
         }
 
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare('DELETE FROM users WHERE id = :id');
         $stmt->execute([':id' => $id]);
 
-        return ['success' => true, 'message' => 'Benutzer wurde geloscht.'];
+        return ['success' => true, 'message' => 'Benutzer wurde gelöscht.'];
     }
 
-    /** Alle Benutzer ohne Passwort-Hashes. */
-    public static function findAll(): array
+    /**
+     * Alle Benutzer ohne Passwort-Hashes, begrenzt auf einen Mandanten.
+     * $tenantScope = null liefert alle Mandanten (nur für Super-Admins).
+     */
+    public static function findAll(?int $tenantScope): array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->query('SELECT id, username, role, can_manage_breeds, can_manage_tests, is_active, created_at, created_by FROM users ORDER BY created_at DESC');
+        $sql = 'SELECT u.id, u.tenant_id, t.name AS tenant_name, u.username, u.role, u.is_super_admin,
+                       u.can_manage_breeds, u.can_manage_tests, u.is_active, u.created_at, u.created_by
+                FROM users u
+                INNER JOIN tenants t ON t.id = u.tenant_id';
+        $params = [];
+        if ($tenantScope !== null) {
+            $sql .= ' WHERE u.tenant_id = :tenant_id';
+            $params[':tenant_id'] = $tenantScope;
+        }
+        $sql .= ' ORDER BY u.created_at DESC';
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
-    public static function setActive(int $userId, bool $active): bool
+    /**
+     * Aktiviert/deaktiviert einen Benutzer. Liefert false, wenn der
+     * Benutzer außerhalb des Mandanten liegt oder geschützt ist.
+     */
+    public static function setActive(int $userId, bool $active, ?int $tenantScope): bool
     {
+        if (self::findManageable($userId, $tenantScope) === null) {
+            return false;
+        }
+
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare('UPDATE users SET is_active = :active WHERE id = :id');
         return $stmt->execute([':active' => $active ? 1 : 0, ':id' => $userId]);
     }
 
-    public static function findById(int $id): ?array
+    public static function findById(int $id, ?int $tenantScope): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, username, role, can_manage_breeds, can_manage_tests, is_active, created_at FROM users WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $id]);
+        $sql = 'SELECT id, tenant_id, username, role, is_super_admin, can_manage_breeds, can_manage_tests, is_active, created_at
+                FROM users WHERE id = :id';
+        $params = [':id' => $id];
+        if ($tenantScope !== null) {
+            $sql .= ' AND tenant_id = :tenant_id';
+            $params[':tenant_id'] = $tenantScope;
+        }
+        $stmt = $pdo->prepare($sql . ' LIMIT 1');
+        $stmt->execute($params);
         $user = $stmt->fetch();
         return $user ?: null;
+    }
+
+    /**
+     * Lädt den eingeloggten Benutzer für den Abgleich pro Request
+     * (refresh_session_user() in config/auth.php). Liefert null, wenn
+     * das Konto oder sein Mandant deaktiviert ist oder nicht mehr passt.
+     */
+    public static function findActiveForSession(int $id, int $tenantId): ?array
+    {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare(
+            'SELECT u.id, u.tenant_id, u.username, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests
+             FROM users u
+             INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
+             WHERE u.id = :id AND u.tenant_id = :tenant_id AND u.is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
+        $user = $stmt->fetch();
+        return $user ?: null;
+    }
+
+    /**
+     * Darf ein Admin mit diesem Scope den Benutzer ändern? Nur innerhalb
+     * des eigenen Mandanten, und Super-Admin-Konten bleiben für normale
+     * Admins tabu (sonst könnte der Admin von Mandant 1 das Passwort des
+     * Super-Admins zurücksetzen).
+     */
+    private static function findManageable(int $id, ?int $tenantScope): ?array
+    {
+        $user = self::findById($id, $tenantScope);
+        if ($user === null) {
+            return null;
+        }
+        if ($tenantScope !== null && !empty($user['is_super_admin'])) {
+            return null;
+        }
+        return $user;
     }
 }

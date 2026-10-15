@@ -16,13 +16,9 @@ jobs:
 
     services:
       mariadb:
-        # all-inkl fährt MariaDB (Stand 2026: 10.5/10.6, je nach KAS-
-        # Einstellung — ggf. anpassen, falls dort eine andere Version
-        # gewählt ist). Vorher lief hier ein mysql:8.0-Image; MySQL und
-        # MariaDB sind für das, was diese App nutzt, praktisch
-        # kompatibel, aber "praktisch" ist nicht "getestet" — deshalb
-        # jetzt die tatsächliche Zielversion.
-        image: mariadb:10.6
+        # Prod auf all-inkl läuft auf MariaDB 10.11 (geprüft am Dump vom
+        # 15.10.2026). Bei einem Versionswechsel im KAS hier mitziehen.
+        image: mariadb:10.11
         env:
           MARIADB_ROOT_PASSWORD: root
           MARIADB_DATABASE: hunderassen_ci
@@ -61,11 +57,13 @@ jobs:
       - name: Testdaten (Fixture) importieren
         run: mysql -h127.0.0.1 -P3306 -uroot -proot hunderassen_ci < sql/fixtures/ci_seed.sql
 
-      - name: Test-Admin-Passwort setzen
+      - name: Test-Passwörter setzen (Super-Admin in Mandant 1, Admin in Mandant B)
         run: |
           HASH=$(php -r "echo password_hash('CiTest123!', PASSWORD_DEFAULT);")
+          HASH_B=$(php -r "echo password_hash('CiTestB456!', PASSWORD_DEFAULT);")
           mysql -h127.0.0.1 -P3306 -uroot -proot hunderassen_ci \
-            -e "UPDATE users SET password_hash = '${HASH}', is_active = 1 WHERE username = 'admin';"
+            -e "UPDATE users SET password_hash = '${HASH}', is_active = 1 WHERE username = 'admin' AND tenant_id = 1;
+                UPDATE users SET password_hash = '${HASH_B}', is_active = 1 WHERE username = 'admin' AND tenant_id = 2;"
 
       - name: config/database.local.php erzeugen
         run: |
@@ -93,10 +91,68 @@ jobs:
           done
 
       - name: Rauchtest ausführen
-        run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123!
+        run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!
 
       - name: App-Fehlerlog bei Fehlschlag anzeigen
         if: failure()
         run: |
           echo "--- logs/app_errors.log ---"
           cat logs/app_errors.log 2>/dev/null || echo "(kein Log vorhanden)"
+
+  migration:
+    # Spielt die Mandanten-Migration auf dem Schema-Stand von vor der
+    # Umstellung ein (Tag prod-2026-10-15 bzw. Commit a4b4f37), zweimal
+    # hin und zweimal zurück, und vergleicht das Schema danach mit vorher.
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: hunderassen_mig
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Code auschecken (mit Historie für das alte Schema)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Auf MariaDB warten
+        run: |
+          for i in $(seq 1 30); do
+            mysqladmin ping -h127.0.0.1 -P3306 -uroot -proot && break
+            sleep 2
+          done
+
+      - name: Altes Schema mit Beispieldaten einspielen
+        run: |
+          git show a4b4f37:sql/schema.sql > /tmp/schema_alt.sql
+          mysql -h127.0.0.1 -uroot -proot hunderassen_mig < /tmp/schema_alt.sql
+          mysql -h127.0.0.1 -uroot -proot hunderassen_mig -e "
+            INSERT INTO halter (id, name, created_by) VALUES (1, 'Alt-Halter', 1);
+            INSERT INTO dogs (id, name, created_by) VALUES (1, 'Alt-Hund', 1);
+            INSERT INTO dog_halter (dog_id, halter_id) VALUES (1, 1);
+            INSERT INTO tests (id, name, created_by) VALUES (1, 'Alt-Test', 1);"
+
+      - name: Migration hin (2x), Schema prüfen, zurück (2x)
+        run: |
+          DB="mysql -h127.0.0.1 -uroot -proot hunderassen_mig"
+          dump() { mysqldump -h127.0.0.1 -uroot -proot --no-data --skip-comments hunderassen_mig | sed -E 's/ AUTO_INCREMENT=[0-9]+//'; }
+          dump > /tmp/vorher.sql
+          $DB < sql/migrationen/migration_2026_07_10_multi_tenant.sql
+          $DB < sql/migrationen/migration_2026_07_10_multi_tenant.sql
+          $DB -N -e "SELECT COUNT(*) FROM users WHERE is_super_admin = 1" | grep -qx 1
+          $DB -N -e "SELECT COUNT(*) FROM dogs WHERE tenant_id = 1" | grep -qx 1
+          $DB -N -e "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME IN ('uq_username','uq_test_name')" | grep -qx 0
+          $DB < sql/migrationen/rollback_multi_tenant.sql
+          $DB < sql/migrationen/rollback_multi_tenant.sql
+          dump > /tmp/nachher.sql
+          diff /tmp/vorher.sql /tmp/nachher.sql

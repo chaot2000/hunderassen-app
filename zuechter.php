@@ -17,20 +17,21 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_zuechter_id'])) {
     csrf_require_valid();
     $zid      = (int) $_POST['delete_zuechter_id'];
-    $zuechter = Zuechter::findByIdForUser($zid, $currentUserId, $isAdmin);
+    $zuechter = Zuechter::findByIdForUser($zid, $currentUserId, $isAdmin, $tenantId);
     if ($zuechter !== null) {
-        Zuechter::delete($zid);
+        Zuechter::delete($zid, $tenantId);
     }
     header('Location: /zuechter.php');
     exit;
 }
 
-$allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin);
-$dogCounts   = Zuechter::getDogCounts($currentUserId, $isAdmin);
+$allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
+$dogCounts   = Zuechter::getDogCounts($currentUserId, $isAdmin, $tenantId);
 
 /**
  * Baut "Vorname Nachname" aus den beiden optionalen Feldern, ohne

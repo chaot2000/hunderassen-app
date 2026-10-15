@@ -20,9 +20,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $halterId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$halter   = $halterId ? Halter::findByIdForUser($halterId, $currentUserId, $isAdmin) : null;
+$halter   = $halterId ? Halter::findByIdForUser($halterId, $currentUserId, $isAdmin, $tenantId) : null;
 
 if ($halter === null) {
     http_response_code(404);
@@ -34,7 +35,7 @@ if ($halter === null) {
     exit;
 }
 
-$dogs = Dog::findByHalterForUser($halterId, $currentUserId, $isAdmin);
+$dogs = Dog::findByHalterForUser($halterId, $currentUserId, $isAdmin, $tenantId);
 
 $pageTitle = $halter['name'];
 require __DIR__ . '/views/partials/header.php';
