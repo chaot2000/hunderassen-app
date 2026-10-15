@@ -55,6 +55,16 @@ pruefe('t() auf Englisch', t('nav.rassen', [], 'en') === 'Breeds');
 pruefe('Unbekannter Schlüssel bleibt sichtbar', t('gibt.es.nicht', [], 'en') === 'gibt.es.nicht');
 pruefe('Unbekannte Sprache fällt auf Deutsch zurück', t('nav.rassen', [], 'xx') === 'Rassen');
 
+// FCI-Gruppen: deutsche Texte identisch mit Breed::FCI_GRUPPEN, alle
+// zehn Gruppen auch auf Englisch
+require_once __DIR__ . '/../models/Breed.php';
+foreach (Breed::FCI_GRUPPEN as $nr => $name) {
+    if (($de['fci.gruppe.' . $nr] ?? null) !== $name || empty($en['fci.gruppe.' . $nr])) {
+        pruefe("FCI-Gruppe {$nr} in beiden Sprachdateien", false);
+    }
+}
+pruefe('FCI-Gruppen vollständig', count(array_filter(array_keys($de), fn($k) => str_starts_with($k, 'fci.gruppe.'))) === count(Breed::FCI_GRUPPEN));
+
 // browser_sprache()
 $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en-US,en;q=0.9,de;q=0.8';
 pruefe('Accept-Language: Englisch zuerst', browser_sprache() === 'en');

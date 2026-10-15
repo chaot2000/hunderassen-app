@@ -860,6 +860,12 @@ else
     check_body_contains "Dashboard-Inhalt englisch" "Browse breeds"
     check_status "Konto auf Englisch" "$BASE_URL/account.php" "200"
     check_body_contains "Kontoseite englisch" "Change password"
+    check_status "Rassenkatalog auf Englisch" "$BASE_URL/rassen.php" "200"
+    check_body_contains "Katalog: Suche englisch" "Search breeds"
+    check_status "Rassenseite auf Englisch" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "FCI-Gruppe englisch" "Sheepdogs and Cattledogs"
+    check_body_contains "Maße-Überschrift englisch" "Size and weight"
+    check_body_not_contains "Kein deutscher Gruppenname" "Hüte- und Treibhunde"
     SPR_ZIEL=$(curl -s -o /dev/null -D - -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST \
         --data-urlencode "csrf_token=$SPR_CSRF" --data-urlencode "sprache=de" --data-urlencode "zurueck=//evil.example/x" \
         "$BASE_URL/sprache.php" | grep -i '^location:' | tr -d '\r' | sed 's/^[Ll]ocation: *//')

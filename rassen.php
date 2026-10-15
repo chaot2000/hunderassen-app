@@ -67,19 +67,22 @@ function paginationLink(int $zielSeite): string
     return '/rassen.php?' . http_build_query($params);
 }
 
-$groessenLabels = ['klein' => 'Klein', 'mittel' => 'Mittel', 'gross' => 'Groß', 'sehr_gross' => 'Sehr groß'];
+$groessenLabels = [];
+foreach (['klein', 'mittel', 'gross', 'sehr_gross'] as $g) {
+    $groessenLabels[$g] = t('groesse.' . $g);
+}
 
-$pageTitle = 'Rassen durchsuchen';
+$pageTitle = t('rassen.titel');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <div x-data="{ filtersOpen: <?= !empty($selectedTags) || !empty($selectedActs) || !empty($selectedSize) ? 'true' : 'false' ?> }">
 
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-extrabold text-fellDk">🐕 Rassen durchsuchen</h1>
+        <h1 class="text-2xl font-extrabold text-fellDk">🐕 <?= e(t('rassen.titel')) ?></h1>
         <?php if (can_manage_breeds()): ?>
             <a href="/admin_add_breed.php" class="bg-pfote hover:bg-fell text-white text-sm font-bold px-4 py-2 rounded-full transition-colors">
-                + Neue Rasse anlegen
+                + <?= e(t('rassen.neu')) ?>
             </a>
         <?php endif; ?>
     </div>
@@ -88,13 +91,13 @@ require __DIR__ . '/views/partials/header.php';
         <div class="flex flex-col md:flex-row gap-3">
             <input
                 type="text" name="q" value="<?= e($searchTerm) ?>"
-                placeholder="Rasse suchen, z. B. &bdquo;Labrador&ldquo; &hellip;"
+                placeholder="<?= e(t('rassen.suche_platzhalter')) ?>"
                 class="flex-1 rounded-lg border border-sand px-4 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
             >
-            <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold px-6 py-2 rounded-full transition-colors">Suchen</button>
+            <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold px-6 py-2 rounded-full transition-colors"><?= e(t('rassen.suchen')) ?></button>
             <button type="button" @click="filtersOpen = !filtersOpen"
                 class="border border-tanne text-tanne hover:bg-tanne hover:text-creme font-bold px-6 py-2 rounded-full transition-colors">
-                Filter <span x-text="filtersOpen ? '▲' : '▼'"></span>
+                <?= e(t('rassen.filter')) ?> <span x-text="filtersOpen ? '▲' : '▼'"></span>
             </button>
         </div>
 
@@ -102,7 +105,7 @@ require __DIR__ . '/views/partials/header.php';
 
             <!-- Größe -->
             <div>
-                <h3 class="font-bold text-sm mb-2 text-tanneDk">Größe</h3>
+                <h3 class="font-bold text-sm mb-2 text-tanneDk"><?= e(t('rassen.groesse')) ?></h3>
                 <div class="space-y-1">
                     <?php foreach ($groessenLabels as $value => $label):
                         $count   = $counts['groessen'][$value] ?? 0;
@@ -123,7 +126,7 @@ require __DIR__ . '/views/partials/header.php';
 
             <!-- Aktivitäten -->
             <div>
-                <h3 class="font-bold text-sm mb-2 text-tanneDk">Aktivitäten</h3>
+                <h3 class="font-bold text-sm mb-2 text-tanneDk"><?= e(t('rassen.aktivitaeten')) ?></h3>
                 <div class="space-y-1 max-h-48 overflow-y-auto pr-2">
                     <?php foreach ($activities as $activity):
                         $id      = (int) $activity['id'];
@@ -141,7 +144,7 @@ require __DIR__ . '/views/partials/header.php';
                         </label>
                     <?php endforeach; ?>
                     <?php if (empty($activities)): ?>
-                        <p class="text-xs text-fellDk/50">Noch keine Aktivitäten angelegt.</p>
+                        <p class="text-xs text-fellDk/50"><?= e(t('rassen.keine_aktivitaeten')) ?></p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -182,12 +185,12 @@ require __DIR__ . '/views/partials/header.php';
                         this.tagQuery = '';
                     }
                  }">
-                <h3 class="font-bold text-sm mb-2 text-tanneDk">Eigenschaften</h3>
+                <h3 class="font-bold text-sm mb-2 text-tanneDk"><?= e(t('rassen.eigenschaften')) ?></h3>
 
                 <div class="relative mb-2">
                     <input
                         type="text" x-model="tagQuery"
-                        placeholder="Tag suchen, z. B. „agil“ …"
+                        placeholder="<?= e(t('rassen.tag_platzhalter')) ?>"
                         autocomplete="off"
                         class="w-full rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne"
                     >
@@ -225,17 +228,17 @@ require __DIR__ . '/views/partials/header.php';
                         </div>
                     <?php endforeach; ?>
                     <?php if (empty($tagGroups)): ?>
-                        <p class="text-xs text-fellDk/50">Noch keine Eigenschaften angelegt.</p>
+                        <p class="text-xs text-fellDk/50"><?= e(t('rassen.keine_eigenschaften')) ?></p>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
 
         <div class="mt-4 flex items-center justify-between">
-            <p class="text-sm text-fellDk/50"><?= $gesamtTreffer ?> Rasse<?= $gesamtTreffer !== 1 ? 'n' : '' ?> gefunden</p>
+            <p class="text-sm text-fellDk/50"><?= e(t($gesamtTreffer === 1 ? 'rassen.treffer_1' : 'rassen.treffer_n', ['anzahl' => $gesamtTreffer])) ?></p>
             <div>
-                <button type="submit" class="text-sm text-tanne underline hover:text-tanneDk">Filter anwenden</button>
-                <a href="/rassen.php" class="text-sm text-fellDk/50 underline hover:text-fellDk ml-4">Zurücksetzen</a>
+                <button type="submit" class="text-sm text-tanne underline hover:text-tanneDk"><?= e(t('rassen.filter_anwenden')) ?></button>
+                <a href="/rassen.php" class="text-sm text-fellDk/50 underline hover:text-fellDk ml-4"><?= e(t('rassen.zuruecksetzen')) ?></a>
             </div>
         </div>
     </form>
@@ -243,17 +246,17 @@ require __DIR__ . '/views/partials/header.php';
     <?php if (empty($breeds)): ?>
         <div class="text-center py-16 text-fellDk/50">
             <span class="text-5xl block mb-3" aria-hidden="true">🦴</span>
-            <p>Keine Rassen gefunden. Versuch es mit anderen Suchbegriffen oder Filtern.</p>
+            <p><?= e(t('rassen.leer')) ?></p>
         </div>
     <?php else: ?>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            <?php foreach ($breeds as $breed): ?>
+            <?php foreach ($breeds as $breed): $anzeigeName = in_sprache($breed['name'], $breed['name_en'] ?? null); ?>
                 <div class="bg-white/80 rounded-2xl shadow border border-sand p-5 flex flex-col">
                     <a href="/breed_detail.php?id=<?= (int) $breed['id'] ?>" class="block group">
                         <?php if (!empty($breed['hat_bild'])): ?>
                             <img
                                 src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
-                                alt="<?= e($breed['name']) ?>"
+                                alt="<?= e($anzeigeName) ?>"
                                 class="w-full h-36 object-cover rounded-xl border border-sand mb-3 group-hover:opacity-90 transition-opacity"
                             >
                         <?php else: ?>
@@ -263,35 +266,35 @@ require __DIR__ . '/views/partials/header.php';
                         <?php endif; ?>
                     </a>
 
-                    <h2 class="text-lg font-extrabold text-fellDk mb-1"><?= e($breed['name']) ?></h2>
+                    <h2 class="text-lg font-extrabold text-fellDk mb-1"><?= e($anzeigeName) ?></h2>
                     <p class="text-sm text-fellDk/70 mb-3">
-                        <?= $breed['ursprungsland'] ? e($breed['ursprungsland']) : 'Ursprungsland unbekannt' ?>
+                        <?= $breed['ursprungsland'] ? e($breed['ursprungsland']) : e(t('rassen.ursprung_unbekannt')) ?>
                         <?php if ($breed['fci_klasse']): ?>
-                            &middot; FCI-Klasse <?= (int) $breed['fci_klasse'] ?>
+                            &middot; <?= e(t('rassen.fci_klasse', ['nr' => (int) $breed['fci_klasse']])) ?>
                         <?php endif; ?>
                         <?php if (!empty($breed['fci_nr'])): ?>
-                            &middot; Nr. <?= e($breed['fci_nr']) ?>
+                            &middot; <?= e(t('rassen.nr', ['nr' => $breed['fci_nr']])) ?>
                         <?php endif; ?>
                     </p>
 
                     <div class="mt-auto pt-3 flex gap-2">
                         <a href="/breed_detail.php?id=<?= (int) $breed['id'] ?>"
                             class="flex-1 text-center text-sm bg-tanne/10 text-tanneDk font-semibold py-2 rounded-full hover:bg-tanne/20 transition-colors">
-                            Details
+                            <?= e(t('rassen.details')) ?>
                         </a>
                         <?php if (can_manage_breeds()): ?>
                             <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>"
                                 class="flex-1 text-center text-sm bg-pfote/10 text-fell font-semibold py-2 rounded-full hover:bg-pfote/20 transition-colors">
-                                Bearbeiten
+                                <?= e(t('rassen.bearbeiten')) ?>
                             </a>
                             <form method="post" action="/rassen.php"
-                                onsubmit="return confirm('<?= e($breed['name']) ?> wirklich löschen?');"
+                                onsubmit="return confirm(<?= e(json_encode(t('rassen.loeschen_frage', ['name' => $anzeigeName]), JSON_UNESCAPED_UNICODE)) ?>);"
                                 class="flex-1">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="delete_breed_id" value="<?= (int) $breed['id'] ?>">
                                 <button type="submit"
                                     class="w-full text-sm bg-red-50 text-red-600 font-semibold py-2 rounded-full hover:bg-red-100 transition-colors">
-                                    Löschen
+                                    <?= e(t('rassen.loeschen')) ?>
                                 </button>
                             </form>
                         <?php endif; ?>
@@ -301,22 +304,22 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <?php if ($gesamtSeiten > 1): ?>
-        <nav class="flex items-center justify-center gap-2 mt-8" aria-label="Seiten">
+        <nav class="flex items-center justify-center gap-2 mt-8" aria-label="<?= e(t('rassen.seiten')) ?>">
             <?php if ($aktuelleSeite > 1): ?>
                 <a href="<?= e(paginationLink($aktuelleSeite - 1)) ?>"
                     class="px-3 py-1.5 rounded-full text-sm border border-sand text-tanneDk hover:bg-tanne hover:text-creme transition-colors">
-                    ← Zurück
+                    ← <?= e(t('rassen.zurueck')) ?>
                 </a>
             <?php endif; ?>
 
             <span class="text-sm text-fellDk/60 px-2">
-                Seite <?= $aktuelleSeite ?> von <?= $gesamtSeiten ?>
+                <?= e(t('rassen.seite_von', ['seite' => $aktuelleSeite, 'gesamt' => $gesamtSeiten])) ?>
             </span>
 
             <?php if ($aktuelleSeite < $gesamtSeiten): ?>
                 <a href="<?= e(paginationLink($aktuelleSeite + 1)) ?>"
                     class="px-3 py-1.5 rounded-full text-sm border border-sand text-tanneDk hover:bg-tanne hover:text-creme transition-colors">
-                    Weiter →
+                    <?= e(t('rassen.weiter')) ?> →
                 </a>
             <?php endif; ?>
         </nav>
