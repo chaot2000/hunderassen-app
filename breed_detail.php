@@ -57,6 +57,10 @@ if ($englisch && trim((string) ($breed['beschreibung_en'] ?? '')) !== '') {
     $textSprache = 'en';
     $text = RassentextGliederung::fuerAnzeige($breed['beschreibung_en']);
 }
+// Quelle nur nennen, wenn der Text noch genau der aus dem TheDogAPI-Import
+// ist. Selbst geschrieben oder nachbearbeitet: kein Hinweis.
+$textAusTheDogApi = $textSprache === 'en'
+    && ContentRevision::stammtAusImport('breeds', $breedId, 'beschreibung_en', $breed['beschreibung_en'], null);
 $textFremd = $englisch && $textSprache === 'de';
 $versionen     = $darfPflegen ? ContentRevision::zaehle('breeds', $breedId, null) : 0;
 
@@ -433,9 +437,11 @@ require __DIR__ . '/views/partials/header.php';
         <?php endif; ?>
 
         <?php if ($textSprache === 'en'): ?>
+            <?php if ($textAusTheDogApi): ?>
             <footer class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
                 <p class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 text-sm text-fellDk"><?= e(t('rasse.text_thedogapi')) ?></p>
             </footer>
+            <?php endif; ?>
         <?php elseif ($text['kurzportraet'] !== null && (($breed['gliederung'] ?? '') === 'automatisch' || !empty($breed['quelle_url']))): ?>
             <footer class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
                 <div class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 space-y-1 text-sm text-fellDk">
