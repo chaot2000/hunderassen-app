@@ -314,6 +314,17 @@ $vdhRassen = $stmt->fetchAll();
 
 $apiBreeds = ladeTheDogApiBreeds();
 
+// Bild-URL je Rasse: Je nach API-Stand steckt sie in image.url oder
+// nur als reference_image_id. Ältere Antworten haben gar keine.
+foreach ($apiBreeds as &$b) {
+    $ref = trim((string) ($b['reference_image_id'] ?? ''));
+    $b['_bild_url'] = (string) ($b['image']['url'] ?? '');
+    if ($b['_bild_url'] === '' && preg_match('/^[A-Za-z0-9_-]+$/', $ref)) {
+        $b['_bild_url'] = 'https://cdn2.thedogapi.com/images/' . $ref . '.jpg';
+    }
+}
+unset($b);
+
 // ===================================================================
 // 4) Matching durchführen
 // ===================================================================
@@ -364,6 +375,18 @@ require __DIR__ . '/views/partials/header.php';
     .tdapi-unmatched { background: #fff8f0; border: 1px dashed #e0a050; padding: .5rem .75rem; margin-bottom: .3rem; border-radius: 4px; font-size: .85rem; }
     .tdapi-submit { position: sticky; bottom: 1rem; background: #2e6bd9; color: white; border: none; padding: .8rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
     .tdapi-info { background: #eef4ff; border: 1px solid #b6d0ff; padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
+    .tdapi-pauschal { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; background: #fff; }
+    .tdapi-pauschal table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .tdapi-pauschal th, .tdapi-pauschal td { text-align: left; padding: .4rem .5rem; border-top: 1px solid #eee; vertical-align: middle; }
+    .tdapi-pauschal thead th { border-top: none; font-size: .75rem; color: #555; font-weight: normal; }
+    .tdapi-pauschal button { min-height: 36px; padding: 0 .75rem; border: 1px solid #888; border-radius: 6px; background: #fafafa; margin: .1rem .25rem .1rem 0; cursor: pointer; }
+    .tdapi-pauschal button:hover { background: #eee; }
+    .tdapi-zahl { font-variant-numeric: tabular-nums; }
+    @media (max-width: 640px) {
+        .tdapi-pauschal thead { display: none; }
+        .tdapi-pauschal tr { display: block; border-top: 1px solid #eee; padding: .4rem 0; }
+        .tdapi-pauschal th, .tdapi-pauschal td { display: block; border: none; padding: .15rem 0; }
+    }
 </style>
 
 <h1 class="text-xl font-bold mb-4">🐾 TheDogAPI Abgleich – Stufe 1: Review</h1>
@@ -382,8 +405,59 @@ require __DIR__ . '/views/partials/header.php';
     <?php endif; ?>
 </div>
 
-<form action="/admin_thedogapi_apply.php" method="post">
+<form action="/admin_thedogapi_apply.php" method="post" id="tdapi-formular">
 <?= csrf_field() ?>
+
+<?php
+// Pauschal-Auswahl pro Feld. Zählt, wie viele Rassen das Feld bekommen
+// könnten: TheDogAPI hat einen Wert und bei uns ist es noch leer.
+$pauschalFelder = [
+    'bild' => 'Bild',
+    'temperament' => 'Temperament',
+    'lebenserwartung' => 'Lebenserwartung',
+    'zuchtzweck' => 'Zuchtzweck',
+    'markieren' => 'Als „abgeglichen“ markieren',
+];
+$apiFeld = ['temperament' => 'temperament', 'lebenserwartung' => 'life_span', 'zuchtzweck' => 'bred_for'];
+$moeglich = array_fill_keys(array_keys($pauschalFelder), ['alle' => 0, 'sicher' => 0]);
+foreach ($treffer as $t) {
+    foreach ($pauschalFelder as $feld => $_) {
+        $geht = match ($feld) {
+            'bild' => $t['api']['_bild_url'] !== '' && !$t['vdh']['hat_bild'],
+            'markieren' => true,
+            default => trim((string) ($t['api'][$apiFeld[$feld]] ?? '')) !== '' && trim((string) ($t['vdh'][$feld] ?? '')) === '',
+        };
+        if ($geht) {
+            $moeglich[$feld]['alle']++;
+            $moeglich[$feld]['sicher'] += $t['score'] >= 85 ? 1 : 0;
+        }
+    }
+}
+?>
+<section class="tdapi-pauschal" aria-labelledby="tdapi-pauschal-titel">
+    <h2 id="tdapi-pauschal-titel" class="font-bold mb-1">Pauschal auswählen</h2>
+    <p style="font-size:.85rem;color:#555;" class="mb-2">
+        Setzt oder entfernt die Häkchen in allen Rassen unten. Felder, die bei uns schon gefüllt sind, bleiben gesperrt.
+        Die Texte von TheDogAPI sind englisch.
+    </p>
+    <table>
+        <thead><tr><th>Feld</th><th>Möglich (sicher / alle)</th><th>Auswählen</th></tr></thead>
+        <tbody>
+        <?php foreach ($pauschalFelder as $feld => $feldLabel): ?>
+            <tr>
+                <th scope="row"><?= e($feldLabel) ?></th>
+                <td class="tdapi-zahl"><?= $moeglich[$feld]['sicher'] ?> / <?= $moeglich[$feld]['alle'] ?></td>
+                <td>
+                    <button type="button" data-pauschal="<?= $feld ?>" data-umfang="sicher">Sichere Treffer</button>
+                    <button type="button" data-pauschal="<?= $feld ?>" data-umfang="alle">Alle Treffer</button>
+                    <button type="button" data-pauschal="<?= $feld ?>" data-umfang="keine">Keine</button>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <p class="mt-2" style="font-size:.9rem;" aria-live="polite">Ausgewählt: <strong id="tdapi-anzahl" class="tdapi-zahl">0</strong> Rassen.</p>
+</section>
 
 <?php foreach ($treffer as $t):
     $vdh = $t['vdh'];
@@ -394,13 +468,12 @@ require __DIR__ . '/views/partials/header.php';
     // Nur sichere Treffer sind vorausgewählt, unsichere muss man bewusst ankreuzen.
     $sicher = $score >= 85;
 ?>
-<div class="tdapi-card <?= $klasse ?>">
+<div class="tdapi-card <?= $klasse ?>" data-rasse="<?= $rowId ?>" data-sicher="<?= $sicher ? '1' : '0' ?>">
     <h3>
         <?= e($vdh['name']) ?> ↔ <?= e($api['name']) ?>
         <span class="tdapi-score">Score: <?= $score ?>%</span>
     </h3>
 
-    <input type="hidden" name="items[<?= $rowId ?>][breed_id]" value="<?= $rowId ?>">
     <input type="hidden" name="items[<?= $rowId ?>][thedogapi_id]" value="<?= e((string)$api['id']) ?>">
 
     <div class="tdapi-grid">
@@ -420,8 +493,8 @@ require __DIR__ . '/views/partials/header.php';
         </div>
         <div>
             <h4>Von TheDogAPI</h4>
-            <?php if (!empty($api['image']['url'])): ?>
-                <img class="thumb" src="<?= e($api['image']['url']) ?>" alt="">
+            <?php if ($api['_bild_url'] !== ''): ?>
+                <img class="thumb" src="<?= e($api['_bild_url']) ?>" alt="">
             <?php endif; ?>
             <div class="tdapi-feld">
                 <label>Temperament (übernehmbar)</label>
@@ -440,16 +513,16 @@ require __DIR__ . '/views/partials/header.php';
 
     <div class="tdapi-checkboxen">
         <?php foreach (['temperament' => 'Temperament', 'lebenserwartung' => 'Lebenserwartung', 'zuchtzweck' => 'Zuchtzweck'] as $feld => $feldLabel): $hatWert = trim((string) ($vdh[$feld] ?? '')) !== ''; ?>
-            <label<?= $hatWert ? ' style="color:#666"' : '' ?>><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_<?= $feld ?>]" value="1" <?= $hatWert ? 'disabled' : '' ?>>
+            <label<?= $hatWert ? ' style="color:#666"' : '' ?>><input type="checkbox" data-feld="<?= $feld ?>" name="items[<?= $rowId ?>][uebernehmen_<?= $feld ?>]" value="1" <?= $hatWert ? 'disabled' : '' ?>>
                 <?= $feldLabel ?> übernehmen<?= $hatWert ? ' (schon vorhanden, bleibt)' : '' ?></label>
         <?php endforeach; ?>
-        <?php if (!empty($api['image']['url'])): ?>
-        <label<?= $vdh['hat_bild'] ? ' style="color:#666"' : '' ?>><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_bild]" value="1" <?= $vdh['hat_bild'] ? 'disabled' : ($sicher ? 'checked' : '') ?>>
+        <?php if ($api['_bild_url'] !== ''): ?>
+        <label<?= $vdh['hat_bild'] ? ' style="color:#666"' : '' ?>><input type="checkbox" data-feld="bild" name="items[<?= $rowId ?>][uebernehmen_bild]" value="1" <?= $vdh['hat_bild'] ? 'disabled' : ($sicher ? 'checked' : '') ?>>
             Bild übernehmen <?= $vdh['hat_bild'] ? '(Bild vorhanden, bleibt)' : '(noch kein Bild vorhanden)' ?>
         </label>
-        <input type="hidden" name="items[<?= $rowId ?>][bild_url]" value="<?= e($api['image']['url']) ?>">
+        <input type="hidden" name="items[<?= $rowId ?>][bild_url]" value="<?= e($api['_bild_url']) ?>">
         <?php endif; ?>
-        <label><input type="checkbox" name="items[<?= $rowId ?>][markieren]" value="1" <?= $sicher ? 'checked' : '' ?>> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
+        <label><input type="checkbox" data-feld="markieren" name="items[<?= $rowId ?>][markieren]" value="1" <?= $sicher ? 'checked' : '' ?>> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
     </div>
 </div>
 <?php endforeach; ?>
@@ -457,6 +530,69 @@ require __DIR__ . '/views/partials/header.php';
 <button type="submit" class="tdapi-submit">✅ Ausgewählte übernehmen → Stufe 2</button>
 
 </form>
+
+<script>
+(function () {
+    var formular = document.getElementById('tdapi-formular');
+    var karten = Array.prototype.slice.call(formular.querySelectorAll('.tdapi-card'));
+    var anzeige = document.getElementById('tdapi-anzahl');
+
+    function hatAuswahl(karte) {
+        return karte.querySelector('input[type=checkbox][data-feld]:checked:not(:disabled)') !== null;
+    }
+    function zaehlen() {
+        anzeige.textContent = karten.filter(hatAuswahl).length;
+    }
+
+    formular.querySelectorAll('[data-pauschal]').forEach(function (knopf) {
+        knopf.addEventListener('click', function () {
+            var feld = knopf.dataset.pauschal, umfang = knopf.dataset.umfang;
+            karten.forEach(function (karte) {
+                var box = karte.querySelector('input[data-feld="' + feld + '"]');
+                if (!box || box.disabled) return;
+                if (umfang === 'keine') { box.checked = false; return; }
+                // Ohne Wert von TheDogAPI gibt es nichts zu übernehmen.
+                var text = karte.querySelector('input[type=text][name$="[' + feld + ']"]');
+                if (text && text.value.trim() === '') return;
+                if (umfang === 'alle' || karte.dataset.sicher === '1') box.checked = true;
+            });
+            zaehlen();
+        });
+    });
+    formular.addEventListener('change', zaehlen);
+
+    // Nur Rassen mit Häkchen verschicken, gebündelt in einem Feld
+    // (sonst greift bei vielen Rassen max_input_vars).
+    formular.addEventListener('submit', function (ereignis) {
+        var auswahl = {};
+        karten.filter(hatAuswahl).forEach(function (karte) {
+            var daten = {};
+            karte.querySelectorAll('input[name^="items["]').forEach(function (feld) {
+                var schluessel = feld.name.slice(feld.name.lastIndexOf('[') + 1, -1);
+                if (feld.type === 'checkbox') {
+                    if (feld.checked && !feld.disabled) daten[schluessel] = '1';
+                } else {
+                    daten[schluessel] = feld.value;
+                }
+            });
+            auswahl[karte.dataset.rasse] = daten;
+        });
+        if (Object.keys(auswahl).length === 0) {
+            ereignis.preventDefault();
+            alert('Es ist nichts ausgewählt.');
+            return;
+        }
+        formular.querySelectorAll('input[name^="items["]').forEach(function (feld) { feld.disabled = true; });
+        var json = document.createElement('input');
+        json.type = 'hidden';
+        json.name = 'items_json';
+        json.value = JSON.stringify(auswahl);
+        formular.appendChild(json);
+    });
+
+    zaehlen();
+})();
+</script>
 
 <?php if (count($ohneTreffer) > 0): ?>
 <h2 class="text-lg font-bold mt-6 mb-2">Ohne automatischen Treffer (<?= count($ohneTreffer) ?>)</h2>

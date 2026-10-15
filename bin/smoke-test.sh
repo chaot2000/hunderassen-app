@@ -774,6 +774,16 @@ else
     check_status "Versionen zeigen den Import" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
     check_body_contains "Erstwert als Import-Version" "CI-Erstwert"
     check_body_not_contains "Zweitwert nie gespeichert" "CI-Zweitwert"
+    # So schickt die Review-Seite die Pauschal-Auswahl: ein JSON-Feld.
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Übernahme als JSON (Pauschal-Auswahl)" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"lebenserwartung\":\"CI-Json\",\"uebernehmen_lebenserwartung\":\"1\"}}"
+    check_body_contains "JSON-Weg ergänzt" "Rasse #1: ergänzt"
+    check_body_contains "Zusammenfassung oben" "Ergänzt: 1"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Bild von fremder Adresse" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"bild_url\":\"http://127.0.0.1:8000/login.php\",\"uebernehmen_bild\":\"1\"}}"
+    check_body_contains "Fremde Bildadresse wird abgelehnt" "nicht von TheDogAPI"
 
     echo ""
     echo "--- Rassen-Detailseite und Gliederung der Rassentexte ---"
