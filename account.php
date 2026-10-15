@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pageTitle = 'Mein Konto';
+$pageTitle = t('konto.titel');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
@@ -48,13 +48,31 @@ require __DIR__ . '/views/partials/header.php';
     <div class="flex items-center gap-3 mb-6">
         <span class="text-4xl" aria-hidden="true">🐾</span>
         <div>
-            <h1 class="text-2xl font-extrabold text-fellDk">Mein Konto</h1>
-            <p class="text-sm text-fellDk/60">Angemeldet als <?= e(current_user()['username'] ?? '') ?></p>
+            <h1 class="text-2xl font-extrabold text-fellDk"><?= e(t('konto.titel')) ?></h1>
+            <p class="text-sm text-fellDk/60"><?= e(t('konto.angemeldet_als', ['name' => current_user()['username'] ?? ''])) ?></p>
         </div>
     </div>
 
+    <form method="post" action="/sprache.php" class="bg-white/80 rounded-2xl shadow border border-sand p-6 sm:p-8 mb-6">
+        <?= csrf_field() ?>
+        <input type="hidden" name="zurueck" value="/account.php">
+        <h2 class="font-extrabold text-fellDk mb-1"><label for="sprache"><?= e(t('konto.sprache_titel')) ?></label></h2>
+        <p id="sprache-hinweis" class="text-sm text-fellDk/70 mb-3"><?= e(t('konto.sprache_hinweis')) ?></p>
+        <div class="flex flex-wrap gap-3">
+            <select id="sprache" name="sprache" aria-describedby="sprache-hinweis"
+                class="min-h-[44px] rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne">
+                <?php foreach (SPRACHEN as $code => $sprachName): ?>
+                    <option value="<?= $code ?>" lang="<?= $code ?>" <?= $code === aktuelle_sprache() ? 'selected' : '' ?>><?= e($sprachName) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="min-h-[44px] px-5 rounded-full bg-tanne hover:bg-tanneDk text-creme font-bold transition-colors">
+                <?= e(t('konto.sprache_speichern')) ?>
+            </button>
+        </div>
+    </form>
+
     <div class="bg-white/80 rounded-2xl shadow border border-sand p-6 sm:p-8">
-        <h2 class="font-extrabold text-fellDk mb-4">Passwort ändern</h2>
+        <h2 class="font-extrabold text-fellDk mb-4"><?= e(t('konto.passwort_titel')) ?></h2>
 
         <?php if ($successMessage !== null): ?>
             <div class="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4" role="status">
@@ -72,7 +90,7 @@ require __DIR__ . '/views/partials/header.php';
             <?= csrf_field() ?>
 
             <div>
-                <label for="current_password" class="block text-sm font-semibold mb-1">Aktuelles Passwort</label>
+                <label for="current_password" class="block text-sm font-semibold mb-1"><?= e(t('konto.passwort_aktuell')) ?></label>
                 <input
                     type="password"
                     id="current_password"
@@ -85,7 +103,7 @@ require __DIR__ . '/views/partials/header.php';
             </div>
 
             <div>
-                <label for="new_password" class="block text-sm font-semibold mb-1">Neues Passwort</label>
+                <label for="new_password" class="block text-sm font-semibold mb-1"><?= e(t('konto.passwort_neu')) ?></label>
                 <input
                     type="password"
                     id="new_password"
@@ -95,11 +113,11 @@ require __DIR__ . '/views/partials/header.php';
                     autocomplete="new-password"
                     class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                 >
-                <p class="text-xs text-fellDk/50 mt-1">Mindestens 10 Zeichen.</p>
+                <p class="text-xs text-fellDk/50 mt-1"><?= e(t('konto.passwort_min')) ?></p>
             </div>
 
             <div>
-                <label for="new_password_repeat" class="block text-sm font-semibold mb-1">Neues Passwort wiederholen</label>
+                <label for="new_password_repeat" class="block text-sm font-semibold mb-1"><?= e(t('konto.passwort_wdh')) ?></label>
                 <input
                     type="password"
                     id="new_password_repeat"
@@ -115,7 +133,7 @@ require __DIR__ . '/views/partials/header.php';
                 type="submit"
                 class="w-full bg-tanne hover:bg-tanneDk text-creme font-bold py-2.5 rounded-full transition-colors"
             >
-                Passwort ändern
+                <?= e(t('konto.passwort_knopf')) ?>
             </button>
         </form>
     </div>

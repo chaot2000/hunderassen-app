@@ -91,7 +91,7 @@ login_as() {
     local mandant="$1" user="$2" pass="$3" token
     curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/logout.php" -o /dev/null
     curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_login_form.html
-    token=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html || true)
+    token=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html | head -1 || true)
     curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" -o /dev/null \
         --data-urlencode "csrf_token=$token" \
         --data-urlencode "mandant=$mandant" \
@@ -122,7 +122,7 @@ check_body_contains "Login-Formular hat Feld Mandant (mehrere Mandanten aktiv)" 
 
 echo ""
 echo "--- CSRF-Token aus dem Login-Formular extrahieren ---"
-CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
 if [ -z "$CSRF_TOKEN" ]; then
     echo "FAIL Kein CSRF-Token im Login-Formular gefunden — Login-Test wird übersprungen."
     FAILED=1
@@ -191,7 +191,7 @@ else
 
         PORTAL_COOKIE_JAR="$(mktemp)"
         curl -s -c "$PORTAL_COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_portaluser_login.html
-        PORTAL_LOGIN_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_portaluser_login.html || true)
+        PORTAL_LOGIN_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_portaluser_login.html | head -1 || true)
         curl -s -b "$PORTAL_COOKIE_JAR" -c "$PORTAL_COOKIE_JAR" \
             --data-urlencode "csrf_token=$PORTAL_LOGIN_CSRF" \
             --data-urlencode "username=$PORTAL_USER" \
@@ -255,7 +255,7 @@ else
     echo ""
     echo "--- Test anlegen und wieder löschen (echte Formular-Einreichung) ---"
     check_status "test_form.php (neu) lädt" "$BASE_URL/test_form.php" "200"
-    TEST_FORM_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+    TEST_FORM_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
 
     if [ -z "$TEST_FORM_CSRF" ]; then
         echo "FAIL Kein CSRF-Token auf test_form.php gefunden — Test-Anlegen wird übersprungen."
@@ -334,7 +334,7 @@ else
     # zuerst gewählte Ergebnis berücksichtigt.
     check_body_contains "Bei Gleichstand wird der Status-Vorschlag auf 'offen' zurückgesetzt" 'this.$refs.statusSelect.value = "offen";'
 
-    TDF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+    TDF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
 
     if [ -z "$TDF_CSRF" ]; then
         echo "FAIL Kein CSRF-Token auf testdurchfuehrung_form.php gefunden — Anlegen wird übersprungen."
@@ -405,7 +405,7 @@ else
         # Rendern verloren ging).
         check_body_contains "Zuvor gewählter Test bleibt nach Fehler im Dropdown ausgewählt" 'value="1" data-zielgruppe="beide" selected'
 
-        FEHLERPFAD_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+        FEHLERPFAD_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
         if [ -z "$FEHLERPFAD_CSRF" ]; then
             echo "FAIL Kein CSRF-Token nach Fehleranzeige gefunden — Korrektur-Test wird übersprungen."
             FAILED=1
@@ -452,7 +452,7 @@ else
         check_status "testdurchfuehrung_form.php?id=1 lädt (Bearbeiten-Modus)" "$BASE_URL/testdurchfuehrung_form.php?id=1" "200"
         check_body_contains "Aufgabe 2 zeigt weiterhin ihr gespeichertes Ergebnis vorausgewählt" 'value="4" data-kategorie="bestanden" selected'
 
-        EDIT_TDF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+        EDIT_TDF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
         if [ -z "$EDIT_TDF_CSRF" ]; then
             echo "FAIL Kein CSRF-Token auf testdurchfuehrung_form.php?id=1 gefunden — Teil-Edit-Test wird übersprungen."
             FAILED=1
@@ -643,7 +643,7 @@ else
             login_as "ci-c" "sperrtest" "falsches-passwort-$i"
         done
         curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_login_form.html
-        LOCK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html || true)
+        LOCK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html | head -1 || true)
         # Mit gefälschtem X-Forwarded-For: darf die IP-Sperre nicht umgehen.
         check_status "C: sechster Fehlversuch mit gefälschter IP im Header" "$BASE_URL/login.php" "200" \
             "-X POST -H X-Forwarded-For:203.0.113.$RANDOM --data-urlencode csrf_token=$LOCK_CSRF --data-urlencode mandant=ci-c \
@@ -820,7 +820,7 @@ else
     check_status "account.php lädt" "$BASE_URL/account.php" "200"
     check_body_contains "Formular zur Passwortänderung vorhanden" "Passwort ändern"
 
-    ACCOUNT_CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+    ACCOUNT_CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
     TEMP_PASSWORD="CiTemp-$(date +%s)Aa!"
 
     if [ -z "$ACCOUNT_CSRF_TOKEN" ]; then
@@ -833,12 +833,53 @@ else
 
         # CSRF-Token wird bei jedem Request neu ausgegeben — für den
         # Rückänderungs-Request den aktuellsten aus der letzten Antwort holen.
-        ACCOUNT_CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html || true)
+        ACCOUNT_CSRF_TOKEN=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
 
         check_status "Passwort zurückändern auf Ausgangszustand" "$BASE_URL/account.php" "200" \
             "-X POST --data-urlencode current_password=$TEMP_PASSWORD --data-urlencode new_password=$ADMIN_PASS --data-urlencode new_password_repeat=$ADMIN_PASS --data-urlencode csrf_token=$ACCOUNT_CSRF_TOKEN"
         check_body_contains "Erfolgsmeldung nach Rückänderung" "erfolgreich geändert"
     fi
+
+    echo ""
+    echo "--- Sprachwahl ---"
+    check_status "Dashboard auf Deutsch" "$BASE_URL/dashboard.php" "200"
+    check_body_contains "Kopf deutsch" ">Abmelden<"
+    check_body_contains "html lang=de" '<html lang="de">'
+    SPR_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "sprache.php nur per POST (405)" "$BASE_URL/sprache.php" "405"
+    check_status "Unbekannte Sprache abgelehnt (400)" "$BASE_URL/sprache.php" "400" \
+        "-X POST --data-urlencode csrf_token=$SPR_CSRF --data-urlencode sprache=fr"
+    check_status "Ohne CSRF-Token abgelehnt (403)" "$BASE_URL/sprache.php" "403" \
+        "-X POST --data-urlencode sprache=en"
+    check_status "Auf Englisch umstellen (303)" "$BASE_URL/sprache.php" "303" \
+        "-X POST --data-urlencode csrf_token=$SPR_CSRF --data-urlencode sprache=en --data-urlencode zurueck=/dashboard.php"
+    # Englisch bleibt auch nach dem Abgleich mit der DB pro Request, ist also gespeichert.
+    check_status "Dashboard nach dem Umstellen" "$BASE_URL/dashboard.php" "200"
+    check_body_contains "Kopf englisch" ">Log out<"
+    check_body_contains "html lang=en" '<html lang="en">'
+    check_status "Konto auf Englisch" "$BASE_URL/account.php" "200"
+    check_body_contains "Kontoseite englisch" "Change password"
+    SPR_ZIEL=$(curl -s -o /dev/null -D - -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST \
+        --data-urlencode "csrf_token=$SPR_CSRF" --data-urlencode "sprache=de" --data-urlencode "zurueck=//evil.example/x" \
+        "$BASE_URL/sprache.php" | grep -i '^location:' | tr -d '\r' | sed 's/^[Ll]ocation: *//')
+    if [ "$SPR_ZIEL" = "/dashboard.php" ]; then
+        echo "OK   Fremdes Rücksprungziel wird ignoriert (Location: $SPR_ZIEL)"
+    else
+        echo "FAIL Fremdes Rücksprungziel: Location '$SPR_ZIEL', erwartet /dashboard.php"
+        FAILED=1
+    fi
+    check_status "Wieder deutsch" "$BASE_URL/dashboard.php" "200"
+    check_body_contains "Kopf wieder deutsch" ">Abmelden<"
+
+    GAST_JAR="$(mktemp)"
+    GAST_CODE=$(curl -s -o /tmp/smoke_gast.html -w "%{http_code}" -c "$GAST_JAR" -H "Accept-Language: en-GB,en;q=0.9" "$BASE_URL/login.php")
+    if [ "$GAST_CODE" = "200" ] && grep -q "Welcome back!" /tmp/smoke_gast.html; then
+        echo "OK   Login-Seite folgt Accept-Language (englisch)"
+    else
+        echo "FAIL Login-Seite mit Accept-Language en: HTTP $GAST_CODE, kein englischer Text"
+        FAILED=1
+    fi
+    rm -f "$GAST_JAR"
 
     echo ""
     echo "--- Logout ---"
