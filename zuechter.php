@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_zuechter_id'])
     $zid      = (int) $_POST['delete_zuechter_id'];
     $zuechter = Zuechter::findByIdForUser($zid, $currentUserId, $isAdmin, $tenantId);
     if ($zuechter !== null) {
-        Zuechter::delete($zid);
+        Zuechter::delete($zid, $tenantId);
     }
     header('Location: /zuechter.php');
     exit;

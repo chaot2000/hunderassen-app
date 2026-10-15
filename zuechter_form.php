@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $removeImage = isset($_POST['bild_entfernen']) && $_POST['bild_entfernen'] === '1';
 
         if ($isEditMode) {
-            $result = Zuechter::update($editingId, $zuechterData, $image, $removeImage);
+            $result = Zuechter::update($editingId, $tenantId, $zuechterData, $image, $removeImage);
         } else {
             $result = Zuechter::create($zuechterData, $currentUserId, $tenantId, $image);
         }

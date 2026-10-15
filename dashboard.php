@@ -28,10 +28,11 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
-$alleHunde     = Dog::search('', $currentUserId, $isAdmin);
-$alleHalter    = Halter::findAllForUser($currentUserId, $isAdmin);
-$alleZuechter  = Zuechter::findAllForUser($currentUserId, $isAdmin);
+$alleHunde     = Dog::search('', $currentUserId, $isAdmin, $tenantId);
+$alleHalter    = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
+$alleZuechter  = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 
 const DASHBOARD_HUNDE_VORSCHAU = 6;
 $hundeVorschau = array_slice($alleHunde, 0, DASHBOARD_HUNDE_VORSCHAU);

@@ -76,9 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $removeImage = isset($_POST['bild_entfernen']) && $_POST['bild_entfernen'] === '1';
 
         if ($isEditMode) {
-            $result = Dog::update($editingId, $dogData, $postedHalterIds, $image, $removeImage);
+            $result = Dog::update($editingId, $tenantId, $currentUserId, $isAdmin, $dogData, $postedHalterIds, $image, $removeImage);
         } else {
-            $result = Dog::create($dogData, $postedHalterIds, $currentUserId, $tenantId, $image);
+            $result = Dog::create($dogData, $postedHalterIds, $currentUserId, $isAdmin, $tenantId, $image);
         }
 
         if ($result['success']) {
@@ -93,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $allBreeds   = Breed::search('', [], [], []); // Rassen sind geteilte Katalogdaten, kein Scoping
-$allHalter   = Halter::findAllForUser($currentUserId, $isAdmin);
-$allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin);
+$allHalter   = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
+$allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 
 $pageTitle = $isEditMode ? 'Hund bearbeiten' : 'Hund anlegen';
 require __DIR__ . '/views/partials/header.php';

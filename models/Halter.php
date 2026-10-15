@@ -96,20 +96,6 @@ class Halter
     }
 
     /**
-     * Ungeprüfter Zugriff für interne Zwecke (Berechtigungsprüfung ist
-     * dann bereits an anderer Stelle passiert, z. B. beim Auflösen
-     * eines bereits userseitig gefilterten Dropdown-Werts).
-     */
-    public static function findById(int $id): ?array
-    {
-        $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, name, telefon, email, adresse, notizen, created_by FROM halter WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $id]);
-        $halter = $stmt->fetch();
-        return $halter ?: null;
-    }
-
-    /**
      * Anzahl der Hunde pro Halter — für die Übersichtsliste.
      * @return array<int, int>
      */
@@ -177,7 +163,7 @@ class Halter
      * @param bool $removeImage true = vorhandenes Bild entfernen (nur wirksam, wenn $image === null)
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, array $data, ?array $image = null, bool $removeImage = false): array
+    public static function update(int $id, int $tenantId, array $data, ?array $image = null, bool $removeImage = false): array
     {
         $validated = self::validate($data);
         if (!$validated['success']) {
@@ -199,15 +185,17 @@ class Halter
 
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'UPDATE halter SET name = :name, telefon = :telefon, email = :email, adresse = :adresse, notizen = :notizen' . $imageSql . ' WHERE id = :id'
+            'UPDATE halter SET name = :name, telefon = :telefon, email = :email, adresse = :adresse, notizen = :notizen' . $imageSql . '
+             WHERE id = :id AND tenant_id = :tenant_id'
         );
         $stmt->execute(array_merge([
             ':name'    => $validated['name'],
             ':telefon' => $validated['telefon'],
             ':email'   => $validated['email'],
             ':adresse' => $validated['adresse'],
-            ':notizen' => $validated['notizen'],
-            ':id'      => $id,
+            ':notizen'   => $validated['notizen'],
+            ':id'        => $id,
+            ':tenant_id' => $tenantId,
         ], $imageParams));
 
         return ['success' => true, 'message' => 'Halter "' . $validated['name'] . '" wurde aktualisiert.'];
@@ -219,11 +207,12 @@ class Halter
      * ON DELETE CASCADE mitgelöscht) — die Hunde selbst bleiben
      * erhalten, ggf. mit den übrigen Mit-Haltern der Familie.
      */
-    public static function delete(int $id): bool
+    public static function delete(int $id, int $tenantId): bool
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM halter WHERE id = :id');
-        return $stmt->execute([':id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM halter WHERE id = :id AND tenant_id = :tenant_id');
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
+        return $stmt->rowCount() > 0;
     }
 
     /**
