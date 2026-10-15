@@ -457,4 +457,7 @@ return [
     'td.m_ergebnis_passt'              => 'Das ausgewählte Ergebnis passt nicht zur zugehörigen Aufgabe.',
     'td.m_datum_format'                => 'Das Durchführungsdatum ist ungültig (Format: JJJJ-MM-TT).',
     'td.m_datum_zukunft'               => 'Das Durchführungsdatum darf nicht in der Zukunft liegen.',
+    // Merkmale und Textabschnitte (PLAN.md Abschnitt 10)
+    'abschnitt.zuchtzweck'       => 'Zuchtzweck',
+    'rasse.keine_merkmale'       => 'Noch keine Merkmale erfasst.',
 ];

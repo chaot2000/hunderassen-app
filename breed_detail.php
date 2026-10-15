@@ -19,6 +19,7 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/Breed.php';
 require_once __DIR__ . '/models/ContentRevision.php';
 require_once __DIR__ . '/models/RassentextGliederung.php';
+require_once __DIR__ . '/models/RassenDaten.php';
 require_once __DIR__ . '/views/partials/rassentext.php';
 
 secure_session_start();
@@ -49,37 +50,57 @@ if ($englisch && trim((string) ($breed['name_en'] ?? '')) !== '') {
     $namen = ['haupt' => (string) $breed['name_en'], 'zweit' => $original !== $breed['name_en'] ? $original : null];
 }
 
-// Text: auf Englisch die englische Beschreibung (TheDogAPI), sonst der
-// deutsche Text. Fehlt die englische, bleibt der deutsche mit Hinweis.
-$textSprache = 'de';
-$text = RassentextGliederung::fuerAnzeige($breed['beschreibung']);
-if ($englisch && trim((string) ($breed['beschreibung_en'] ?? '')) !== '') {
-    $textSprache = 'en';
-    $text = RassentextGliederung::fuerAnzeige($breed['beschreibung_en']);
+// Merkmale und Texte aus dem neuen Modell (models/RassenDaten.php). Hat
+// sich die Rasse seit der letzten Übernahme geändert, wird vorher neu
+// übernommen.
+RassenDaten::uebernehmenWennNoetig($breedId);
+$sprache     = aktuelle_sprache();
+$texte       = RassenDaten::texte($breedId, $sprache);
+$merkmale    = RassenDaten::merkmale($breedId, $sprache);
+$merkmalNach = [];
+foreach ($merkmale as $liste) {
+    foreach ($liste as $m) {
+        $merkmalNach[$m['schluessel']] = $m;
+    }
 }
-// Quelle nur nennen, wenn der Text noch genau der aus dem TheDogAPI-Import
-// ist. Selbst geschrieben oder nachbearbeitet: kein Hinweis.
-$textAusTheDogApi = $textSprache === 'en'
+
+// Abschnitte für views/partials/rassentext.php. Jeder Abschnitt kommt in
+// der gewählten Sprache, sonst in der anderen (gekennzeichnet).
+$absaetze = fn(string $t): array => array_values(array_filter(array_map('trim', preg_split('/\n\s*\n/', str_replace("\r", '', $t)))));
+$text = [
+    'kurzportraet' => $texte['kurzportraet']['text'] ?? null,
+    'einleitung'   => isset($texte['allgemein']) ? $absaetze($texte['allgemein']['text']) : [],
+    'abschnitte'   => [],
+];
+$kurzSprache = $texte['kurzportraet']['sprache'] ?? $sprache;
+foreach (RassenDaten::ABSCHNITTE as $abschnitt => $titel) {
+    if ($titel === null || !isset($texte[$abschnitt])) {
+        continue;
+    }
+    $text['abschnitte'][] = ['titel' => $titel, 'absaetze' => $absaetze($texte[$abschnitt]['text']), 'sprache' => $texte[$abschnitt]['sprache']];
+}
+if (isset($texte['weitere'])) {
+    foreach (RassentextGliederung::fuerAnzeige($texte['weitere']['text'])['abschnitte'] as $a) {
+        $text['abschnitte'][] = $a + ['sprache' => $texte['weitere']['sprache']];
+    }
+}
+$textSprachen = array_values(array_unique(array_column($texte, 'sprache')));
+$textSprache  = in_array($sprache, $textSprachen, true) || $textSprachen === [] ? $sprache : $textSprachen[0];
+$textFremd    = $textSprachen !== [] && !in_array($sprache, $textSprachen, true);
+$englisch     = $sprache === 'en';
+// Quelle nur nennen, wenn der englische Text noch genau der aus dem
+// TheDogAPI-Import ist. Selbst geschrieben oder nachbearbeitet: kein Hinweis.
+$textAusTheDogApi = in_array('en', $textSprachen, true)
     && ContentRevision::stammtAusImport('breeds', $breedId, 'beschreibung_en', $breed['beschreibung_en'], null);
-$textFremd = $englisch && $textSprache === 'de';
 $versionen     = $darfPflegen ? ContentRevision::zaehle('breeds', $breedId, null) : 0;
 
-$groessenLabels = [];
-foreach (['klein', 'mittel', 'gross', 'sehr_gross'] as $g) {
-    $groessenLabels[$g] = t('groesse.' . $g);
-}
-$arbeitspruefungLabels = [
-    'mit'        => t('rasse.ap_mit'),
-    'ohne'       => t('rasse.ap_ohne'),
-    'fakultativ' => t('rasse.ap_fakultativ'),
-];
-
-/** "46–58 cm", "ab 46 cm", "bis 58 cm" oder null */
+/** "46–58 cm", "ab 46 cm", "bis 58 cm" oder null; Dezimalzeichen nach Sprache */
 function format_spanne(?float $min, ?float $max, string $einheit): ?string
 {
-    $fmt = static fn(float $v): string => rtrim(rtrim(number_format($v, 1, ',', ''), '0'), ',');
+    $komma = aktuelle_sprache() === 'en' ? '.' : ',';
+    $fmt = static fn(float $v): string => rtrim(rtrim(number_format($v, 1, $komma, ''), '0'), $komma);
     if ($min !== null && $max !== null) {
-        return $fmt($min) . '–' . $fmt($max) . ' ' . $einheit;
+        return ($min === $max ? $fmt($min) : $fmt($min) . '–' . $fmt($max)) . ' ' . $einheit;
     }
     if ($min !== null) {
         return t('rasse.ab', ['wert' => $fmt($min) . ' ' . $einheit]);
@@ -88,11 +109,6 @@ function format_spanne(?float $min, ?float $max, string $einheit): ?string
         return t('rasse.bis', ['wert' => $fmt($max) . ' ' . $einheit]);
     }
     return null;
-}
-
-function als_zahl($wert): ?float
-{
-    return $wert !== null && $wert !== '' ? (float) $wert : null;
 }
 
 /**
@@ -145,14 +161,48 @@ function render_skalenzeile(float $skala, string $einheit): string
 // bleiben; nur bei Ausreißern wächst die Skala mit.
 $maxCm = 90.0;
 $maxKg = 90.0;
-foreach ($breed['sizes'] as $s) {
-    foreach (['schulterhoehe_ruede_max_cm', 'schulterhoehe_haendin_max_cm', 'schulterhoehe_ruede_min_cm', 'schulterhoehe_haendin_min_cm'] as $k) {
-        $maxCm = max($maxCm, (float) ($s[$k] ?? 0));
-    }
-    foreach (['gewicht_ruede_max_kg', 'gewicht_haendin_max_kg', 'gewicht_ruede_min_kg', 'gewicht_haendin_min_kg'] as $k) {
-        $maxKg = max($maxKg, (float) ($s[$k] ?? 0));
+foreach (['schulterhoehe' => 'maxCm', 'gewicht' => 'maxKg'] as $schl => $var) {
+    foreach ($merkmalNach[$schl]['spannen'] ?? [] as [$von, $bis]) {
+        $$var = max($$var, (float) $von, (float) $bis);
     }
 }
+
+// Maße für die Balken: Rüde, Hündin oder für beide gemeinsam
+$masse = [];
+foreach (['schulterhoehe' => ['rasse.schulterhoehe', 'cm', $maxCm], 'gewicht' => ['rasse.gewicht', 'kg', $maxKg]] as $schl => [$label, $einheit, $skala]) {
+    $zeilen = [];
+    foreach (['ruede' => ['rasse.ruede', 'bg-tanne'], 'huendin' => ['rasse.huendin', 'bg-fell'], 'alle' => [null, 'bg-tanne']] as $g => [$gLabel, $farbe]) {
+        if (isset($merkmalNach[$schl]['spannen'][$g])) {
+            [$von, $bis] = $merkmalNach[$schl]['spannen'][$g];
+            $zeilen[] = [$gLabel !== null ? t($gLabel) : '', $von, $bis, $farbe];
+        }
+    }
+    if ($zeilen) {
+        $masse[] = ['name' => t($label), 'einheit' => $einheit, 'skala' => $skala, 'zeilen' => $zeilen];
+    }
+}
+
+/** Anzeigewert eines Merkmals: Werte, Spanne mit Einheit oder Land. */
+function merkmal_anzeige(array $m): string
+{
+    if ($m['werte']) {
+        return implode(', ', $m['werte']);
+    }
+    if ($m['land'] !== null) {
+        return $m['land'];
+    }
+    $teile = [];
+    foreach ($m['spannen'] as [$von, $bis]) {
+        $spanne = format_spanne($von, $bis, $m['einheit'] === 'jahre' ? '' : (string) $m['einheit']);
+        if ($spanne !== null) {
+            $teile[] = $m['einheit'] === 'jahre' ? t('rasse.jahre', ['wert' => trim($spanne)]) : $spanne;
+        }
+    }
+    return implode(' · ', $teile);
+}
+
+// Was schon in der Größen-Spalte oder im Kopf steht, nicht noch einmal
+$imSteckbrief = array_diff_key($merkmalNach, array_flip(['schulterhoehe', 'gewicht', 'groessenklasse', 'arbeitspruefung']));
 
 $pageTitle = $namen['haupt'];
 require __DIR__ . '/views/partials/header.php';
@@ -197,7 +247,7 @@ require __DIR__ . '/views/partials/header.php';
 
             <?php if ($text['kurzportraet'] !== null): ?>
                 <?php $lang = mb_strlen($text['kurzportraet']) > 160; ?>
-                <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?> lang="<?= $textSprache ?>">
+                <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?> lang="<?= $kurzSprache ?>">
                     <!-- Am Handy optisch gekürzt, damit die Aktion im ersten Bild bleibt; der volle Text steht im DOM. -->
                     <p class="mt-5 sm:mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch] <?= $lang ? 'line-clamp-3 sm:line-clamp-none' : '' ?>" <?= $lang ? ':class="ganz && \'line-clamp-none\'"' : '' ?>><?= e($text['kurzportraet']) ?></p>
                     <?php if ($lang): ?>
@@ -252,7 +302,7 @@ require __DIR__ . '/views/partials/header.php';
                 </p>
             <?php endif; ?>
             <p class="balken self-start w-[86%] lg:w-[48%] lg:ml-[8%] bg-fellDk text-creme px-5 sm:px-8 py-3 text-sm sm:text-base font-bold flex flex-wrap gap-x-6 gap-y-1">
-                <span><?= e($arbeitspruefungLabels[$breed['arbeitspruefung'] ?? ''] ?? t('rasse.ap_keine')) ?></span>
+                <span><?= e(!empty($merkmalNach['arbeitspruefung']) ? merkmal_anzeige($merkmalNach['arbeitspruefung']) : t('rasse.ap_keine')) ?></span>
                 <span><?= e(t('rasse.standard')) ?> <?= !empty($breed['fci_nr']) ? e(t('rasse.nr_kurz')) . ' <span class="font-mono font-medium">' . e($breed['fci_nr']) . '</span>' : e(t('rasse.ohne_nr')) ?></span>
             </p>
         </div>
@@ -280,7 +330,7 @@ require __DIR__ . '/views/partials/header.php';
     <div class="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
         <section aria-labelledby="masse-titel" class="lg:col-span-5 border-t-4 border-fellDk pt-4">
             <h2 id="masse-titel" class="text-xl font-black text-fellDk"><?= e(t('rasse.masse_titel')) ?></h2>
-            <?php if (empty($breed['sizes'])): ?>
+            <?php if (!$masse): ?>
                 <p class="mt-3 text-sm text-fellDk/80"><?= e(t('rasse.keine_masse')) ?></p>
             <?php else: ?>
                 <p class="mt-1 text-xs text-fellDk/80">
@@ -288,128 +338,49 @@ require __DIR__ . '/views/partials/header.php';
                     <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-tanne rounded-sm" aria-hidden="true"></span><?= e(t('rasse.ruede')) ?></span>
                     <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-fell rounded-sm" aria-hidden="true"></span><?= e(t('rasse.huendin')) ?></span>
                 </p>
-                <?php foreach ($breed['sizes'] as $size):
-                    $werte = [
-                        'hoehe' => [
-                            [t('rasse.ruede'), als_zahl($size['schulterhoehe_ruede_min_cm']), als_zahl($size['schulterhoehe_ruede_max_cm']), 'bg-tanne'],
-                            [t('rasse.huendin'), als_zahl($size['schulterhoehe_haendin_min_cm']), als_zahl($size['schulterhoehe_haendin_max_cm']), 'bg-fell'],
-                        ],
-                        'gewicht' => [
-                            [t('rasse.ruede'), als_zahl($size['gewicht_ruede_min_kg']), als_zahl($size['gewicht_ruede_max_kg']), 'bg-tanne'],
-                            [t('rasse.huendin'), als_zahl($size['gewicht_haendin_min_kg']), als_zahl($size['gewicht_haendin_max_kg']), 'bg-fell'],
-                        ],
-                    ];
-                ?>
-                    <div class="mt-5">
-                        <?php if (count($breed['sizes']) > 1): ?>
-                            <h3 class="text-sm font-black uppercase tracking-wide text-fellDk mb-2"><?= e($groessenLabels[$size['groesse']] ?? $size['groesse']) ?></h3>
-                        <?php else: ?>
-                            <p class="text-sm font-bold text-fellDk mb-2"><?= e(t('rasse.groessenklasse', ['klasse' => $groessenLabels[$size['groesse']] ?? $size['groesse']])) ?></p>
-                        <?php endif; ?>
-                        <?php foreach ($werte as $art => $zeilen):
-                            $einheit = $art === 'gewicht' ? 'kg' : 'cm';
-                            $skala = $art === 'gewicht' ? $maxKg : $maxCm;
-                            $artName = t($art === 'gewicht' ? 'rasse.gewicht' : 'rasse.schulterhoehe');
-                            // Nur Zeilen mit Werten zeigen
-                            $zeilen = array_filter($zeilen, fn($z) => $z[1] !== null || $z[2] !== null);
-                            if (empty($zeilen)) {
-                                continue;
-                            }
-                        ?>
-                            <div class="mb-4">
-                                <dl class="space-y-3">
-                                    <?php foreach ($zeilen as [$geschlecht, $min, $max, $farbe]): ?>
-                                        <div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] items-center gap-3">
-                                            <dt class="text-sm text-fellDk">
-                                                <?= e($artName) ?> <?= e($geschlecht) ?>
-                                                <span class="block font-mono text-sm font-medium"><?= e(format_spanne($min, $max, $einheit) ?? '–') ?></span>
-                                            </dt>
-                                            <dd><?= render_spannenbalken($min, $max, $skala, $farbe) ?></dd>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </dl>
-                                <?= render_skalenzeile($skala, $einheit) ?>
+            <?php endif; ?>
+            <?php if (!empty($merkmalNach['groessenklasse'])): ?>
+                <p class="mt-4 text-sm font-bold text-fellDk"><?= e(t('rasse.groessenklasse', ['klasse' => merkmal_anzeige($merkmalNach['groessenklasse'])])) ?></p>
+            <?php endif; ?>
+            <?php foreach ($masse as $mass): ?>
+                <div class="mt-4 mb-2">
+                    <dl class="space-y-3">
+                        <?php foreach ($mass['zeilen'] as [$geschlecht, $min, $max, $farbe]): ?>
+                            <div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] items-center gap-3">
+                                <dt class="text-sm text-fellDk">
+                                    <?= e(trim($mass['name'] . ' ' . $geschlecht)) ?>
+                                    <span class="block font-mono text-sm font-medium"><?= e(format_spanne($min, $max, $mass['einheit']) ?? '–') ?></span>
+                                </dt>
+                                <dd><?= render_spannenbalken($min, $max, $mass['skala'], $farbe) ?></dd>
                             </div>
                         <?php endforeach; ?>
-                        <?php if (count(array_filter([
-                            $size['schulterhoehe_ruede_min_cm'], $size['schulterhoehe_ruede_max_cm'], $size['schulterhoehe_haendin_min_cm'], $size['schulterhoehe_haendin_max_cm'],
-                            $size['gewicht_ruede_min_kg'], $size['gewicht_ruede_max_kg'], $size['gewicht_haendin_min_kg'], $size['gewicht_haendin_max_kg'],
-                        ], fn($v) => $v !== null)) < 8): ?>
-                            <p class="mt-2 text-xs text-fellDk/80"><?= e(t('rasse.fehlende_werte')) ?></p>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
+                    </dl>
+                    <?= render_skalenzeile($mass['skala'], $mass['einheit']) ?>
+                </div>
+            <?php endforeach; ?>
         </section>
 
         <section aria-labelledby="merkmale-titel" class="lg:col-span-7 border-t-4 border-fellDk pt-4">
             <h2 id="merkmale-titel" class="text-xl font-black text-fellDk"><?= e(t('rasse.merkmale')) ?></h2>
+            <?php if (!$imSteckbrief): ?>
+                <p class="mt-3 text-sm text-fellDk/80"><?= e(t('rasse.keine_merkmale')) ?></p>
+            <?php endif; ?>
             <dl class="mt-3 divide-y divide-sand">
-                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rassen.eigenschaften')) ?></dt>
-                    <dd>
-                        <?php if (empty($breed['tags'])): ?>
-                            <span class="text-sm text-fellDk/80"><?= e(t('rasse.keine_zugeordnet')) ?></span>
+                <?php foreach ($imSteckbrief as $m): ?>
+                    <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
+                        <dt class="text-sm font-bold text-fellDk"><?= e($m['name']) ?></dt>
+                        <?php if (in_array($m['typ'], ['mehrfach'], true) && count($m['werte']) > 1): ?>
+                            <dd>
+                                <ul class="flex flex-wrap gap-2">
+                                    <?php foreach ($m['werte'] as $w): ?>
+                                        <li class="bg-sand text-fellDk text-sm font-semibold px-3 py-1 rounded-sm"><?= e($w) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </dd>
                         <?php else: ?>
-                            <ul class="flex flex-wrap gap-2">
-                                <?php foreach ($breed['tags'] as $tag): ?>
-                                    <li class="bg-sand text-fellDk text-sm font-semibold px-3 py-1 rounded-sm"><?= e($tag['name']) ?></li>
-                                <?php endforeach; ?>
-                            </ul>
+                            <dd class="text-sm text-fellDk"><?= e(merkmal_anzeige($m)) ?></dd>
                         <?php endif; ?>
-                    </dd>
-                </div>
-                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rassen.aktivitaeten')) ?></dt>
-                    <dd>
-                        <?php if (empty($breed['activities'])): ?>
-                            <span class="text-sm text-fellDk/80"><?= e(t('rasse.keine_zugeordnet')) ?></span>
-                        <?php else: ?>
-                            <ul class="flex flex-wrap gap-2">
-                                <?php foreach ($breed['activities'] as $activity): ?>
-                                    <li class="bg-tanne/10 text-tanneDk text-sm font-semibold px-3 py-1 rounded-sm"><?= e($activity['name']) ?></li>
-                                <?php endforeach; ?>
-                            </ul>
-                        <?php endif; ?>
-                    </dd>
-                </div>
-                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rasse.farben')) ?></dt>
-                    <dd class="text-sm text-fellDk"><?= !empty($breed['farben']) ? e($breed['farben']) : '<span class="text-fellDk/80">' . e(t('rasse.keine_angabe')) . '</span>' ?></dd>
-                </div>
-                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rasse.ursprungsland')) ?></dt>
-                    <dd class="text-sm text-fellDk"><?= !empty($breed['ursprungsland']) ? e($breed['ursprungsland']) : '<span class="text-fellDk/80">' . e(t('rasse.keine_angabe')) . '</span>' ?></dd>
-                </div>
-                <?php
-                // Nur gefüllte Zeilen. Gibt es den Wert nur in der anderen
-                // Sprache, steht er da und ist als solcher gekennzeichnet.
-                $lebenserwartung = trim((string) ($breed['lebenserwartung'] ?? ''));
-                if ($lebenserwartung !== '' && !preg_match('/jahr|year/i', $lebenserwartung)) {
-                    $lebenserwartung = t('rasse.jahre', ['wert' => preg_replace('/\s*-\s*/', '–', $lebenserwartung)]);
-                }
-                $charakterZeilen = [
-                    'rasse.temperament'     => [$breed['temperament'] ?? '', $breed['temperament_en'] ?? ''],
-                    'rasse.zuchtzweck'      => [$breed['zuchtzweck'] ?? '', $breed['zuchtzweck_en'] ?? ''],
-                    'rasse.lebenserwartung' => [$lebenserwartung, $lebenserwartung],
-                ];
-                foreach ($charakterZeilen as $titel => [$deutsch, $engl]):
-                    $deutsch = trim((string) $deutsch);
-                    $engl = trim((string) $engl);
-                    if ($deutsch === '' && $engl === '') {
-                        continue;
-                    }
-                    // [Wert, Sprache des Werts, Hinweis falls fremde Sprache]
-                    if ($englisch) {
-                        $zeile = $engl !== '' ? [$engl, 'en', null] : [$deutsch, 'de', t('rasse.nur_deutsch')];
-                    } else {
-                        $zeile = $deutsch !== '' ? [$deutsch, 'de', null] : [$engl, 'en', t('rasse.nur_englisch')];
-                    }
-                ?>
-                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e(t($titel)) ?></dt>
-                    <dd class="text-sm text-fellDk"><span lang="<?= $zeile[1] ?>"><?= e($zeile[0]) ?></span><?php if ($zeile[2] !== null): ?> <span class="text-fellDk/80"><?= e($zeile[2]) ?></span><?php endif; ?></dd>
-                </div>
+                    </div>
                 <?php endforeach; ?>
             </dl>
         </section>
@@ -433,7 +404,7 @@ require __DIR__ . '/views/partials/header.php';
                 <p class="text-sm text-fellDk mb-3"><?= e(t('rasse.ungeprueft')) ?></p>
             <?php endif; ?>
             <?= render_rassentext_sprungleiste($text['abschnitte']) ?>
-            <div lang="<?= $textSprache ?>"><?= render_rassentext_abschnitte($text) ?></div>
+            <?= render_rassentext_abschnitte($text) ?>
         <?php endif; ?>
 
         <?php if ($textSprache === 'en'): ?>

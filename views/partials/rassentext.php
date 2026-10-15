@@ -42,6 +42,7 @@ function rassentext_titel(string $titel): string
         'Aussehen'                 => 'abschnitt.aussehen',
         'Herkunft und Geschichte'  => 'abschnitt.herkunft',
         'Angaben aus dem Standard' => 'abschnitt.standard',
+        'Zuchtzweck'               => 'abschnitt.zuchtzweck',
         default                    => null,
     };
     return $schluessel !== null ? t($schluessel) : $titel;
@@ -90,11 +91,19 @@ function render_rassentext_abschnitte(array $anzeige): string
     foreach ($anzeige['abschnitte'] as $a) {
         $f = rassentext_farbe($a['titel']);
         $anker = rassentext_anker($a['titel']);
-        $html .= '<section aria-labelledby="' . e($anker) . '-titel" id="' . e($anker) . '" class="scroll-mt-6 lg:grid lg:grid-cols-12 lg:gap-10 mb-12">'
+        // Optional: Sprache des Abschnitts. Weicht sie von der gewählten ab
+        // (kein Text in dieser Sprache), wird das unter dem Titel vermerkt.
+        $abschnittSprache = $a['sprache'] ?? null;
+        $fremd = $abschnittSprache !== null && $abschnittSprache !== aktuelle_sprache();
+        $html .= '<section aria-labelledby="' . e($anker) . '-titel" id="' . e($anker) . '"'
+            . ($abschnittSprache !== null ? ' lang="' . e($abschnittSprache) . '"' : '')
+            . ' class="scroll-mt-6 lg:grid lg:grid-cols-12 lg:gap-10 mb-12">'
             . '<div class="lg:col-span-4 mb-4 lg:mb-0">'
-            . '<h2 id="' . e($anker) . '-titel" class="' . $f['block'] . ' ' . $f['text'] . ' lg:sticky lg:top-6 text-xl sm:text-2xl font-black leading-tight px-5 py-4 rounded-sm">'
+            . '<h2 id="' . e($anker) . '-titel" class="' . $f['block'] . ' ' . $f['text'] . ' lg:sticky lg:top-6 text-xl sm:text-2xl font-black leading-tight px-5 py-4 rounded-sm"'
+            . ($abschnittSprache !== null ? ' lang="' . e(aktuelle_sprache()) . '"' : '') . '>'
             . e(rassentext_titel($a['titel'])) . '</h2></div>'
-            . '<div class="lg:col-span-8 space-y-4">';
+            . '<div class="lg:col-span-8 space-y-4">'
+            . ($fremd ? '<p class="text-sm text-fellDk/80" lang="' . e(aktuelle_sprache()) . '">' . e(t($abschnittSprache === 'de' ? 'rasse.nur_deutsch' : 'rasse.nur_englisch')) . '</p>' : '');
         foreach ($a['absaetze'] as $p) {
             $html .= '<p class="text-[1.0625rem] leading-[1.75] text-fellDk max-w-[60ch]">' . nl2br(e($p)) . '</p>';
         }
