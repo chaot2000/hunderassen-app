@@ -24,12 +24,23 @@ function current_user(): ?array
 
 /**
  * Liefert die Tenant-ID des aktuell eingeloggten Benutzers aus der Session.
- * Fallback auf Default-Tenant (ID 1) für Kompatibilität mit Sessions
- * ohne Tenant-Kontext (z.B. nach Migration ohne Logout).
+ *
+ * Fail-closed: Fehlt der Mandant (z. B. Session von vor der Migration)
+ * oder ist er ungültig, wird die Session beendet und zum Login
+ * umgeleitet. Es gibt bewusst keinen Fallback auf Mandant 1, sonst
+ * landet eine kaputte Session in fremden Daten.
  */
 function current_tenant_id(): int
 {
-    return $_SESSION['tenant_id'] ?? 1;
+    $tenantId = $_SESSION['tenant_id'] ?? null;
+
+    if (!is_int($tenantId) || $tenantId <= 0) {
+        destroy_session();
+        header('Location: /login.php');
+        exit;
+    }
+
+    return $tenantId;
 }
 
 function is_logged_in(): bool
@@ -102,6 +113,10 @@ function require_login(): void
         header('Location: /login.php');
         exit;
     }
+
+    // Prüft den Mandanten früh, damit keine Seite ohne gültigen
+    // Mandanten-Kontext weiterläuft (siehe current_tenant_id()).
+    current_tenant_id();
 }
 
 /**
@@ -167,9 +182,14 @@ function require_manage_tests(): void
  */
 function login_user(array $user): void
 {
+    $tenantId = (int) ($user['tenant_id'] ?? 0);
+    if ($tenantId <= 0) {
+        throw new RuntimeException('login_user(): Benutzer ohne Mandant.');
+    }
+
     regenerate_session_after_login();
     $_SESSION['user'] = $user;
-    $_SESSION['tenant_id'] = $user['tenant_id'] ?? 1;
+    $_SESSION['tenant_id'] = $tenantId;
 }
 
 function logout_user(): void
