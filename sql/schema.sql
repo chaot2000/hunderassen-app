@@ -52,6 +52,7 @@ CREATE TABLE `users` (
     `is_super_admin` TINYINT(1)  NOT NULL DEFAULT 0, -- mandantenübergreifend: verwaltet Mandanten, wählt tenant_id beim Anlegen von Benutzern
     `can_manage_breeds` TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Rassen-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
     `can_manage_tests`  TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Test-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
+    `sprache`       ENUM('de', 'en') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'de', -- Sprache der Oberfläche, siehe config/i18n.php
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1, -- manuelles Sperren durch Admin möglich
     `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_by`    INT UNSIGNED NULL,                -- welcher Admin hat den Account angelegt

@@ -15,7 +15,7 @@
  *    zuwächst, sobald weitere Verwaltungsseiten dazukommen. Nur für
  *    Admins sichtbar.
  */
-$pageTitle = $pageTitle ?? 'Hunderassen-Verwaltung';
+$pageTitle = $pageTitle ?? t('kopf.titel');
 
 // Aktueller Pfad für die Hervorhebung des aktiven Nav-Punkts.
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
@@ -81,11 +81,11 @@ $meineEintraegePfade = [
 $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="<?= e(aktuelle_sprache()) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= e($pageTitle) ?> &middot; Hunderassen-Verwaltung</title>
+    <title><?= e($pageTitle) ?> &middot; <?= e(t('kopf.titel')) ?></title>
 
     <!-- Tailwind CSS via CDN (kein Build-Tool auf Shared-Hosting verfügbar) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -132,9 +132,10 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
     <div class="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <a href="<?= is_logged_in() ? '/dashboard.php' : '/index.php' ?>" class="flex items-center gap-2.5 text-lg sm:text-xl font-extrabold tracking-tight whitespace-nowrap">
             <?= render_dog_icon(38, '#2C4130', '#C4D62A') ?>
-            <span class="hidden sm:inline">Hunderassen-Verwaltung</span>
+            <span class="hidden sm:inline"><?= e(t('kopf.titel')) ?></span>
         </a>
 
+        <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
         <?php if (is_logged_in()): ?>
             <nav class="flex flex-wrap items-center gap-1 sm:gap-4 text-sm font-semibold" x-data="{ verwaltungOpen: false, meineOpen: false }">
                 <a href="/dashboard.php"
@@ -142,7 +143,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                     <?php if ($dashboardAktiv): ?>
                         <span class="w-1.5 h-1.5 rounded-full bg-pfote" aria-hidden="true"></span>
                     <?php endif; ?>
-                    Übersicht
+                    <?= e(t('nav.uebersicht')) ?>
                 </a>
 
                 <a href="/rassen.php"
@@ -150,7 +151,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                     <?php if ($rassenAktiv): ?>
                         <span class="w-1.5 h-1.5 rounded-full bg-pfote" aria-hidden="true"></span>
                     <?php endif; ?>
-                    Rassen
+                    <?= e(t('nav.rassen')) ?>
                 </a>
 
                 <div class="relative" @click.outside="meineOpen = false">
@@ -159,7 +160,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                         <?php if ($meineEintraegeAktiv): ?>
                             <span class="w-1.5 h-1.5 rounded-full bg-pfote" aria-hidden="true"></span>
                         <?php endif; ?>
-                        Meine Einträge
+                        <?= e(t('nav.meine_eintraege')) ?>
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform" :class="meineOpen ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                         </svg>
@@ -169,11 +170,11 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                          class="absolute left-0 right-auto sm:left-auto sm:right-0 mt-2 w-56 max-w-[90vw] bg-white text-fellDk rounded-xl shadow-lg border border-sand overflow-hidden max-h-[80vh] overflow-y-auto"
                          style="display: none;">
                         <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50">
-                            <?= is_admin() ? 'Portal (Admin sieht alles)' : 'Nur eigene Einträge' ?>
+                            <?= e(is_admin() ? t('nav.portal_admin') : t('nav.nur_eigene')) ?>
                         </p>
-                        <a href="/dogs.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🐕 Hunde</a>
-                        <a href="/halter.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🧑 Halter</a>
-                        <a href="/zuechter.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🏠 Züchter</a>
+                        <a href="/dogs.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🐕 <?= e(t('nav.hunde')) ?></a>
+                        <a href="/halter.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🧑 <?= e(t('nav.halter')) ?></a>
+                        <a href="/zuechter.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">🏠 <?= e(t('nav.zuechter')) ?></a>
                     </div>
                 </div>
 
@@ -184,7 +185,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                             <?php if ($verwaltungAktiv): ?>
                                 <span class="w-1.5 h-1.5 rounded-full bg-pfote" aria-hidden="true"></span>
                             <?php endif; ?>
-                            Verwaltung
+                            <?= e(t('nav.verwaltung')) ?>
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform" :class="verwaltungOpen ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                             </svg>
@@ -194,44 +195,59 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                              class="absolute left-0 right-auto sm:left-auto sm:right-0 mt-2 w-64 max-w-[90vw] bg-white text-fellDk rounded-xl shadow-lg border border-sand overflow-hidden max-h-[80vh] overflow-y-auto"
                              style="display: none;">
                             <?php if (can_manage_breeds()): ?>
-                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50">Rassen (geteilter Katalog)</p>
-                                <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rasse anlegen</a>
-                                <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Eigenschaften &amp; Aktivitäten</a>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50"><?= e(t('nav.gruppe_rassen')) ?></p>
+                                <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rasse_anlegen')) ?></a>
+                                <a href="/admin_manage_tags.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.tags')) ?></a>
                                 <?php if (is_super_admin()): ?>
-                                    <a href="/admin_rassentexte.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Rassentexte gliedern</a>
-                                    <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">TheDogAPI-Abgleich</a>
+                                    <a href="/admin_rassentexte.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassentexte')) ?></a>
+                                    <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.thedogapi')) ?></a>
                                 <?php endif; ?>
                             <?php endif; ?>
 
                             <?php if (can_manage_tests()): ?>
-                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Tests (Katalog des Mandanten)</p>
-                                <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Tests verwalten</a>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1"><?= e(t('nav.gruppe_tests')) ?></p>
+                                <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.tests')) ?></a>
                             <?php endif; ?>
 
                             <?php if (is_admin()): ?>
-                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
-                                <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
-                                <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer anlegen</a>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1"><?= e(t('nav.gruppe_benutzer')) ?></p>
+                                <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.benutzer_verwalten')) ?></a>
+                                <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.benutzer_anlegen')) ?></a>
                             <?php endif; ?>
 
                             <?php if (is_super_admin()): ?>
-                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Mandanten</p>
-                                <a href="/admin_manage_tenants.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Mandanten verwalten</a>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1"><?= e(t('nav.gruppe_mandanten')) ?></p>
+                                <a href="/admin_manage_tenants.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.mandanten')) ?></a>
                             <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>
 
                 <span class="hidden md:inline text-creme/70 ml-2">
-                    Hallo, <a href="/account.php" class="hover:text-creme hover:underline"><?= e(current_user()['username'] ?? '') ?></a>
-                    <?php if (is_admin()): ?><span class="ml-1 px-2 py-0.5 rounded-full bg-pfote/30 text-xs">Admin</span><?php endif; ?>
+                    <?= e(t('kopf.hallo')) ?> <a href="/account.php" class="hover:text-creme hover:underline"><?= e(current_user()['username'] ?? '') ?></a>
+                    <?php if (is_admin()): ?><span class="ml-1 px-2 py-0.5 rounded-full bg-pfote/30 text-xs"><?= e(t('kopf.admin')) ?></span><?php endif; ?>
                 </span>
                 <a href="/account.php" class="md:hidden flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors <?= nav_is_active($currentPath, ['/account.php']) ? 'bg-creme/15 text-creme' : 'hover:text-pfote' ?>">
-                    Konto
+                    <?= e(t('nav.konto')) ?>
                 </a>
-                <a href="/logout.php" class="bg-fell hover:bg-fellDk transition-colors px-3 py-1.5 rounded-full whitespace-nowrap">Abmelden</a>
+                <a href="/logout.php" class="bg-fell hover:bg-fellDk transition-colors px-3 py-1.5 rounded-full whitespace-nowrap"><?= e(t('nav.abmelden')) ?></a>
             </nav>
         <?php endif; ?>
+
+        <?php // Sprachumschalter, auch ohne Login (Login-Seite). ?>
+        <form method="post" action="/sprache.php" class="flex items-center rounded-full border border-creme/40 text-xs font-bold overflow-hidden" aria-label="<?= e(t('sprache.umschalter')) ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="zurueck" value="<?= e((string) ($_SERVER['REQUEST_URI'] ?? '/')) ?>">
+            <?php foreach (SPRACHEN as $code => $sprachName): $aktiv = $code === aktuelle_sprache(); ?>
+                <button type="submit" name="sprache" value="<?= $code ?>" lang="<?= $code ?>"
+                    aria-pressed="<?= $aktiv ? 'true' : 'false' ?>"
+                    title="<?= e(t('sprache.wechseln_zu', ['sprache' => $sprachName], $code)) ?>"
+                    class="min-h-[32px] min-w-[40px] px-2 uppercase transition-colors <?= $aktiv ? 'bg-pfote text-fellDk' : 'text-creme hover:bg-creme/15' ?>">
+                    <?= $code ?>
+                </button>
+            <?php endforeach; ?>
+        </form>
+        </div>
     </div>
 </header>
 

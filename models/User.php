@@ -27,12 +27,12 @@ class User
         $lockoutSeconds = get_lockout_remaining_seconds($username, $tenantId);
         if ($lockoutSeconds > 0) {
             $minutes = (int) ceil($lockoutSeconds / 60);
-            return ['success' => false, 'message' => 'Zu viele fehlgeschlagene Login-Versuche. Bitte warten Sie noch ca. ' . $minutes . ' Minute(n).'];
+            return ['success' => false, 'message' => t('login.gesperrt', ['minuten' => $minutes])];
         }
 
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'SELECT u.id, u.tenant_id, u.username, u.password_hash, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests, u.is_active
+            'SELECT u.id, u.tenant_id, u.username, u.password_hash, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests, u.sprache, u.is_active
              FROM users u
              INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
              WHERE u.username = :username AND u.tenant_id = :tenant_id
@@ -41,7 +41,7 @@ class User
         $stmt->execute([':username' => $username, ':tenant_id' => $tenantId]);
         $user = $stmt->fetch();
 
-        $genericError = 'Benutzername oder Passwort ist falsch.';
+        $genericError = t('login.falsch');
 
         if (!$user) {
             log_login_attempt($username, false, $tenantId);
@@ -50,7 +50,7 @@ class User
 
         if ((int) $user['is_active'] !== 1) {
             log_login_attempt($username, false, $tenantId);
-            return ['success' => false, 'message' => 'Dieser Account wurde deaktiviert. Bitte wenden Sie sich an einen Administrator.'];
+            return ['success' => false, 'message' => t('login.deaktiviert')];
         }
 
         if (!password_verify($password, $user['password_hash'])) {
@@ -203,30 +203,30 @@ class User
         $row = $stmt->fetch();
 
         if ($row === false) {
-            return ['success' => false, 'message' => 'Benutzer nicht gefunden.'];
+            return ['success' => false, 'message' => t('konto.fehler_benutzer')];
         }
 
         if (!password_verify($currentPassword, $row['password_hash'])) {
-            return ['success' => false, 'message' => 'Das aktuelle Passwort ist nicht korrekt.'];
+            return ['success' => false, 'message' => t('konto.fehler_aktuell')];
         }
 
         if ($newPassword !== $newPasswordRepeat) {
-            return ['success' => false, 'message' => 'Die beiden neuen Passwörter stimmen nicht überein.'];
+            return ['success' => false, 'message' => t('konto.fehler_gleich')];
         }
 
         if (mb_strlen($newPassword) < 10) {
-            return ['success' => false, 'message' => 'Das neue Passwort muss mindestens 10 Zeichen lang sein.'];
+            return ['success' => false, 'message' => t('konto.fehler_min')];
         }
 
         if ($newPassword === $currentPassword) {
-            return ['success' => false, 'message' => 'Das neue Passwort muss sich vom aktuellen unterscheiden.'];
+            return ['success' => false, 'message' => t('konto.fehler_unveraendert')];
         }
 
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
         $updateStmt = $pdo->prepare('UPDATE users SET password_hash = :hash WHERE id = :id');
         $updateStmt->execute([':hash' => $hash, ':id' => $id]);
 
-        return ['success' => true, 'message' => 'Dein Passwort wurde erfolgreich geändert.'];
+        return ['success' => true, 'message' => t('konto.passwort_geaendert')];
     }
 
     /**
@@ -304,6 +304,22 @@ class User
     }
 
     /**
+     * Speichert die Sprache der Oberfläche für den eigenen Benutzer.
+     * Mandant wird mitgeprüft, damit eine Session nie ein fremdes Konto trifft.
+     */
+    public static function setSprache(int $id, int $tenantId, string $sprache): bool
+    {
+        if (!in_array($sprache, ['de', 'en'], true)) {
+            return false;
+        }
+        $stmt = Database::getConnection()->prepare(
+            'UPDATE users SET sprache = :sprache WHERE id = :id AND tenant_id = :tenant_id'
+        );
+        $stmt->execute([':sprache' => $sprache, ':id' => $id, ':tenant_id' => $tenantId]);
+        return true;
+    }
+
+    /**
      * Lädt den eingeloggten Benutzer für den Abgleich pro Request
      * (refresh_session_user() in config/auth.php). Liefert null, wenn
      * das Konto oder sein Mandant deaktiviert ist oder nicht mehr passt.
@@ -312,7 +328,7 @@ class User
     {
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'SELECT u.id, u.tenant_id, u.username, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests
+            'SELECT u.id, u.tenant_id, u.username, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests, u.sprache
              FROM users u
              INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
              WHERE u.id = :id AND u.tenant_id = :tenant_id AND u.is_active = 1
