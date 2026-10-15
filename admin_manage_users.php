@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_POST['username'] ?? '',
                 $_POST['role'] ?? '',
                 $currentAdminId,
-                (int) ($_POST['tenant_id'] ?? $tenantId),
+                $tenantId,
                 isset($_POST['can_manage_breeds']),
                 isset($_POST['can_manage_tests'])
             );

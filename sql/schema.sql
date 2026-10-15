@@ -49,6 +49,7 @@ CREATE TABLE `users` (
     `username`      VARCHAR(50)  NOT NULL,
     `password_hash` VARCHAR(255) NOT NULL,           -- password_hash() Output, PASSWORD_DEFAULT
     `role`          ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+    `is_super_admin` TINYINT(1)  NOT NULL DEFAULT 0, -- mandantenübergreifend: verwaltet Mandanten, wählt tenant_id beim Anlegen von Benutzern
     `can_manage_breeds` TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Rassen-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
     `can_manage_tests`  TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Test-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1, -- manuelles Sperren durch Admin möglich
@@ -447,8 +448,8 @@ VALUES (1, 'Default', 'default', 1, NOW());
 --   php -r "echo password_hash('DeinSicheresPasswort123!', PASSWORD_DEFAULT);"
 -- Niemals Klartext-Passwörter in die Datenbank schreiben!
 -- =====================================================================
-INSERT INTO `users` (`tenant_id`, `username`, `password_hash`, `role`, `is_active`)
-VALUES (1, 'admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1);
+INSERT INTO `users` (`tenant_id`, `username`, `password_hash`, `role`, `is_super_admin`, `is_active`)
+VALUES (1, 'admin', '$2y$10$G7cxovylsXsqpAaWvlNDFuJj3dzWSkiJ7kkq8fiETcRjzyNAwEU.e', 'admin', 1, 1);
 
 -- ---------------------------------------------------------------------
 -- Beispiel-Tags (optional, kann gelöscht/erweitert werden)

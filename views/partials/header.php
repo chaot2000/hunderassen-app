@@ -59,6 +59,7 @@ $verwaltungsPfade = [
     '/admin_manage_tags.php',
     '/admin_manage_users.php',
     '/admin_add_user.php',
+    '/admin_manage_tenants.php',
     '/admin_thedogapi_review.php',
     '/admin_thedogapi_apply.php',
     '/admin_manage_tests.php',
@@ -209,6 +210,9 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
                                 <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
                                 <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer anlegen</a>
+                            <?php endif; ?>
+
+                            <?php if (is_super_admin()): ?>
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Mandanten</p>
                                 <a href="/admin_manage_tenants.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Mandanten verwalten</a>
                             <?php endif; ?>

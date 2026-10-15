@@ -19,9 +19,13 @@ require_admin();
 $pdo = Database::getConnection();
 $tenantId = current_tenant_id();
 
-// Alle aktiven Tenants für das Formular laden
-$tenantsStmt = $pdo->query('SELECT id, name, subdomain FROM tenants WHERE is_active = 1 ORDER BY name');
-$tenants = $tenantsStmt->fetchAll();
+// Nur der Super-Admin wählt den Mandanten. Normale Admins legen
+// Benutzer immer im eigenen Mandanten an, ein gepostetes tenant_id
+// wird für sie ignoriert.
+$tenants = [];
+if (is_super_admin()) {
+    $tenants = $pdo->query('SELECT id, name, subdomain FROM tenants WHERE is_active = 1 ORDER BY name')->fetchAll();
+}
 
 $successMessage = null;
 $errorMessage   = null;
@@ -47,12 +51,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password        = $_POST['password'] ?? '';
         $passwordConfirm = $_POST['password_confirm'] ?? '';
         $role            = $_POST['role'] ?? 'user';
-        $tenantIdSelect  = (int) ($_POST['tenant_id'] ?? $tenantId);
+        $tenantIdSelect  = $tenantId;
+        if (is_super_admin() && isset($_POST['tenant_id'])) {
+            $tenantIdSelect = (int) $_POST['tenant_id'];
+        }
         $canManageBreeds = isset($_POST['can_manage_breeds']);
         $canManageTests  = isset($_POST['can_manage_tests']);
 
         if ($password !== $passwordConfirm) {
             $errorMessage = 'Die Passwörter stimmen nicht überein.';
+        } elseif (is_super_admin() && !in_array($tenantIdSelect, array_map('intval', array_column($tenants, 'id')), true)) {
+            $errorMessage = 'Der gewählte Mandant existiert nicht oder ist deaktiviert.';
         } else {
             $result = User::createByAdmin($username, $password, $role, (int) current_user()['id'], $tenantIdSelect, $canManageBreeds, $canManageTests);
 
@@ -145,6 +154,7 @@ require __DIR__ . '/views/partials/header.php';
                 </select>
             </div>
 
+            <?php if (is_super_admin()): ?>
             <div>
                 <label for="tenant_id" class="block text-sm font-semibold mb-1">Mandant</label>
                 <select
@@ -153,12 +163,13 @@ require __DIR__ . '/views/partials/header.php';
                     class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                 >
                     <?php foreach ($tenants as $t): ?>
-                        <option value="<?= $t['id'] ?>" <?= $t['id'] == $tenantId ? 'selected' : '' ?>>
+                        <option value="<?= (int) $t['id'] ?>" <?= (int) $t['id'] === $tenantId ? 'selected' : '' ?>>
                             <?= e($t['name']) ?> (<?= e($t['subdomain']) ?>)
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php endif; ?>
 
             <div x-show="role === 'user'" x-cloak class="space-y-2 border border-sand rounded-lg p-3 bg-creme/40">
                 <p class="text-xs font-semibold text-fellDk/70">Zusätzliche Portal-Rechte (geteilte Kataloge)</p>

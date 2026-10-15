@@ -28,7 +28,7 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, tenant_id, username, password_hash, role, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, tenant_id, username, password_hash, role, is_super_admin, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
         $stmt->execute([':username' => $username]);
         $user = $stmt->fetch();
 
