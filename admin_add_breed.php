@@ -43,7 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'farben'             => $_POST['farben'] ?? '',
         'fci_klasse'         => $_POST['fci_klasse'] ?? '',
         'fci_nr'             => $_POST['fci_nr'] ?? '',
+        'fci_sektion'        => $_POST['fci_sektion'] ?? '',
+        'fci_sektion_name'   => $_POST['fci_sektion_name'] ?? '',
+        'arbeitspruefung'    => $_POST['arbeitspruefung'] ?? '',
         'beschreibung'       => $_POST['beschreibung'] ?? '',
+        'gliederung'         => $_POST['gliederung'] ?? 'keine',
     ];
 
     // Größenklassen aus dem dynamisch erzeugten Formular-Array einlesen.
@@ -301,21 +305,21 @@ require __DIR__ . '/views/partials/header.php';
 
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label for="fci_klasse" class="block text-sm font-semibold mb-1">FCI-Klasse</label>
+                    <label for="fci_klasse" class="block text-sm font-semibold mb-1">FCI-Gruppe</label>
                     <select
                         id="fci_klasse" name="fci_klasse"
                         class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                     >
-                        <option value="">Keine FCI-Klasse</option>
-                        <?php for ($i = 1; $i <= 10; $i++): ?>
+                        <option value="">Keine FCI-Gruppe</option>
+                        <?php foreach (Breed::FCI_GRUPPEN as $i => $gruppenName): ?>
                             <option value="<?= $i ?>" <?= (isset($existing['fci_klasse']) && (int) $existing['fci_klasse'] === $i) ? 'selected' : '' ?>>
-                                Klasse <?= $i ?>
+                                <?= $i ?> · <?= e($gruppenName) ?>
                             </option>
-                        <?php endfor; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div>
-                    <label for="fci_nr" class="block text-sm font-semibold mb-1">FCI-Nr.</label>
+                    <label for="fci_nr" class="block text-sm font-semibold mb-1">FCI-Standard-Nr.</label>
                     <input
                         type="text" id="fci_nr" name="fci_nr" maxlength="20"
                         placeholder="z. B. 166"
@@ -323,6 +327,39 @@ require __DIR__ . '/views/partials/header.php';
                         class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                     >
                 </div>
+            </div>
+
+            <div class="grid grid-cols-[6rem_1fr] gap-3">
+                <div>
+                    <label for="fci_sektion" class="block text-sm font-semibold mb-1">Sektion</label>
+                    <input
+                        type="text" id="fci_sektion" name="fci_sektion" maxlength="10"
+                        placeholder="z. B. 1.1"
+                        value="<?= e($existing['fci_sektion'] ?? '') ?>"
+                        class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                    >
+                </div>
+                <div>
+                    <label for="fci_sektion_name" class="block text-sm font-semibold mb-1">Name der Sektion</label>
+                    <input
+                        type="text" id="fci_sektion_name" name="fci_sektion_name" maxlength="150"
+                        placeholder="z. B. Pinscher und Schnauzer"
+                        value="<?= e($existing['fci_sektion_name'] ?? '') ?>"
+                        class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                    >
+                </div>
+            </div>
+
+            <div>
+                <label for="arbeitspruefung" class="block text-sm font-semibold mb-1">Arbeitsprüfung</label>
+                <select
+                    id="arbeitspruefung" name="arbeitspruefung"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+                    <?php foreach (['' => 'keine Angabe', 'mit' => 'mit Arbeitsprüfung', 'ohne' => 'ohne Arbeitsprüfung', 'fakultativ' => 'fakultativ'] as $wert => $label): ?>
+                        <option value="<?= $wert ?>" <?= (string) ($existing['arbeitspruefung'] ?? '') === $wert ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
 
             <div class="md:col-span-2">
@@ -337,10 +374,25 @@ require __DIR__ . '/views/partials/header.php';
 
             <div class="md:col-span-2">
                 <label for="beschreibung" class="block text-sm font-semibold mb-1">Beschreibung</label>
+                <p id="beschreibung-hinweis" class="text-sm text-fellDk/80 mb-2">
+                    Der erste Absatz ist das Kurzporträt oben auf der Rassenseite. Eine Zeile, die mit <code class="font-mono">## </code> beginnt, wird zur Abschnittsüberschrift, z. B. <code class="font-mono">## Wesen</code>. Absätze mit einer Leerzeile trennen.
+                </p>
                 <textarea
-                    id="beschreibung" name="beschreibung" rows="14"
-                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                    id="beschreibung" name="beschreibung" rows="18" aria-describedby="beschreibung-hinweis"
+                    class="w-full rounded-lg border border-sand px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-tanne"
                 ><?= e($existing['beschreibung'] ?? '') ?></textarea>
+            </div>
+
+            <div>
+                <label for="gliederung" class="block text-sm font-semibold mb-1">Gliederung der Beschreibung</label>
+                <select
+                    id="gliederung" name="gliederung"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+                    <?php foreach (['keine' => 'keine Abschnitte', 'automatisch' => 'automatisch zugeordnet, ungeprüft', 'geprueft' => 'geprüft'] as $wert => $label): ?>
+                        <option value="<?= $wert ?>" <?= (string) ($existing['gliederung'] ?? 'keine') === $wert ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
         </div>
     </div>

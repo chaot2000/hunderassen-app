@@ -36,10 +36,16 @@ class ContentRevision
             'farben'            => 'Farben',
             'fci_klasse'        => 'FCI-Gruppe',
             'fci_nr'            => 'FCI-Standard-Nr.',
+            'fci_sektion'       => 'FCI-Sektion',
+            'fci_sektion_name'  => 'Name der Sektion',
+            'arbeitspruefung'   => 'Arbeitsprüfung',
             'beschreibung'      => 'Beschreibung',
             'temperament'       => 'Temperament',
             'lebenserwartung'   => 'Lebenserwartung',
             'zuchtzweck'        => 'Zuchtzweck',
+            'quelle_url'        => 'Quelle',
+            'quelle_stand'      => 'Stand der Quelle',
+            'gliederung'        => 'Gliederung',
         ],
         'tests' => [
             'name'         => 'Name',
@@ -62,6 +68,7 @@ class ContentRevision
         'import'            => 'Import',
         'loeschung'         => 'Gelöscht',
         'wiederherstellung' => 'Wiederhergestellt',
+        'umstrukturierung'  => 'Automatisch gegliedert',
     ];
 
     /**
@@ -306,6 +313,12 @@ class ContentRevision
         }
         if ($tabelle === 'tests' && $feld === 'zielgruppe' && !in_array($wert, ['welpe', 'erwachsen', 'beide'], true)) {
             return 'Ungültige Zielgruppe.';
+        }
+        if ($tabelle === 'breeds' && $feld === 'arbeitspruefung' && $wert !== null && !in_array($wert, ['mit', 'ohne', 'fakultativ'], true)) {
+            return 'Ungültiger Wert für die Arbeitsprüfung.';
+        }
+        if ($tabelle === 'breeds' && $feld === 'gliederung' && !in_array($wert, ['keine', 'automatisch', 'geprueft'], true)) {
+            return 'Ungültiger Wert für die Gliederung.';
         }
         if ($tabelle === 'tests' && $feld === 'name') {
             $chk = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id AND id != :id LIMIT 1');
