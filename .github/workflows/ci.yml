@@ -104,7 +104,7 @@ jobs:
 
   migration:
     # Spielt die Mandanten-Migration auf dem Schema-Stand von vor der
-    # Umstellung ein (Tag prod-2026-10-15 bzw. Commit a4b4f37), zweimal
+    # Umstellung ein (Tag prod-2026-10-15), zweimal
     # hin und zweimal zurück, und vergleicht das Schema danach mit vorher.
     runs-on: ubuntu-latest
 
@@ -137,7 +137,7 @@ jobs:
 
       - name: Altes Schema mit Beispieldaten einspielen
         run: |
-          git show a4b4f37:sql/schema.sql > /tmp/schema_alt.sql
+          git show prod-2026-10-15:sql/schema.sql > /tmp/schema_alt.sql
           mysql -h127.0.0.1 -uroot -proot hunderassen_mig < /tmp/schema_alt.sql
           mysql -h127.0.0.1 -uroot -proot hunderassen_mig -e "
             INSERT INTO halter (id, name, created_by) VALUES (1, 'Alt-Halter', 1);

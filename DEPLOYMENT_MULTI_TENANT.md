@@ -60,4 +60,4 @@ Das Rollback bricht ab, bevor es etwas ändert, wenn es schon Daten in einem and
 ## Getestet
 
 - Kopie der Prod-DB vom 15.10.2026 in Laragon (MySQL 8.4): Migration zweimal, Rollback zweimal, Schema und Daten danach identisch mit vorher.
-- CI-Job `migration` macht dasselbe bei jedem Push auf MariaDB 10.11 mit dem Schema von `a4b4f37`. Noch nicht gelaufen, solange der Branch nicht gepusht ist.
+- CI-Job `migration` macht dasselbe bei jedem Push auf MariaDB 10.11 mit dem Schema vom Tag `prod-2026-10-15`. Noch nicht gelaufen, solange der Branch nicht gepusht ist.
