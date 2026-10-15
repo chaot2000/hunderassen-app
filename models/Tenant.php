@@ -19,6 +19,16 @@ class Tenant
     /** Kürzel des Mandanten, der bei leerem Login-Feld gilt. */
     public const DEFAULT_SUBDOMAIN = 'default';
 
+    /**
+     * Kürzel, die nie ein Mandant sein dürfen und beim Lesen aus der
+     * Adresse ignoriert werden. "hunde" ist das erste Label der
+     * App-Adresse hunde.familie-jakob.net: Ein Mandant mit diesem
+     * Kürzel würde sonst jeden Login über diese Adresse an sich ziehen.
+     * Zieht die App auf eine andere Adresse um, deren erstes Label hier
+     * ergänzen.
+     */
+    public const RESERVIERTE_KUERZEL = ['www', 'hunde'];
+
     /** @return array<int, array<string, mixed>> */
     public static function findAll(): array
     {
@@ -68,7 +78,7 @@ class Tenant
         }
 
         $labels = explode('.', $host);
-        if (count($labels) < 3 || $labels[0] === 'www') {
+        if (count($labels) < 3 || in_array($labels[0], self::RESERVIERTE_KUERZEL, true)) {
             return null;
         }
 
@@ -122,8 +132,8 @@ class Tenant
         if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/', $subdomain)) {
             return ['success' => false, 'message' => 'Das Kürzel darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten (max. 50 Zeichen, nicht mit Bindestrich beginnen oder enden).'];
         }
-        if ($subdomain === 'www') {
-            return ['success' => false, 'message' => 'Das Kürzel "www" ist reserviert.'];
+        if (in_array($subdomain, self::RESERVIERTE_KUERZEL, true)) {
+            return ['success' => false, 'message' => 'Das Kürzel "' . $subdomain . '" ist reserviert.'];
         }
 
         $pdo = Database::getConnection();
