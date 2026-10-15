@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $removeImage = isset($_POST['bild_entfernen']) && $_POST['bild_entfernen'] === '1';
 
         if ($isEditMode) {
-            $result = Breed::update($editingId, $breedData, $sizes, $tagIds, $activityIds, $image, $removeImage);
+            $result = Breed::update($editingId, $breedData, $sizes, $tagIds, $activityIds, $image, $removeImage, (int) current_user()['id']);
         } else {
             $result = Breed::create($breedData, $sizes, $tagIds, $activityIds, (int) current_user()['id'], $image);
         }
@@ -137,9 +137,17 @@ $pageTitle = $isEditMode ? 'Rasse bearbeiten' : 'Rasse anlegen';
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<h1 class="text-2xl font-extrabold text-fellDk mb-6">
-    <?= $isEditMode ? '✏️ Rasse bearbeiten' : '➕ Neue Rasse anlegen' ?>
-</h1>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h1 class="text-2xl font-extrabold text-fellDk">
+        <?= $isEditMode ? '✏️ Rasse bearbeiten' : '➕ Neue Rasse anlegen' ?>
+    </h1>
+    <?php if ($isEditMode): ?>
+        <a href="/content_versionen.php?typ=rasse&amp;id=<?= (int) $editingId ?>"
+           class="text-sm font-semibold text-tanne hover:text-tanneDk border border-tanne/40 hover:border-tanne rounded-lg px-3 py-1.5 transition-colors">
+            Versionen (<?= ContentRevision::zaehle('breeds', (int) $editingId, null) ?>)
+        </a>
+    <?php endif; ?>
+</div>
 
 <?php if ($errorMessage !== null): ?>
     <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-6" role="alert">

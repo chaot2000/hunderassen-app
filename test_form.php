@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isEditMode) {
-        $result = Test::update($editingId, $tenantId, $testData, $aufgaben);
+        $result = Test::update($editingId, $tenantId, $testData, $aufgaben, (int) current_user()['id']);
     } else {
         $result = Test::create($testData, $aufgaben, (int) current_user()['id'], $tenantId);
     }
@@ -137,9 +137,17 @@ require __DIR__ . '/views/partials/header.php';
     ← Zur Übersicht
 </a>
 
-<h1 class="text-2xl font-extrabold text-fellDk mb-6">
-    <?= $isEditMode ? '✏️ Test bearbeiten' : '➕ Neuen Test anlegen' ?>
-</h1>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h1 class="text-2xl font-extrabold text-fellDk">
+        <?= $isEditMode ? '✏️ Test bearbeiten' : '➕ Neuen Test anlegen' ?>
+    </h1>
+    <?php if ($isEditMode): ?>
+        <a href="/content_versionen.php?typ=test&amp;id=<?= (int) $editingId ?>"
+           class="text-sm font-semibold text-tanne hover:text-tanneDk border border-tanne/40 hover:border-tanne rounded-lg px-3 py-1.5 transition-colors">
+            Versionen (<?= ContentRevision::zaehle('tests', (int) $editingId, $tenantId) ?>)
+        </a>
+    <?php endif; ?>
+</div>
 
 <?php if ($errorMessage !== null): ?>
     <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-6" role="alert">

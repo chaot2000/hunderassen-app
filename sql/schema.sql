@@ -7,7 +7,7 @@
 -- (Prod-Erstinstallation ODER lokales Fresh-Setup). Sie enthält bereits
 -- den kompletten, aktuellen Stand inkl. aller Migrationen aus
 -- sql/migrationen/ (alternative_namen, TheDogAPI-Felder, dogs, halter,
--- Foto-Spalten, Multi-Tenant). Die Dateien in sql/migrationen/ sind nur noch das
+-- Foto-Spalten, Multi-Tenant, Textversionen). Die Dateien in sql/migrationen/ sind nur noch das
 -- historische Archiv, wie eine bereits laufende ältere Installation
 -- schrittweise auf diesen Stand gebracht wurde — für eine neue
 -- Installation NICHT mehr einzeln ausführen, siehe INSTALL.md.
@@ -128,6 +128,7 @@ CREATE TABLE `breeds` (
     `fci_klasse`      TINYINT UNSIGNED NULL,    -- 1-10, NULL = keine FCI-Klasse
     `fci_nr`          VARCHAR(20) NULL,         -- offizielle FCI-Standardnummer, z.B. "166"
     `beschreibung`    TEXT NULL,
+    `beschreibung_original` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Stand beim Anlegen bzw. bei Einführung der Versionierung, wird nie überschrieben
     `temperament`     VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar
     `lebenserwartung` VARCHAR(50)  NULL,        -- aus TheDogAPI-Abgleich übernehmbar
     `zuchtzweck`      VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar (bred_for)
@@ -435,6 +436,31 @@ CREATE TABLE `dog_halter` (
     KEY `idx_dog_halter_halter` (`halter_id`),
     CONSTRAINT `fk_doghalter_dog`    FOREIGN KEY (`dog_id`)    REFERENCES `dogs` (`id`)   ON DELETE CASCADE,
     CONSTRAINT `fk_doghalter_halter` FOREIGN KEY (`halter_id`) REFERENCES `halter` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: content_revisions
+-- Versionen der Rassen- und Testtexte (alter/neuer Wert je Feld). Ohne
+-- FK auf breeds/tests, damit Versionen das Löschen überleben. Siehe
+-- models/ContentRevision.php und migration_2026_10_15_text_versionen.sql.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `content_revisions`;
+CREATE TABLE `content_revisions` (
+    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`     INT UNSIGNED NULL,               -- NULL = geteilter Katalog (Rassen)
+    `tabelle`       VARCHAR(40)  NOT NULL,           -- 'breeds' | 'tests'
+    `datensatz_id`  INT UNSIGNED NOT NULL,
+    `feld`          VARCHAR(64)  NOT NULL,
+    `alter_wert`    MEDIUMTEXT   NULL,
+    `neuer_wert`    MEDIUMTEXT   NULL,
+    `anlass`        ENUM('bearbeitung', 'import', 'loeschung', 'wiederherstellung') NOT NULL,
+    `geaendert_von` INT UNSIGNED NULL,
+    `geaendert_am`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_rev_datensatz` (`tabelle`, `datensatz_id`, `geaendert_am`),
+    KEY `idx_rev_tenant` (`tenant_id`),
+    KEY `idx_rev_geaendert_von` (`geaendert_von`),
+    CONSTRAINT `fk_rev_geaendert_von` FOREIGN KEY (`geaendert_von`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

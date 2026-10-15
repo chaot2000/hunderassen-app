@@ -708,6 +708,46 @@ else
     fi
 
     echo ""
+    echo "--- Textversionen (content_versionen.php) ---"
+    check_status "Rasse bearbeiten lädt" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Link auf die Versionen vorhanden" "content_versionen.php?typ=rasse&amp;id=1"
+    BREED_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    # Werte ohne Leerzeichen: extra_curl_args wird per Wortaufteilung übergeben.
+    check_status "Rasse mit geändertem Text speichern (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$BREED_CSRF --data-urlencode name=CI-Testrasse \
+         --data-urlencode ursprungsland=Deutschland --data-urlencode farben=schwarz,braun --data-urlencode fci_klasse=1 \
+         --data-urlencode beschreibung=CI-Versionstext-geaendert \
+         --data-urlencode sizes[0][groesse]=mittel --data-urlencode sizes[0][ruede_min]=40 --data-urlencode sizes[0][ruede_max]=50"
+    check_status "Versionen der Rasse laden" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Version mit dem neuen Text" "CI-Versionstext-geaendert"
+    check_body_contains "Anlass „Bearbeitet“" "Bearbeitet"
+    check_body_contains "Originaltext wird angeboten" "Original wiederherstellen"
+    VER_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Original wiederherstellen (Redirect)" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$VER_CSRF --data-urlencode original=1"
+    check_status "Versionen nach der Wiederherstellung" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Erfolgsmeldung der Wiederherstellung" "Beschreibung wurde wiederhergestellt."
+    check_body_contains "Wiederherstellung ist selbst eine Version" "Wiederhergestellt"
+    check_body_not_contains "Original wird nicht mehr angeboten (ist wieder aktuell)" "Original wiederherstellen"
+    check_status "Rassendetail nach der Wiederherstellung" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Originaltext ist wieder aktiv" "Nur für automatisierte Tests angelegt."
+    check_body_not_contains "Geänderter Text ist weg" "CI-Versionstext-geaendert"
+    check_status "Versionen eines Tests (Mandant 1) laden" "$BASE_URL/content_versionen.php?typ=test&id=1" "200"
+    check_body_contains "Leerer Zustand ohne Versionen" "Noch keine Änderungen gespeichert."
+    check_status "Versionen ohne gültigen Typ: 404" "$BASE_URL/content_versionen.php?typ=foo&id=1" "404"
+
+    if [ -n "$B_PASS" ]; then
+        A_VER_JAR="$COOKIE_JAR"
+        B_VER_JAR="$(mktemp)"
+        COOKIE_JAR="$B_VER_JAR"
+        login_as "$B_TENANT" "$B_USER" "$B_PASS"
+        check_status "B: Versionen des Tests aus Mandant 1 nicht abrufbar (404)" "$BASE_URL/content_versionen.php?typ=test&id=1" "404"
+        check_status "B: Versionen des eigenen Tests laden" "$BASE_URL/content_versionen.php?typ=test&id=2" "200"
+        rm -f "$B_VER_JAR"
+        COOKIE_JAR="$A_VER_JAR"
+    fi
+
+    echo ""
     echo "--- Eigenes Passwort ändern (account.php) ---"
     check_status "account.php lädt" "$BASE_URL/account.php" "200"
     check_body_contains "Formular zur Passwortänderung vorhanden" "Passwort ändern"
