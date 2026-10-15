@@ -178,10 +178,10 @@ require __DIR__ . '/views/partials/header.php';
             <?php endif; ?>
 
             <?php if ($text['kurzportraet'] !== null): ?>
-                <?php $lang = mb_strlen($text['kurzportraet']) > 220; ?>
+                <?php $lang = mb_strlen($text['kurzportraet']) > 160; ?>
                 <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?>>
                     <!-- Am Handy optisch gekürzt, damit die Aktion im ersten Bild bleibt; der volle Text steht im DOM. -->
-                    <p class="mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch] <?= $lang ? 'line-clamp-4 sm:line-clamp-none' : '' ?>" <?= $lang ? ':class="ganz && \'line-clamp-none\'"' : '' ?>><?= e($text['kurzportraet']) ?></p>
+                    <p class="mt-5 sm:mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch] <?= $lang ? 'line-clamp-3 sm:line-clamp-none' : '' ?>" <?= $lang ? ':class="ganz && \'line-clamp-none\'"' : '' ?>><?= e($text['kurzportraet']) ?></p>
                     <?php if ($lang): ?>
                         <button type="button" x-show="!ganz" @click="ganz = true" class="sm:hidden mt-2 min-h-[44px] py-2 text-sm font-bold text-creme underline underline-offset-4">Weiterlesen</button>
                     <?php endif; ?>
@@ -189,27 +189,36 @@ require __DIR__ . '/views/partials/header.php';
             <?php endif; ?>
         </div>
 
-        <div class="lg:col-span-5 relative min-h-[180px] sm:min-h-[300px] <?= !empty($breed['hat_bild']) ? 'bg-sand' : 'bg-tanneDk' ?> overflow-hidden lg:rounded-r-lg">
-            <?php if (!empty($breed['hat_bild'])): ?>
+        <?php if (!empty($breed['hat_bild'])): ?>
+            <div class="lg:col-span-5 relative min-h-[220px] sm:min-h-[300px] bg-sand overflow-hidden lg:rounded-r-lg">
                 <img src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
                      alt="<?= e($breed['name']) ?>"
                      class="absolute inset-0 w-full h-full object-cover object-[50%_25%]">
-            <?php else: ?>
-                <!-- Ohne Foto trägt eine gesetzte Farbfläche: große Gruppennummer und Signet -->
-                <span class="absolute -top-6 right-2 font-mono font-medium text-[7rem] sm:text-[12rem] leading-none text-creme/15 select-none" aria-hidden="true"><?= $gruppe !== null ? $gruppe : '' ?></span>
-                <div class="absolute inset-0 flex items-center justify-center pb-20 lg:pb-24">
-                    <span class="hidden lg:block"><?= render_dog_icon(200, '#B5502E', '#E4DEC8') ?></span>
-                    <span class="lg:hidden"><?= render_dog_icon(88, '#B5502E', '#E4DEC8') ?></span>
+            </div>
+        <?php else: ?>
+            <div class="lg:col-span-5 relative bg-tanneDk overflow-hidden lg:min-h-[300px] lg:rounded-r-lg">
+                <!-- Schmal (unter lg): eine Zeile mit kleinem Signet, damit die Aktion im ersten Bild bleibt -->
+                <div class="lg:hidden flex items-center gap-3 px-5 min-h-[56px]">
+                    <?= render_dog_icon(32, '#B5502E', '#E4DEC8') ?>
+                    <span class="text-sm font-semibold text-creme">Noch kein Foto</span>
+                    <?php if ($darfPflegen): ?>
+                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="ml-auto text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
+                    <?php endif; ?>
                 </div>
-                <p class="sr-only">Noch kein Foto.</p>
-                <?php if ($darfPflegen): ?>
-                    <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 left-4 lg:left-auto lg:right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
+                <!-- Breit: gesetzte Farbfläche mit großer Gruppennummer und Signet -->
+                <div class="hidden lg:block absolute inset-0">
+                    <span class="absolute -top-6 right-2 font-mono font-medium text-[12rem] leading-none text-creme/15 select-none" aria-hidden="true"><?= $gruppe !== null ? $gruppe : '' ?></span>
+                    <div class="absolute inset-0 flex items-center justify-center pb-24"><?= render_dog_icon(200, '#B5502E', '#E4DEC8') ?></div>
+                    <p class="sr-only">Noch kein Foto.</p>
+                    <?php if ($darfPflegen): ?>
+                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
 
-        <!-- FCI-Balken, über die Kante des Kopfmoduls geschoben -->
-        <div class="lg:col-span-12 -mt-24 sm:-mt-24 relative z-10 flex flex-col">
+        <!-- FCI-Balken, über die Kante des Kopfmoduls geschoben (schmal ohne Foto: direkt darunter) -->
+        <div class="lg:col-span-12 <?= !empty($breed['hat_bild']) ? '-mt-16' : 'mt-0' ?> lg:-mt-24 relative z-10 flex flex-col">
             <p class="balken self-start w-full lg:w-[78%] bg-fell text-creme px-5 sm:px-10 py-4 text-lg sm:text-xl font-black leading-snug">
                 <?php if ($gruppe !== null): ?>
                     <span class="mr-2">FCI <span class="font-mono font-medium"><?= $gruppe ?></span></span>
