@@ -5,14 +5,13 @@
  * Merkmale und Textabschnitte einer Rasse (PLAN.md Abschnitt 10):
  * Lesen für die Anzeige und Übernahme aus den alten Feldern.
  *
- * Übernahme: Solange "Rasse bearbeiten" noch die alten Felder schreibt
- * (breed_sizes, Tags, beschreibung …), wird das neue Modell daraus
- * abgeleitet. Zeilen mit quelle = 'alt' werden dabei jedes Mal neu
- * erzeugt, alle anderen Quellen (hand, thedogapi, vdh_text) bleiben
- * unangetastet. Neu übernommen wird, wenn sich der Prüfwert über alle
- * alten Felder (STAND_SQL) von breeds.daten_stand unterscheidet. Dadurch
- * braucht keine Schreibstelle einen eigenen Aufruf, und auch zwei
- * Änderungen in derselben Sekunde werden erkannt.
+ * Übernahme: Einmal je Rasse wird das neue Modell aus den alten Feldern
+ * (breed_sizes, Tags, beschreibung …) abgeleitet, Quelle 'alt' bzw.
+ * 'thedogapi' für einen unveränderten TheDogAPI-Text. Danach ist das neue
+ * Modell die einzige Quelle: "Rasse bearbeiten" und der TheDogAPI-Abgleich
+ * schreiben direkt hinein (speichern(), ausTheDogApi()). breeds.daten_stand
+ * hält den Prüfwert der alten Felder zum Zeitpunkt der Übernahme fest;
+ * NULL heißt "noch nicht übernommen".
  */
 
 declare(strict_types=1);
@@ -125,12 +124,10 @@ class RassenDaten
         (SELECT MAX(r.id) FROM content_revisions r WHERE r.tabelle = 'breeds' AND r.datensatz_id = b.id AND r.feld = 'beschreibung_en')
     ))";
 
-    /** Übernimmt, wenn sich die alten Felder seit der letzten Übernahme geändert haben. */
+    /** Übernimmt, wenn die Rasse noch nicht ins neue Modell übernommen ist. */
     public static function uebernehmenWennNoetig(int $breedId): void
     {
-        $stmt = Database::getConnection()->prepare(
-            'SELECT b.daten_stand IS NULL OR b.daten_stand <> ' . self::STAND_SQL . ' FROM breeds b WHERE b.id = :id'
-        );
+        $stmt = Database::getConnection()->prepare('SELECT daten_stand IS NULL FROM breeds WHERE id = :id');
         $stmt->execute([':id' => $breedId]);
         if ((bool) $stmt->fetchColumn()) {
             self::uebernehmen($breedId);
@@ -141,7 +138,7 @@ class RassenDaten
     public static function alleUebernehmen(): int
     {
         $ids = Database::getConnection()->query(
-            'SELECT b.id FROM breeds b WHERE b.daten_stand IS NULL OR b.daten_stand <> ' . self::STAND_SQL
+            'SELECT id FROM breeds WHERE daten_stand IS NULL'
         )->fetchAll(PDO::FETCH_COLUMN);
         foreach ($ids as $id) {
             self::uebernehmen((int) $id);
@@ -236,15 +233,15 @@ class RassenDaten
 
         // Texte
         foreach (self::textZerlegen((string) $b['beschreibung'], false) as $abschnitt => $text) {
-            $texte[] = ['de', $abschnitt, $text];
+            $texte[] = ['de', $abschnitt, $text, 'alt'];
         }
         $importiert = ContentRevision::stammtAusImport('breeds', $breedId, 'beschreibung_en', $b['beschreibung_en'], null);
         foreach (self::textZerlegen((string) $b['beschreibung_en'], $importiert) as $abschnitt => $text) {
-            $texte[] = ['en', $abschnitt, $text];
+            $texte[] = ['en', $abschnitt, $text, $importiert ? 'thedogapi' : 'alt'];
         }
         foreach (['de' => 'zuchtzweck', 'en' => 'zuchtzweck_en'] as $sprache => $feld) {
             if (trim((string) $b[$feld]) !== '') {
-                $texte[] = [$sprache, 'zuchtzweck', trim((string) $b[$feld])];
+                $texte[] = [$sprache, 'zuchtzweck', trim((string) $b[$feld]), 'alt'];
             }
         }
 
@@ -276,10 +273,10 @@ class RassenDaten
 
             // Abschnitte, die schon von Hand oder aus einer anderen Quelle da sind, bleiben
             $insText = $pdo->prepare(
-                "INSERT IGNORE INTO rasse_texte (breed_id, sprache, abschnitt, text, quelle) VALUES (:breed, :sprache, :abschnitt, :text, 'alt')"
+                'INSERT IGNORE INTO rasse_texte (breed_id, sprache, abschnitt, text, quelle) VALUES (:breed, :sprache, :abschnitt, :text, :quelle)'
             );
-            foreach ($texte as [$sprache, $abschnitt, $text]) {
-                $insText->execute([':breed' => $breedId, ':sprache' => $sprache, ':abschnitt' => $abschnitt, ':text' => $text]);
+            foreach ($texte as [$sprache, $abschnitt, $text, $quelle]) {
+                $insText->execute([':breed' => $breedId, ':sprache' => $sprache, ':abschnitt' => $abschnitt, ':text' => $text, ':quelle' => $quelle]);
             }
 
             // Prüfwert merken; updated_at = updated_at hält den Änderungszeitpunkt fest
@@ -386,24 +383,37 @@ class RassenDaten
      * Texte einer Rasse in der gewünschten Sprache, je Abschnitt mit
      * Rückfall auf die andere Sprache.
      *
-     * @return array<string, array{text: string, sprache: string}>
+     * @return array<string, array{text: string, sprache: string, quelle: string}>
      */
     public static function texte(int $breedId, string $sprache): array
     {
-        $stmt = Database::getConnection()->prepare('SELECT sprache, abschnitt, text FROM rasse_texte WHERE breed_id = :id');
+        $stmt = Database::getConnection()->prepare('SELECT sprache, abschnitt, text, quelle FROM rasse_texte WHERE breed_id = :id');
         $stmt->execute([':id' => $breedId]);
         $alle = [];
         foreach ($stmt->fetchAll() as $r) {
-            $alle[$r['abschnitt']][$r['sprache']] = (string) $r['text'];
+            $alle[$r['abschnitt']][$r['sprache']] = ['text' => (string) $r['text'], 'quelle' => (string) $r['quelle']];
         }
         $andere = $sprache === 'en' ? 'de' : 'en';
         $ergebnis = [];
         foreach (array_keys(self::ABSCHNITTE) as $abschnitt) {
-            if (trim($alle[$abschnitt][$sprache] ?? '') !== '') {
-                $ergebnis[$abschnitt] = ['text' => $alle[$abschnitt][$sprache], 'sprache' => $sprache];
-            } elseif (trim($alle[$abschnitt][$andere] ?? '') !== '') {
-                $ergebnis[$abschnitt] = ['text' => $alle[$abschnitt][$andere], 'sprache' => $andere];
+            foreach ([$sprache, $andere] as $sp) {
+                if (trim($alle[$abschnitt][$sp]['text'] ?? '') !== '') {
+                    $ergebnis[$abschnitt] = $alle[$abschnitt][$sp] + ['sprache' => $sp];
+                    break;
+                }
             }
+        }
+        return $ergebnis;
+    }
+
+    /** Alle Texte zum Bearbeiten: [sprache][abschnitt] => text */
+    public static function alleTexte(int $breedId): array
+    {
+        $stmt = Database::getConnection()->prepare('SELECT sprache, abschnitt, text FROM rasse_texte WHERE breed_id = :id');
+        $stmt->execute([':id' => $breedId]);
+        $ergebnis = ['de' => [], 'en' => []];
+        foreach ($stmt->fetchAll() as $r) {
+            $ergebnis[$r['sprache']][$r['abschnitt']] = (string) $r['text'];
         }
         return $ergebnis;
     }

@@ -93,11 +93,13 @@ if ($titel === null) {
 }
 $titel = $titel ?? ('#' . $id);
 
-// Originaltext (nur Rassen): nur anbieten, wenn er vom aktuellen abweicht.
+// Originaltext (nur Rassen): nur anbieten, wenn er vom aktuellen abweicht
+// und die Rasse noch nicht ins Merkmalsmodell übernommen ist. Danach
+// stehen die Texte in Abschnitten und werden je Abschnitt wiederhergestellt.
 $original = null;
 if ($tabelle === 'breeds' && $datensatz !== null) {
     $pdo = Database::getConnection();
-    $st = $pdo->prepare('SELECT beschreibung, beschreibung_original FROM breeds WHERE id = :id');
+    $st = $pdo->prepare('SELECT beschreibung, beschreibung_original FROM breeds WHERE id = :id AND daten_stand IS NULL');
     $st->execute([':id' => $id]);
     $row = $st->fetch();
     if ($row && $row['beschreibung_original'] !== null && $row['beschreibung_original'] !== $row['beschreibung']) {
@@ -113,7 +115,6 @@ foreach ($versionen as $v) {
     $vorgaenge[$key]['felder'][] = $v;
 }
 
-$feldnamen = ContentRevision::FELDER[$tabelle];
 
 /**
  * Wortgenauer Vergleich als HTML mit <del>/<ins>. Gemeinsamer Anfang
@@ -292,9 +293,9 @@ require __DIR__ . '/views/partials/header.php';
                     <?php foreach ($vorgang['felder'] as $v): ?>
                         <div class="border-t border-sand pt-3">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                <h2 class="text-sm font-bold text-fellDk"><?= e($feldnamen[$v['feld']] ?? $v['feld']) ?></h2>
+                                <h2 class="text-sm font-bold text-fellDk"><?= e(ContentRevision::feldLabel($tabelle, $v['feld'])) ?></h2>
                                 <?php if ($datensatz !== null && $v['anlass'] !== 'loeschung' && ContentRevision::istWiederherstellbar($tabelle, $v['feld'])): ?>
-                                    <form method="post" onsubmit="return confirm('Feld „<?= e($feldnamen[$v['feld']] ?? $v['feld']) ?>“ auf den Stand vor dieser Änderung zurücksetzen?');">
+                                    <form method="post" onsubmit="return confirm('Feld „<?= e(ContentRevision::feldLabel($tabelle, $v['feld'])) ?>“ auf den Stand vor dieser Änderung zurücksetzen?');">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="revision_id" value="<?= (int) $v['id'] ?>">
                                         <button type="submit" class="text-sm font-semibold text-tanne hover:text-tanneDk border border-tanne/40 hover:border-tanne rounded-lg px-3 py-1.5 transition-colors">

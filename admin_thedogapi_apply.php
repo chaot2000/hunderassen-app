@@ -23,6 +23,7 @@ require_once __DIR__ . '/models/BildVerarbeitung.php';
 require_once __DIR__ . '/models/ContentRevision.php';
 require_once __DIR__ . '/models/TheDogApiFelder.php';
 require_once __DIR__ . '/models/Uebersetzung.php';
+require_once __DIR__ . '/models/RassenDatenSchreiben.php';
 
 secure_session_start();
 // Schreibt in den geteilten Rassenkatalog aller Mandanten, daher nur
@@ -191,6 +192,25 @@ foreach ($items as $breedId => $daten) {
             $sets[] = 'thedogapi_stand = NOW()';
             $params[':thedogapi_id'] = $neueId;
             $neu['thedogapi_id'] = $neueId;
+        }
+    }
+
+    // Merkmalsmodell (Rassenseite liest nur noch dieses): angehakte Werte
+    // übernehmen, auch hier nur in leere Merkmale und Abschnitte.
+    $fuerModell = [];
+    foreach (['temperament_en', 'lebenserwartung', 'zuchtzweck_en', 'beschreibung_en'] as $feld) {
+        $wert = trim((string) ($daten[$feld] ?? ''));
+        if (!empty($daten['uebernehmen_' . $feld]) && $wert !== '') {
+            $fuerModell[$feld] = $wert;
+        }
+    }
+    if ($fuerModell) {
+        try {
+            $imModell = RassenDatenSchreiben::ausTheDogApi($breedId, $fuerModell, $userId);
+            $hinweise[] = $imModell ? 'Rassenseite: ' . implode(', ', $imModell) : 'Rassenseite: schon belegt, nichts geändert';
+        } catch (Throwable $e) {
+            error_log('TheDogAPI ins Merkmalsmodell, Rasse ' . $breedId . ': ' . $e->getMessage());
+            $hinweise[] = 'Rassenseite: Fehler, nichts geändert';
         }
     }
 
