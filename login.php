@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/models/Tenant.php';
 
 secure_session_start();
 
@@ -21,13 +22,33 @@ if (is_logged_in()) {
 
 $errorMessage = null;
 
+// Mandant: zuerst aus der Subdomain (kunde1.example.de), sonst über
+// das Feld "Mandant". Gibt es nur einen aktiven Mandanten, entfällt
+// das Feld ganz (Einzelinstallation wie bisher).
+$host             = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$hostTenant       = Tenant::resolveFromHost($host);
+$zeigeMandantFeld = $hostTenant === null && Tenant::countActive() > 1;
+$mandantEingabe   = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid();
 
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
+    $username       = $_POST['username'] ?? '';
+    $password       = $_POST['password'] ?? '';
+    $mandantEingabe = $zeigeMandantFeld ? (string) ($_POST['mandant'] ?? '') : '';
 
-    $result = User::attemptLogin($username, $password);
+    $tenant = $hostTenant;
+    if ($tenant === null) {
+        $tenant = $zeigeMandantFeld
+            ? Tenant::resolveForLogin($host, $mandantEingabe)
+            : (Tenant::findAllActive()[0] ?? null);
+    }
+
+    // Unbekannter Mandant -> gleiche Meldung wie falsches Passwort,
+    // damit sich Mandanten-Kürzel nicht durchprobieren lassen.
+    $result = $tenant !== null
+        ? User::attemptLogin($username, $password, (int) $tenant['id'])
+        : ['success' => false, 'message' => 'Benutzername oder Passwort ist falsch.'];
 
     if ($result['success']) {
         login_user($result['user']);
@@ -57,6 +78,27 @@ require __DIR__ . '/views/partials/header.php';
 
     <form method="post" action="/login.php" class="space-y-4">
         <?= csrf_field() ?>
+
+        <?php if ($hostTenant !== null): ?>
+            <p class="text-sm text-fellDk/70">Mandant: <strong><?= e($hostTenant['name']) ?></strong></p>
+        <?php elseif ($zeigeMandantFeld): ?>
+            <div>
+                <label for="mandant" class="block text-sm font-semibold mb-1">Mandant</label>
+                <input
+                    type="text"
+                    id="mandant"
+                    name="mandant"
+                    value="<?= e($mandantEingabe) ?>"
+                    autocomplete="organization"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    maxlength="50"
+                    aria-describedby="mandant-hinweis"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+                <p id="mandant-hinweis" class="text-xs text-fellDk/60 mt-1">Kürzel deines Vereins oder Teams. Leer lassen, wenn du keins bekommen hast.</p>
+            </div>
+        <?php endif; ?>
 
         <div>
             <label for="username" class="block text-sm font-semibold mb-1">Benutzername</label>

@@ -14,10 +14,13 @@ require_once __DIR__ . '/../config/security.php';
 class User
 {
     /**
-     * Versucht einen Login durchzuführen.
+     * Versucht einen Login im angegebenen Mandanten durchzuführen.
+     * Der Benutzername ist nur pro Mandant eindeutig (uq_tenant_username),
+     * deshalb wird immer mit Mandant gesucht. Deaktivierte Mandanten
+     * lassen keinen Login zu.
      * @return array{success: bool, message: string, user?: array}
      */
-    public static function attemptLogin(string $username, string $password): array
+    public static function attemptLogin(string $username, string $password, int $tenantId): array
     {
         $username = clean_input($username);
 
@@ -28,8 +31,14 @@ class User
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT id, tenant_id, username, password_hash, role, is_super_admin, can_manage_breeds, can_manage_tests, is_active FROM users WHERE username = :username LIMIT 1');
-        $stmt->execute([':username' => $username]);
+        $stmt = $pdo->prepare(
+            'SELECT u.id, u.tenant_id, u.username, u.password_hash, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests, u.is_active
+             FROM users u
+             INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
+             WHERE u.username = :username AND u.tenant_id = :tenant_id
+             LIMIT 1'
+        );
+        $stmt->execute([':username' => $username, ':tenant_id' => $tenantId]);
         $user = $stmt->fetch();
 
         $genericError = 'Benutzername oder Passwort ist falsch.';
