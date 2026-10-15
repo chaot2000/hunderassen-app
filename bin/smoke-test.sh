@@ -633,13 +633,77 @@ else
         done
         curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/login.php" -o /tmp/smoke_login_form.html
         LOCK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_login_form.html || true)
-        check_status "C: sechster Fehlversuch" "$BASE_URL/login.php" "200" \
-            "-X POST --data-urlencode csrf_token=$LOCK_CSRF --data-urlencode mandant=ci-c \
-             --data-urlencode username=sperrtest --data-urlencode password=falsch"
-        check_body_contains "C: Mandant C ist für diese IP gesperrt" "Zu viele fehlgeschlagene Login-Versuche"
+        # Mit gefälschtem X-Forwarded-For: darf die IP-Sperre nicht umgehen.
+        check_status "C: sechster Fehlversuch mit gefälschter IP im Header" "$BASE_URL/login.php" "200" \
+            "-X POST -H X-Forwarded-For:203.0.113.$RANDOM --data-urlencode csrf_token=$LOCK_CSRF --data-urlencode mandant=ci-c \
+             --data-urlencode username=sperrtest-$RANDOM --data-urlencode password=falsch"
+        check_body_contains "C: Sperre greift trotz gefälschtem Header (IP-Sperre)" "Zu viele fehlgeschlagene Login-Versuche"
         login_as "" "$ADMIN_USER" "$ADMIN_PASS"
         check_status "A: Login von derselben IP klappt trotz Sperre in Mandant C" "$BASE_URL/dashboard.php" "200"
         rm -f "$LOCK_JAR"
+        COOKIE_JAR="$A_COOKIE_JAR"
+
+        echo ""
+        echo "--- Deaktivieren wirkt sofort auf laufende Sessions ---"
+        check_status "A: Benutzer anlegen lädt" "$BASE_URL/admin_add_user.php" "200"
+        SESS_ADD_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        SESS_USER="ci-session-$(date +%s)"
+        SESS_PASS="Session-Test-123!"
+        check_status "A: Benutzer für Session-Test anlegen" "$BASE_URL/admin_add_user.php" "200" \
+            "--data-urlencode csrf_token=$SESS_ADD_CSRF --data-urlencode username=$SESS_USER \
+             --data-urlencode password=$SESS_PASS --data-urlencode password_confirm=$SESS_PASS --data-urlencode role=user"
+        check_body_contains "A: Session-Testbenutzer angelegt" "erfolgreich angelegt"
+
+        SESS_JAR="$(mktemp)"
+        COOKIE_JAR="$SESS_JAR"
+        login_as "" "$SESS_USER" "$SESS_PASS"
+        check_status "Session-Testbenutzer ist eingeloggt" "$BASE_URL/dashboard.php" "200"
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Benutzerverwaltung" "$BASE_URL/admin_manage_users.php" "200"
+        SESS_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        SESS_USER_ID=$(grep -ozP "(?s)$SESS_USER.*?name=\"user_id\" value=\"\K[0-9]+" /tmp/smoke_last_response.html | tr -d '\0' || true)
+        check_status "A: Session-Testbenutzer deaktivieren" "$BASE_URL/admin_manage_users.php" "302" \
+            "-X POST --data-urlencode csrf_token=$SESS_CSRF --data-urlencode action=toggle_active \
+             --data-urlencode user_id=$SESS_USER_ID --data-urlencode active=0"
+
+        COOKIE_JAR="$SESS_JAR"
+        check_status "Deaktivierter Benutzer wird beim nächsten Klick abgemeldet" "$BASE_URL/dashboard.php" "302"
+        check_status "Session des deaktivierten Benutzers bleibt beendet" "$BASE_URL/dogs.php" "302"
+        rm -f "$SESS_JAR"
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Session-Testbenutzer wieder löschen" "$BASE_URL/admin_manage_users.php" "302" \
+            "-X POST --data-urlencode csrf_token=$SESS_CSRF --data-urlencode action=delete_user --data-urlencode user_id=$SESS_USER_ID"
+
+        B2_JAR="$(mktemp)"
+        COOKIE_JAR="$B2_JAR"
+        login_as "$B_TENANT" "$B_USER" "$B_PASS"
+        check_status "B ist eingeloggt" "$BASE_URL/dashboard.php" "200"
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Mandantenverwaltung" "$BASE_URL/admin_manage_tenants.php" "200"
+        TENANT_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "A: Mandant B deaktivieren" "$BASE_URL/admin_manage_tenants.php" "200" \
+            "-X POST --data-urlencode csrf_token=$TENANT_CSRF --data-urlencode action=set_active \
+             --data-urlencode tenant_id=2 --data-urlencode active=0"
+        check_body_contains "A: Mandant B ist deaktiviert" "Mandant wurde deaktiviert."
+
+        COOKIE_JAR="$B2_JAR"
+        check_status "B wird nach Deaktivieren des Mandanten sofort abgemeldet" "$BASE_URL/dashboard.php" "302"
+        login_as "$B_TENANT" "$B_USER" "$B_PASS"
+        check_status "B kann sich bei deaktiviertem Mandanten nicht anmelden" "$BASE_URL/dashboard.php" "302"
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Mandant B wieder aktivieren" "$BASE_URL/admin_manage_tenants.php" "200" \
+            "-X POST --data-urlencode csrf_token=$TENANT_CSRF --data-urlencode action=set_active \
+             --data-urlencode tenant_id=2 --data-urlencode active=1"
+        check_body_contains "A: Mandant B ist wieder aktiv" "Mandant wurde aktiviert."
+
+        COOKIE_JAR="$B2_JAR"
+        login_as "$B_TENANT" "$B_USER" "$B_PASS"
+        check_status "B kann sich nach Reaktivieren wieder anmelden" "$BASE_URL/dashboard.php" "200"
+        rm -f "$B2_JAR"
         COOKIE_JAR="$A_COOKIE_JAR"
     fi
 

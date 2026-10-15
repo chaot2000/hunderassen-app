@@ -6,9 +6,9 @@
  * Nur für Super-Admins (siehe is_super_admin() in config/auth.php).
  *
  * Deaktivieren sperrt den Login für alle Benutzer des Mandanten
- * (User::attemptLogin()). Laufende Sessions bleiben bis zum Logout
- * bestehen. Löschen gibt es bewusst nicht: die Daten hängen per
- * ON DELETE RESTRICT am Mandanten.
+ * (User::attemptLogin()) und beendet laufende Sessions beim nächsten
+ * Seitenaufruf (refresh_session_user()). Löschen gibt es bewusst
+ * nicht: die Daten hängen per ON DELETE RESTRICT am Mandanten.
  */
 
 declare(strict_types=1);
@@ -141,7 +141,7 @@ require __DIR__ . '/views/partials/header.php';
                                     <span class="text-xs text-fellDk/50">—</span>
                                 <?php else: ?>
                                     <form method="post" action="/admin_manage_tenants.php" class="inline"
-                                        <?php if ($isActive): ?>onsubmit="return confirm(<?= e(json_encode('Mandant „' . $tenant['name'] . '“ deaktivieren? Seine Benutzer können sich dann nicht mehr anmelden.', JSON_UNESCAPED_UNICODE)) ?>);"<?php endif; ?>>
+                                        <?php if ($isActive): ?>onsubmit="return confirm(<?= e(json_encode('Mandant „' . $tenant['name'] . '“ deaktivieren? Seine Benutzer werden sofort abgemeldet und können sich nicht mehr anmelden.', JSON_UNESCAPED_UNICODE)) ?>);"<?php endif; ?>>
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="set_active">
                                         <input type="hidden" name="tenant_id" value="<?= $tid ?>">
