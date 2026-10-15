@@ -543,6 +543,8 @@ else
         check_body_contains "B: Fehlermeldung 'Test nicht gefunden'" "nicht gefunden"
 
         check_status "B: Mandantenverwaltung ist nur für Super-Admins (403)" "$BASE_URL/admin_manage_tenants.php" "403"
+        check_status "B: TheDogAPI-Abgleich ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_review.php" "403"
+        check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
         check_status "B: Benutzerverwaltung lädt" "$BASE_URL/admin_manage_users.php" "200"
         check_body_not_contains "B: Benutzerliste zeigt den Super-Admin aus Mandant 1 nicht" "Super-Admin"
 
@@ -623,6 +625,15 @@ else
         check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
         check_status "A: Mandantenverwaltung für Super-Admin" "$BASE_URL/admin_manage_tenants.php" "200"
         check_body_contains "A: Mandant B wird gelistet" "CI-Mandant B"
+        RES_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "A: Mandant mit reserviertem Kürzel 'hunde' anlegen" "$BASE_URL/admin_manage_tenants.php" "200" \
+            "-X POST --data-urlencode csrf_token=$RES_CSRF --data-urlencode action=create \
+             --data-urlencode name=Reserviert --data-urlencode subdomain=hunde"
+        check_body_contains "A: Kürzel 'hunde' wird abgelehnt" "Das Kürzel &quot;hunde&quot; ist reserviert."
+        # Ohne config/thedogapi.local.php (wie in CI): 503 statt 403, d. h.
+        # der Super-Admin kommt durch die Rechteprüfung.
+        check_status "A: TheDogAPI-Abgleich ohne Schlüssel meldet 503 (nicht 403)" "$BASE_URL/admin_thedogapi_review.php" "503"
+        check_body_contains "A: Hinweis auf fehlenden Schlüssel" "Kein TheDogAPI-Schlüssel hinterlegt"
 
         echo ""
         echo "--- Login-Sperre zählt pro Mandant ---"
