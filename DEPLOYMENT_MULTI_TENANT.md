@@ -32,6 +32,8 @@ Neu sind unter anderem `models/Tenant.php` und `admin_manage_tenants.php`. Nicht
 
 Nach dem Upload sind alle alten Sessions ungültig (kein Mandant in der Session) und landen beim Login. Das ist gewollt.
 
+Nach dem Livegang einmal `SELECT ip_address, attempted_at FROM login_attempts ORDER BY id DESC LIMIT 5;` ansehen. Steht dort bei verschiedenen Logins immer dieselbe Adresse, läuft der Server hinter einem Proxy. Dann `TRUSTED_PROXIES` setzen, sonst sperrt die IP-Sperre alle Benutzer eines Mandanten gemeinsam.
+
 ## 4. Prüfen
 
 1. Mit dem Super-Admin einloggen. Solange es nur einen Mandanten gibt, sieht das Login-Formular aus wie vorher.
@@ -45,7 +47,8 @@ Nach dem Upload sind alle alten Sessions ungültig (kein Mandant in der Session)
 - Passt die Subdomain zu keinem Mandanten und gibt es mehr als einen aktiven Mandanten, zeigt das Login-Formular ein Feld "Mandant". Leer gelassen gilt der Mandant `default`.
 - Benutzernamen sind nur pro Mandant eindeutig.
 - Nur der Super-Admin verwaltet Mandanten und wählt beim Anlegen von Benutzern den Mandanten. Normale Admins verwalten nur Benutzer ihres Mandanten und können Super-Admin-Konten nicht ändern.
-- Deaktivieren eines Mandanten sperrt neue Logins. Laufende Sessions bleiben bis zum Logout bestehen.
+- Deaktivieren eines Mandanten oder Benutzers wirkt sofort: neue Logins sind gesperrt, laufende Sessions enden beim nächsten Seitenaufruf. Rolle und Rechte werden bei jedem Seitenaufruf aus der Datenbank übernommen.
+- Login-Sperre: 5 Fehlversuche in 15 Minuten, gezählt pro Mandant (Benutzername und IP). Die IP kommt aus `REMOTE_ADDR`. Steht der Server hinter einem eigenen Proxy, dessen Adresse in `TRUSTED_PROXIES` (config/security.php) eintragen.
 
 ## Rollback
 

@@ -13,9 +13,9 @@ require_once __DIR__ . '/../models/User.php';
 
 /**
  * Liefert den aktuell eingeloggten Benutzer aus der Session, oder
- * null, falls niemand eingeloggt ist. Validiert NICHT erneut gegen
- * die Datenbank (Performance) — für sicherheitskritische Aktionen
- * ggf. is_active separat über User::findById() prüfen.
+ * null, falls niemand eingeloggt ist. Auf geschützten Seiten hat
+ * require_login() die Daten in diesem Request bereits gegen die
+ * Datenbank abgeglichen (siehe refresh_session_user()).
  */
 function current_user(): ?array
 {
@@ -117,6 +117,34 @@ function require_login(): void
     // Prüft den Mandanten früh, damit keine Seite ohne gültigen
     // Mandanten-Kontext weiterläuft (siehe current_tenant_id()).
     current_tenant_id();
+    refresh_session_user();
+}
+
+/**
+ * Gleicht den eingeloggten Benutzer bei jedem geschützten Seitenaufruf
+ * mit der Datenbank ab. Ist das Konto oder sein Mandant inzwischen
+ * deaktiviert (oder gelöscht), endet die Session sofort, nicht erst
+ * beim Logout. Rolle und Portal-Rechte werden dabei aus der Datenbank
+ * übernommen, damit ein entzogenes Recht ebenfalls sofort wirkt.
+ * Eine indizierte Abfrage pro Request.
+ */
+function refresh_session_user(): void
+{
+    static $erledigt = false;
+    if ($erledigt) {
+        return;
+    }
+    $erledigt = true;
+
+    $fresh = User::findActiveForSession((int) (current_user()['id'] ?? 0), current_tenant_id());
+
+    if ($fresh === null) {
+        destroy_session();
+        header('Location: /login.php');
+        exit;
+    }
+
+    $_SESSION['user'] = array_merge($_SESSION['user'], $fresh);
 }
 
 /**

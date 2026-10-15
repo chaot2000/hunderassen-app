@@ -304,6 +304,26 @@ class User
     }
 
     /**
+     * Lädt den eingeloggten Benutzer für den Abgleich pro Request
+     * (refresh_session_user() in config/auth.php). Liefert null, wenn
+     * das Konto oder sein Mandant deaktiviert ist oder nicht mehr passt.
+     */
+    public static function findActiveForSession(int $id, int $tenantId): ?array
+    {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare(
+            'SELECT u.id, u.tenant_id, u.username, u.role, u.is_super_admin, u.can_manage_breeds, u.can_manage_tests
+             FROM users u
+             INNER JOIN tenants t ON t.id = u.tenant_id AND t.is_active = 1
+             WHERE u.id = :id AND u.tenant_id = :tenant_id AND u.is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
+        $user = $stmt->fetch();
+        return $user ?: null;
+    }
+
+    /**
      * Darf ein Admin mit diesem Scope den Benutzer ändern? Nur innerhalb
      * des eigenen Mandanten, und Super-Admin-Konten bleiben für normale
      * Admins tabu (sonst könnte der Admin von Mandant 1 das Passwort des

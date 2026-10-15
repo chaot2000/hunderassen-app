@@ -207,13 +207,35 @@ const MAX_LOGIN_ATTEMPTS  = 5;
 const LOCKOUT_MINUTES     = 15;
 
 /**
- * Ermittelt die Client-IP-Adresse. Berücksichtigt ggf. einen
- * Proxy-Header, falls all-inkl Requests über einen Loadbalancer
- * durchreicht (Header wird nur genutzt, wenn vorhanden).
+ * Proxys, deren X-Forwarded-For-Header wir glauben. Leer = keinem.
+ * Nur eintragen, wenn der Server nachweislich hinter einem eigenen
+ * Proxy/Loadbalancer steht und REMOTE_ADDR dessen Adresse ist.
+ */
+const TRUSTED_PROXIES = [];
+
+/**
+ * Ermittelt die Client-IP-Adresse für die Login-Sperre.
+ *
+ * X-Forwarded-For setzt der Client selbst. Würden wir ihm ungeprüft
+ * glauben, könnte ein Angreifer bei jedem Versuch eine andere IP
+ * mitschicken und die IP-Sperre umgehen. Deshalb zählt REMOTE_ADDR,
+ * und der Header nur, wenn die Anfrage von einem TRUSTED_PROXIES-
+ * Eintrag kommt. Dann gilt der letzte Eintrag im Header (den hat
+ * unser Proxy angehängt, alles davor kann gefälscht sein).
  */
 function get_client_ip(): string
 {
-    return $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+
+    if (in_array($remote, TRUSTED_PROXIES, true) && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $kette = array_map('trim', explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR']));
+        $letzte = end($kette);
+        if ($letzte !== false && filter_var($letzte, FILTER_VALIDATE_IP) !== false) {
+            return $letzte;
+        }
+    }
+
+    return $remote;
 }
 
 /**
