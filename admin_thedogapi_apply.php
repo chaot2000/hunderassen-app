@@ -4,10 +4,8 @@
  *
  * STUFE 2 des TheDogAPI-Imports: verarbeitet das Formular aus
  * admin_thedogapi_review.php. Schreibt NUR Felder/Bilder, die dort
- * explizit per Checkbox bestätigt wurden — alles andere bleibt
- * unangetastet. Läuft idempotent: mehrfaches Absenden derselben Daten
- * überschreibt lediglich erneut mit denselben Werten, richtet keinen
- * Schaden an.
+ * explizit per Checkbox bestätigt wurden, und davon nur leere.
+ * Mehrfaches Absenden ist unschädlich.
  *
  * Bilder werden NICHT direkt als Rohdaten von TheDogAPI übernommen,
  * sondern durch dieselbe BildVerarbeitung-Pipeline geschickt wie
@@ -35,7 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 csrf_require_valid();
 
+// Die Review-Seite schickt die Auswahl als ein JSON-Feld. Einzelne
+// Formularfelder pro Rasse würden bei einer Pauschal-Auswahl über
+// max_input_vars (Standard 1000) kommen, PHP schneidet dann still ab.
+// items[...] bleibt als Weg ohne JavaScript erhalten.
 $items = $_POST['items'] ?? [];
+if (isset($_POST['items_json'])) {
+    $items = json_decode((string) $_POST['items_json'], true);
+}
 if (!is_array($items) || count($items) === 0) {
     die('Keine Daten übermittelt.');
 }
@@ -44,9 +49,23 @@ $pdo = Database::getConnection();
 
 $ergebnisse = [];
 
+// Bilder laden dauert pro Rasse bis zu 15 s. Damit eine große Auswahl
+// nicht an max_execution_time scheitert, wird nach ZEITBUDGET_SEK
+// abgebrochen und der Rest auf der Ergebnisseite zum Weitermachen
+// angeboten. Ein erneuter Lauf ist unschädlich, es werden nur leere
+// Felder gefüllt.
+const ZEITBUDGET_SEK = 20;
+$start = microtime(true);
+$offen = [];
+
 foreach ($items as $breedId => $daten) {
     $breedId = (int) $breedId;
-    if ($breedId <= 0) {
+    if ($breedId <= 0 || !is_array($daten)) {
+        continue;
+    }
+    // Mindestens eine Rasse pro Lauf, sonst geht es nie voran.
+    if ($ergebnisse && microtime(true) - $start > ZEITBUDGET_SEK) {
+        $offen[$breedId] = $daten;
         continue;
     }
 
@@ -109,9 +128,10 @@ foreach ($items as $breedId => $daten) {
     }
 
     $behaltenText = $behalten ? ' Nicht überschrieben: ' . implode(', ', $behalten) . '.' : '';
+    $bildFehler = ($bildStatus !== null && !$bildStatus['success']) ? ' (Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'] . ')' : '';
 
     if (count($updates) === 0) {
-        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts Neues)' . $behaltenText];
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts Neues)' . $behaltenText . $bildFehler];
         continue;
     }
 
@@ -145,11 +165,7 @@ foreach ($items as $breedId => $daten) {
         $stmt->execute($params);
         ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neueWerte, (int) current_user()['id'], 'import');
         $pdo->commit();
-        $status = 'ergänzt' . $behaltenText;
-        if ($bildStatus !== null && !$bildStatus['success']) {
-            $status .= ' (Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'] . ')';
-        }
-        $ergebnisse[] = ['id' => $breedId, 'status' => $status];
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'ergänzt' . $behaltenText . $bildFehler];
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -165,6 +181,13 @@ foreach ($items as $breedId => $daten) {
  */
 function uebernehmeBildVonUrl(string $url): array
 {
+    // Die URL kommt aus dem Formular. Nur Bilder von TheDogAPI laden,
+    // sonst ließe sich der Server auf beliebige Adressen schicken.
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    if (parse_url($url, PHP_URL_SCHEME) !== 'https' || !preg_match('/(^|\.)thedogapi\.com$/', $host)) {
+        return ['success' => false, 'message' => 'Bildadresse ist nicht von TheDogAPI.'];
+    }
+
     $tmpDatei = tempnam(sys_get_temp_dir(), 'tdapi_');
     if ($tmpDatei === false) {
         return ['success' => false, 'message' => 'Konnte keine temporäre Datei anlegen.'];
@@ -174,7 +197,11 @@ function uebernehmeBildVonUrl(string $url): array
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
+        // Weiterleitungen nur innerhalb von HTTPS, höchstens drei.
         CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
     ]);
     $bildDaten = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -264,7 +291,16 @@ require __DIR__ . '/views/partials/header.php';
     .tdapi-fehler { color: #c94b4b; }
 </style>
 
-<h1 class="text-xl font-bold mb-4">Import abgeschlossen</h1>
+<?php
+$anzahlErgaenzt = count(array_filter($ergebnisse, fn($r) => str_starts_with($r['status'], 'ergänzt')));
+$anzahlFehler = count(array_filter($ergebnisse, fn($r) => str_starts_with($r['status'], 'FEHLER')));
+?>
+<h1 class="text-xl font-bold mb-2"><?= $offen ? 'Import läuft' : 'Import abgeschlossen' ?></h1>
+<p class="mb-4">
+    Ergänzt: <?= $anzahlErgaenzt ?> ·
+    übersprungen: <?= count($ergebnisse) - $anzahlErgaenzt - $anzahlFehler ?> ·
+    Fehler: <?= $anzahlFehler ?><?= $offen ? ' · noch offen: ' . count($offen) : '' ?>
+</p>
 <ul class="space-y-1 mb-4">
 <?php foreach ($ergebnisse as $r): ?>
     <li class="<?= str_starts_with($r['status'], 'FEHLER') ? 'tdapi-fehler' : '' ?>">
@@ -272,6 +308,14 @@ require __DIR__ . '/views/partials/header.php';
     </li>
 <?php endforeach; ?>
 </ul>
+<?php if ($offen): ?>
+<form action="/admin_thedogapi_apply.php" method="post" class="mb-4">
+    <?= csrf_field() ?>
+    <input type="hidden" name="items_json" value="<?= e(json_encode($offen, JSON_UNESCAPED_UNICODE)) ?>">
+    <p class="mb-2"><?= count($offen) ?> Rassen sind noch offen. Die Übernahme läuft in Etappen, damit der Server nicht abbricht.</p>
+    <button type="submit" class="min-h-[44px] bg-tanne hover:bg-tanneDk text-creme font-bold px-5 rounded-lg">Mit den restlichen <?= count($offen) ?> Rassen weitermachen</button>
+</form>
+<?php endif; ?>
 <p><a href="/admin_thedogapi_review.php" class="underline">← Zurück zur Review (weitere Rassen abgleichen)</a></p>
 
 <?php require __DIR__ . '/views/partials/footer.php'; ?>
