@@ -22,6 +22,7 @@ require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
+require_once __DIR__ . '/models/ContentRevision.php';
 
 secure_session_start();
 require_admin();
@@ -91,14 +92,31 @@ foreach ($items as $breedId => $daten) {
     $sql = 'UPDATE breeds SET ' . implode(', ', $updates) . ' WHERE id = :id';
     $stmt = $pdo->prepare($sql);
 
+    // Textfelder, die der Import überschreibt, als Version sichern.
+    $neueTexte = [];
+    foreach (['temperament', 'lebenserwartung', 'zuchtzweck'] as $feld) {
+        if (array_key_exists(':' . $feld, $params)) {
+            $neueTexte[$feld] = $params[':' . $feld];
+        }
+    }
+
     try {
+        $pdo->beginTransaction();
+        $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck FROM breeds WHERE id = :id FOR UPDATE');
+        $altStmt->execute([':id' => $breedId]);
+        $alt = $altStmt->fetch() ?: [];
         $stmt->execute($params);
+        ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neueTexte, (int) current_user()['id'], 'import');
+        $pdo->commit();
         $status = 'aktualisiert';
         if ($bildStatus !== null && !$bildStatus['success']) {
             $status .= ' (Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'] . ')';
         }
         $ergebnisse[] = ['id' => $breedId, 'status' => $status];
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $ergebnisse[] = ['id' => $breedId, 'status' => 'FEHLER: ' . $e->getMessage()];
     }
 }

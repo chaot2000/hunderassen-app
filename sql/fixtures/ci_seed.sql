@@ -31,8 +31,8 @@ VALUES
 INSERT INTO `users` (`id`, `tenant_id`, `username`, `password_hash`, `role`, `is_super_admin`, `is_active`, `created_by`)
 VALUES (2, 2, 'admin', '__CI_PASSWORT_WIRD_GESETZT__', 'admin', 0, 1, 1);
 
-INSERT INTO `breeds` (`id`, `name`, `ursprungsland`, `farben`, `fci_klasse`, `beschreibung`, `created_by`)
-VALUES (1, 'CI-Testrasse', 'Deutschland', 'schwarz, braun', 1, 'Nur für automatisierte Tests angelegt.', 1);
+INSERT INTO `breeds` (`id`, `name`, `ursprungsland`, `farben`, `fci_klasse`, `beschreibung`, `beschreibung_original`, `created_by`)
+VALUES (1, 'CI-Testrasse', 'Deutschland', 'schwarz, braun', 1, 'Nur für automatisierte Tests angelegt.', 'Nur für automatisierte Tests angelegt.', 1);
 
 INSERT INTO `breed_sizes` (`breed_id`, `groesse`, `schulterhoehe_ruede_min_cm`, `schulterhoehe_ruede_max_cm`)
 VALUES (1, 'mittel', 40, 50);

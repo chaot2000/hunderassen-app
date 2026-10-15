@@ -23,7 +23,7 @@ require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_breed_id'])) {
     require_manage_breeds();
     csrf_require_valid();
-    Breed::delete((int) $_POST['delete_breed_id']);
+    Breed::delete((int) $_POST['delete_breed_id'], (int) current_user()['id']);
     header('Location: /rassen.php');
     exit;
 }

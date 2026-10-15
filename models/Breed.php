@@ -12,6 +12,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/ContentRevision.php';
 
 class Breed
 {
@@ -72,10 +73,13 @@ class Breed
         try {
             $pdo->beginTransaction();
 
+            // beschreibung_original = Text beim Anlegen, wird danach nie
+            // mehr überschrieben (siehe ContentRevision).
             $insertBreed = $pdo->prepare(
-                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung, bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
-                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :beschreibung, :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
+                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung, beschreibung_original, bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
+                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :beschreibung, :beschreibung_original, :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
             );
+            $beschreibung = clean_input($breedData['beschreibung'] ?? '') ?: null;
             $insertBreed->execute([
                 ':name'              => $name,
                 ':alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
@@ -84,7 +88,8 @@ class Breed
                 ':farben'            => clean_input($breedData['farben'] ?? '') ?: null,
                 ':fci_klasse'        => $fciKlasse,
                 ':fci_nr'            => clean_input($breedData['fci_nr'] ?? '') ?: null,
-                ':beschreibung'      => clean_input($breedData['beschreibung'] ?? '') ?: null,
+                ':beschreibung'      => $beschreibung,
+                ':beschreibung_original' => $beschreibung,
                 ':bild_blob'         => $image['blob'] ?? null,
                 ':bild_mime'         => $image['mime'] ?? null,
                 ':bild_updated_at'   => $image !== null ? date('Y-m-d H:i:s') : null,
@@ -116,6 +121,9 @@ class Breed
      * Bild-Verhalten: $image === null bedeutet "kein neues Bild
      * hochgeladen, bestehendes Bild unverändert lassen". Um ein
      * vorhandenes Bild zu entfernen, $removeImage = true setzen.
+     *
+     * Geänderte Textfelder werden in derselben Transaktion als Version
+     * gespeichert (ContentRevision), $geaendertVon ist der Benutzer.
      */
     public static function update(
         int $breedId,
@@ -124,7 +132,8 @@ class Breed
         array $tagIds,
         array $activityIds,
         ?array $image = null,
-        bool $removeImage = false
+        bool $removeImage = false,
+        ?int $geaendertVon = null
     ): array {
         $name = clean_input($breedData['name'] ?? '');
         if ($name === '') {
@@ -162,6 +171,24 @@ class Breed
                 $imageSql = ', bild_blob = NULL, bild_mime = NULL, bild_updated_at = NULL';
             }
 
+            $altStmt = $pdo->prepare(
+                'SELECT name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung
+                 FROM breeds WHERE id = :id FOR UPDATE'
+            );
+            $altStmt->execute([':id' => $breedId]);
+            $alt = $altStmt->fetch() ?: [];
+
+            $neu = [
+                'name'              => $name,
+                'alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
+                'namenszusatz'      => clean_input($breedData['namenszusatz'] ?? '') ?: null,
+                'ursprungsland'     => clean_input($breedData['ursprungsland'] ?? '') ?: null,
+                'farben'            => clean_input($breedData['farben'] ?? '') ?: null,
+                'fci_klasse'        => $fciKlasse,
+                'fci_nr'            => clean_input($breedData['fci_nr'] ?? '') ?: null,
+                'beschreibung'      => clean_input($breedData['beschreibung'] ?? '') ?: null,
+            ];
+
             $updateBreed = $pdo->prepare(
                 'UPDATE breeds
                  SET name = :name, alternative_namen = :alternative_namen, namenszusatz = :namenszusatz,
@@ -171,16 +198,18 @@ class Breed
                  WHERE id = :id'
             );
             $updateBreed->execute(array_merge([
-                ':name'              => $name,
-                ':alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
-                ':namenszusatz'      => clean_input($breedData['namenszusatz'] ?? '') ?: null,
-                ':ursprungsland'     => clean_input($breedData['ursprungsland'] ?? '') ?: null,
-                ':farben'            => clean_input($breedData['farben'] ?? '') ?: null,
-                ':fci_klasse'        => $fciKlasse,
-                ':fci_nr'            => clean_input($breedData['fci_nr'] ?? '') ?: null,
-                ':beschreibung'      => clean_input($breedData['beschreibung'] ?? '') ?: null,
+                ':name'              => $neu['name'],
+                ':alternative_namen' => $neu['alternative_namen'],
+                ':namenszusatz'      => $neu['namenszusatz'],
+                ':ursprungsland'     => $neu['ursprungsland'],
+                ':farben'            => $neu['farben'],
+                ':fci_klasse'        => $neu['fci_klasse'],
+                ':fci_nr'            => $neu['fci_nr'],
+                ':beschreibung'      => $neu['beschreibung'],
                 ':id'                => $breedId,
             ], $imageParams));
+
+            ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neu, $geaendertVon, 'bearbeitung');
 
             $pdo->prepare('DELETE FROM breed_sizes WHERE breed_id = :id')->execute([':id' => $breedId]);
             self::insertSizes($pdo, $breedId, $sizeValidation['sizes']);
@@ -201,12 +230,36 @@ class Breed
     /**
      * Löscht eine Rasse. Größenklassen, Tag- und Aktivitäten-Zuordnungen
      * werden durch ON DELETE CASCADE automatisch mitgelöscht.
+     *
+     * Alle Textfelder werden vorher als Version (Anlass "loeschung")
+     * gesichert, damit der Text nach dem Löschen nachlesbar bleibt.
      */
-    public static function delete(int $breedId): bool
+    public static function delete(int $breedId, ?int $geaendertVon = null): bool
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM breeds WHERE id = :id');
-        return $stmt->execute([':id' => $breedId]);
+
+        try {
+            $pdo->beginTransaction();
+
+            $felder = '`' . implode('`, `', array_keys(ContentRevision::FELDER['breeds'])) . '`';
+            $altStmt = $pdo->prepare("SELECT {$felder} FROM breeds WHERE id = :id FOR UPDATE");
+            $altStmt->execute([':id' => $breedId]);
+            $alt = $altStmt->fetch();
+
+            if ($alt) {
+                ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, [], $geaendertVon, 'loeschung');
+            }
+
+            $stmt = $pdo->prepare('DELETE FROM breeds WHERE id = :id');
+            $stmt->execute([':id' => $breedId]);
+
+            $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            error_log('Fehler beim Löschen einer Rasse: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
