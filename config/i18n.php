@@ -89,3 +89,16 @@ function t(string $schluessel, array $platzhalter = [], ?string $sprache = null)
     }
     return $text;
 }
+
+/**
+ * Inhalt mit deutscher und englischer Fassung, z. B. Rassenname:
+ * in_sprache($breed['name'], $breed['name_en']). Auf Englisch kommt die
+ * englische Fassung, solange es sie gibt, sonst die deutsche.
+ */
+function in_sprache(?string $deutsch, ?string $englisch): string
+{
+    if (aktuelle_sprache() === 'en' && trim((string) $englisch) !== '') {
+        return (string) $englisch;
+    }
+    return (string) $deutsch;
+}

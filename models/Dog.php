@@ -49,7 +49,7 @@ class Dog
         $sql = "SELECT d.id, d.name, d.geburtsdatum, d.farbe, d.breed_id, d.zuechter_id,
                        d.created_at, d.updated_at, d.created_by,
                        d.bild_updated_at, (d.bild_blob IS NOT NULL) AS hat_bild,
-                       b.name AS breed_name,
+                       b.name AS breed_name, b.name_en AS breed_name_en,
                        GROUP_CONCAT(h.name ORDER BY h.name SEPARATOR ', ') AS halter_namen
                 FROM dogs d
                 LEFT JOIN breeds b ON b.id = d.breed_id
@@ -101,7 +101,7 @@ class Dog
             'SELECT d.id, d.name, d.geburtsdatum, d.farbe, d.breed_id, d.zuechter_id,
                     d.created_at, d.updated_at, d.created_by,
                     d.bild_updated_at, (d.bild_blob IS NOT NULL) AS hat_bild,
-                    b.name AS breed_name, b.farben AS breed_farben,
+                    b.name AS breed_name, b.name_en AS breed_name_en, b.farben AS breed_farben,
                     z.zuchtname AS zuechter_name, z.telefon AS zuechter_telefon, z.email AS zuechter_email
              FROM dogs d
              LEFT JOIN breeds b ON b.id = d.breed_id
