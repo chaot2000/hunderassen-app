@@ -9,6 +9,7 @@
 # eine nicht versionierte Variante ersetzt (empfohlen für Produktiv-
 # Zugangsdaten, siehe README "Sicherheitshinweise")
 /config/database.local.php
+/config/thedogapi.local.php
 /.env
 /.env.local
 
