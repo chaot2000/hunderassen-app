@@ -28,10 +28,10 @@ $dog   = $dogId ? Dog::findByIdForUser($dogId, $currentUserId, $isAdmin, $tenant
 
 if ($dog === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('allg.nicht_gefunden');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk/50"><p>Dieser Hund wurde nicht gefunden.</p>
-          <a href="/dogs.php" class="text-tanne underline">Zurück zur Übersicht</a></div>';
+    echo '<div class="text-center py-16 text-fellDk/50"><p>' . e(t('hunde.nicht_gefunden')) . '</p>
+          <a href="/dogs.php" class="text-tanne underline">' . e(t('allg.zurueck_uebersicht')) . '</a></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -41,14 +41,14 @@ if ($dog === null) {
 $canEdit = true;
 
 $testdurchfuehrungen = TestDurchfuehrung::findAllForDog((int) $dog['id']);
-$durchfuehrungStatusLabels = ['offen' => 'Offen', 'bestanden' => 'Bestanden', 'nicht_bestanden' => 'Nicht bestanden'];
+$durchfuehrungStatusLabels = ['offen' => t('status.offen'), 'bestanden' => t('status.bestanden'), 'nicht_bestanden' => t('status.nicht_bestanden')];
 $durchfuehrungStatusFarben = ['offen' => 'bg-sand/50 text-fellDk/70', 'bestanden' => 'bg-tanne/10 text-tanneDk', 'nicht_bestanden' => 'bg-red-50 text-red-700'];
 
 $pageTitle = $dog['name'];
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; Zurück zur Übersicht</a>
+<a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; <?= e(t('allg.zurueck_uebersicht')) ?></a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
     <div class="flex flex-col sm:flex-row gap-6">
@@ -70,13 +70,13 @@ require __DIR__ . '/views/partials/header.php';
                 <?php if ($canEdit): ?>
                     <div class="flex gap-2 shrink-0">
                         <a href="/dog_form.php?id=<?= (int) $dog['id'] ?>" class="bg-pfote/10 text-fell font-semibold text-sm px-4 py-2 rounded-full hover:bg-pfote/20 transition-colors whitespace-nowrap">
-                            Bearbeiten
+                            <?= e(t('allg.bearbeiten')) ?>
                         </a>
-                        <form method="post" action="/dogs.php" onsubmit="return confirm('Diesen Hund wirklich löschen?');">
+                        <form method="post" action="/dogs.php" onsubmit="return confirm(<?= e(json_encode(t('hunde.loeschen_frage'), JSON_UNESCAPED_UNICODE)) ?>);">
                             <?= csrf_field() ?>
                             <input type="hidden" name="delete_dog_id" value="<?= (int) $dog['id'] ?>">
                             <button type="submit" class="bg-red-50 text-red-700 font-semibold text-sm px-4 py-2 rounded-full hover:bg-red-100 transition-colors whitespace-nowrap">
-                                Löschen
+                                <?= e(t('allg.loeschen')) ?>
                             </button>
                         </form>
                     </div>
@@ -84,32 +84,32 @@ require __DIR__ . '/views/partials/header.php';
             </div>
 
             <?php if ($isAdmin && (int) $dog['created_by'] !== $currentUserId): ?>
-                <p class="text-xs text-fellDk/40 mt-1">Eintrag eines anderen Nutzers (Admin-Ansicht)</p>
+                <p class="text-xs text-fellDk/40 mt-1"><?= e(t('allg.fremd_admin')) ?></p>
             <?php endif; ?>
 
             <dl class="mt-4 space-y-2 text-sm">
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Rasse</dt>
+                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.rasse')) ?></dt>
                     <dd>
                         <?php if ($dog['breed_id']): ?>
                             <a href="/breed_detail.php?id=<?= (int) $dog['breed_id'] ?>" class="text-tanne hover:text-tanneDk underline">
-                                <?= e($dog['breed_name']) ?>
+                                <?= e(in_sprache($dog['breed_name'], $dog['breed_name_en'] ?? null)) ?>
                             </a>
                         <?php else: ?>
-                            <span class="text-fellDk/50">unbekannt / Mischling</span>
+                            <span class="text-fellDk/50"><?= e(t('allg.unbekannt_mischling')) ?></span>
                         <?php endif; ?>
                     </dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Geburtsdatum</dt>
+                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.geburtsdatum')) ?></dt>
                     <dd><?= !empty($dog['geburtsdatum']) ? e(date('d.m.Y', strtotime($dog['geburtsdatum']))) : '—' ?></dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Farbe</dt>
+                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.farbe')) ?></dt>
                     <dd><?= !empty($dog['farbe']) ? e($dog['farbe']) : '—' ?></dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Halter</dt>
+                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.halter')) ?></dt>
                     <dd>
                         <?php if (!empty($dog['halters'])): ?>
                             <ul class="space-y-0.5">
@@ -133,7 +133,7 @@ require __DIR__ . '/views/partials/header.php';
                     </dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0">Züchter</dt>
+                    <dt class="font-semibold text-fellDk/70 w-32 shrink-0"><?= e(t('allg.zuechter')) ?></dt>
                     <dd>
                         <?php if ($dog['zuechter_name']): ?>
                             <a href="/zuechter_detail.php?id=<?= (int) $dog['zuechter_id'] ?>" class="text-tanne hover:text-tanneDk hover:underline"><?= e($dog['zuechter_name']) ?></a>
@@ -154,9 +154,9 @@ require __DIR__ . '/views/partials/header.php';
 
             <?php if ($dog['breed_id']): ?>
                 <div class="mt-6">
-                    <h2 class="font-bold text-fellDk mb-2">Wichtigste Eigenschaften der Rasse</h2>
+                    <h2 class="font-bold text-fellDk mb-2"><?= e(t('hunde.eigenschaften_rasse')) ?></h2>
                     <?php if (empty($dog['top_tags'])): ?>
-                        <p class="text-sm text-fellDk/50">Für diese Rasse sind noch keine Eigenschaften hinterlegt.</p>
+                        <p class="text-sm text-fellDk/50"><?= e(t('hunde.keine_eigenschaften')) ?></p>
                     <?php else: ?>
                         <div class="flex flex-wrap gap-2">
                             <?php foreach ($dog['top_tags'] as $tag): ?>
@@ -172,14 +172,14 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
     <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold text-fellDk">🧪 Testdurchführungen</h2>
+        <h2 class="font-bold text-fellDk">🧪 <?= e(t('hunde.testdurchfuehrungen')) ?></h2>
         <a href="/testdurchfuehrung_form.php?dog_id=<?= (int) $dog['id'] ?>" class="text-sm bg-tanne hover:bg-tanneDk text-creme font-bold px-4 py-2 rounded-full transition-colors whitespace-nowrap">
-            + Testdurchführung erfassen
+            + <?= e(t('hunde.td_erfassen')) ?>
         </a>
     </div>
 
     <?php if (empty($testdurchfuehrungen)): ?>
-        <p class="text-sm text-fellDk/50">Für diesen Hund wurden noch keine Testdurchführungen erfasst.</p>
+        <p class="text-sm text-fellDk/50"><?= e(t('hunde.keine_td')) ?></p>
     <?php else: ?>
         <div class="space-y-2">
             <?php foreach ($testdurchfuehrungen as $durchfuehrung): ?>

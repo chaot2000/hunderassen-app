@@ -29,7 +29,7 @@ $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
     http_response_code(404);
-    die('Der angeforderte Züchter wurde nicht gefunden.');
+    die(e(t('zuechter.angefordert')));
 }
 
 $errorMessage = null;
@@ -72,15 +72,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing = array_merge($existing ?? [], $zuechterData);
 }
 
-$pageTitle = $isEditMode ? 'Züchter bearbeiten' : 'Züchter anlegen';
+$pageTitle = $isEditMode ? t('zuechter.bearbeiten') : t('zuechter.anlegen');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<a href="/zuechter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; Zurück zur Übersicht</a>
+<a href="/zuechter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; <?= e(t('allg.zurueck_uebersicht')) ?></a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-xl">
     <h1 class="text-xl font-extrabold text-fellDk mb-4">
-        <?= $isEditMode ? 'Züchter bearbeiten' : 'Neuen Züchter anlegen' ?>
+        <?= e($isEditMode ? t('zuechter.bearbeiten') : t('zuechter.neu')) ?>
     </h1>
 
     <?php if ($errorMessage !== null): ?>
@@ -105,19 +105,19 @@ require __DIR__ . '/views/partials/header.php';
                     <span x-show="!previewUrl" x-cloak class="text-3xl text-fellDk/20" aria-hidden="true">🏠</span>
                 </div>
                 <div class="flex-1 w-full space-y-2">
-                    <label for="bild" class="block text-sm font-semibold">Foto</label>
+                    <label for="bild" class="block text-sm font-semibold"><?= e(t('bild.foto')) ?></label>
                     <input
                         type="file" id="bild" accept="image/jpeg,image/png,image/webp"
                         x-ref="fileInput" @change="onFileSelected($event)"
                         class="block w-full text-sm text-fellDk file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-pfote/10 file:text-fell file:font-semibold hover:file:bg-pfote/20 file:cursor-pointer cursor-pointer">
-                    <p class="text-xs text-fellDk/50">JPG, PNG oder WebP. Nach der Auswahl kannst du den Bildausschnitt per Ziehen festlegen.</p>
+                    <p class="text-xs text-fellDk/50"><?= e(t('bild.hinweis')) ?></p>
 
                     <div class="flex gap-3">
                         <button type="button" @click="reopenCropper()" x-show="previewUrl" class="text-xs text-tanne hover:text-tanneDk font-semibold">
-                            Ausschnitt ändern
+                            <?= e(t('bild.ausschnitt_aendern')) ?>
                         </button>
                         <button type="button" @click="removeImage()" x-show="previewUrl" class="text-xs text-red-500 hover:text-red-700 font-semibold">
-                            Bild entfernen
+                            <?= e(t('bild.entfernen')) ?>
                         </button>
                     </div>
 
@@ -129,8 +129,8 @@ require __DIR__ . '/views/partials/header.php';
             <!-- Crop-Modal: erscheint nach Dateiauswahl, blockt die restliche Seite ab -->
             <div x-show="cropperOpen" x-cloak class="fixed inset-0 bg-fellDk/60 z-50 flex items-center justify-center p-4" style="display: none;">
                 <div class="bg-creme rounded-2xl shadow-xl p-6 w-full max-w-md">
-                    <h3 class="text-lg font-bold text-fellDk mb-1">Bildausschnitt wählen</h3>
-                    <p class="text-xs text-fellDk/60 mb-4">Zum Verschieben ziehen, mit dem Regler zoomen.</p>
+                    <h3 class="text-lg font-bold text-fellDk mb-1"><?= e(t('bild.ausschnitt_waehlen')) ?></h3>
+                    <p class="text-xs text-fellDk/60 mb-4"><?= e(t('bild.ziehen')) ?></p>
 
                     <div
                         x-ref="cropStage"
@@ -148,10 +148,10 @@ require __DIR__ . '/views/partials/header.php';
 
                     <div class="flex gap-3 mt-5">
                         <button type="button" @click="confirmCrop()" class="flex-1 bg-tanne hover:bg-tanneDk text-creme font-bold px-4 py-2.5 rounded-full transition-colors">
-                            Übernehmen
+                            <?= e(t('bild.uebernehmen')) ?>
                         </button>
                         <button type="button" @click="cancelCrop()" class="text-fellDk/60 hover:text-fellDk font-semibold px-4 py-2.5">
-                            Abbrechen
+                            <?= e(t('allg.abbrechen')) ?>
                         </button>
                     </div>
                 </div>
@@ -159,7 +159,7 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="zuchtname" class="block text-sm font-semibold mb-1">Zuchtname *</label>
+            <label for="zuchtname" class="block text-sm font-semibold mb-1"><?= e(t('zuechter.zuchtname_pflicht')) ?></label>
             <input type="text" id="zuchtname" name="zuchtname" required maxlength="150"
                 value="<?= e($existing['zuchtname'] ?? '') ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
@@ -167,13 +167,13 @@ require __DIR__ . '/views/partials/header.php';
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label for="ansprechpartner_vorname" class="block text-sm font-semibold mb-1">Ansprechpartner — Vorname</label>
+                <label for="ansprechpartner_vorname" class="block text-sm font-semibold mb-1"><?= e(t('zuechter.vorname')) ?></label>
                 <input type="text" id="ansprechpartner_vorname" name="ansprechpartner_vorname" maxlength="100"
                     value="<?= e($existing['ansprechpartner_vorname'] ?? '') ?>"
                     class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
             </div>
             <div>
-                <label for="ansprechpartner_nachname" class="block text-sm font-semibold mb-1">Ansprechpartner — Nachname</label>
+                <label for="ansprechpartner_nachname" class="block text-sm font-semibold mb-1"><?= e(t('zuechter.nachname')) ?></label>
                 <input type="text" id="ansprechpartner_nachname" name="ansprechpartner_nachname" maxlength="100"
                     value="<?= e($existing['ansprechpartner_nachname'] ?? '') ?>"
                     class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
@@ -181,50 +181,50 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="adresse" class="block text-sm font-semibold mb-1">Adresse</label>
+            <label for="adresse" class="block text-sm font-semibold mb-1"><?= e(t('allg.adresse')) ?></label>
             <input type="text" id="adresse" name="adresse" maxlength="255"
                 value="<?= e($existing['adresse'] ?? '') ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
         </div>
 
         <div class="pt-2 border-t border-sand">
-            <p class="text-xs font-bold uppercase tracking-wide text-fellDk/50 mb-3 mt-3">Kontaktdaten</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-fellDk/50 mb-3 mt-3"><?= e(t('zuechter.kontaktdaten')) ?></p>
         </div>
 
         <div>
-            <label for="telefon" class="block text-sm font-semibold mb-1">Telefon</label>
+            <label for="telefon" class="block text-sm font-semibold mb-1"><?= e(t('allg.telefon')) ?></label>
             <input type="tel" id="telefon" name="telefon" maxlength="50" autocomplete="tel"
                 value="<?= e($existing['telefon'] ?? '') ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
         </div>
 
         <div>
-            <label for="email" class="block text-sm font-semibold mb-1">E-Mail</label>
+            <label for="email" class="block text-sm font-semibold mb-1"><?= e(t('allg.email')) ?></label>
             <input type="email" id="email" name="email" maxlength="150" autocomplete="email"
                 value="<?= e($existing['email'] ?? '') ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
         </div>
 
         <div>
-            <label for="webseite" class="block text-sm font-semibold mb-1">Webseite</label>
+            <label for="webseite" class="block text-sm font-semibold mb-1"><?= e(t('allg.webseite')) ?></label>
             <input type="text" id="webseite" name="webseite" maxlength="255"
                 value="<?= e($existing['webseite'] ?? '') ?>"
-                placeholder="z. B. www.meine-zucht.de"
+                placeholder="<?= e(t('zuechter.webseite_platzhalter')) ?>"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
-            <p class="text-xs text-fellDk/50 mt-1">"https://" wird automatisch ergänzt, falls du es weglässt.</p>
+            <p class="text-xs text-fellDk/50 mt-1"><?= e(t('zuechter.https_hinweis')) ?></p>
         </div>
 
         <div>
-            <label for="notizen" class="block text-sm font-semibold mb-1">Notizen</label>
+            <label for="notizen" class="block text-sm font-semibold mb-1"><?= e(t('allg.notizen')) ?></label>
             <textarea id="notizen" name="notizen" rows="3"
                 class="w-full rounded-lg border border-sand px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-tanne"><?= e($existing['notizen'] ?? '') ?></textarea>
         </div>
 
         <div class="flex flex-col sm:flex-row gap-3 pt-2">
             <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-6 py-2.5 rounded-full transition-colors">
-                <?= $isEditMode ? 'Speichern' : 'Züchter anlegen' ?>
+                <?= e($isEditMode ? t('allg.speichern') : t('zuechter.anlegen')) ?>
             </button>
-            <a href="/zuechter.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk">Abbrechen</a>
+            <a href="/zuechter.php" class="text-sm text-fellDk/60 self-center hover:text-fellDk"><?= e(t('allg.abbrechen')) ?></a>
         </div>
     </form>
 </div>
@@ -272,7 +272,7 @@ function bildCropper({ initialPreviewUrl }) {
                 this.drawNext();
             };
             img.onerror = () => {
-                alert('Dieses Bild konnte nicht gelesen werden. Bitte eine andere Datei wählen.');
+                alert(<?= json_encode(t('bild.js_lesen'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
             };
             this.releasePreviousObjectUrl();
             img.src = URL.createObjectURL(file);
@@ -296,7 +296,7 @@ function bildCropper({ initialPreviewUrl }) {
                     this.drawNext();
                 };
                 img.onerror = () => {
-                    alert('Das gespeicherte Bild konnte nicht geladen werden. Bitte ein neues Bild hochladen.');
+                    alert(<?= json_encode(t('bild.js_laden'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                 };
                 img.crossOrigin = 'anonymous';
                 img.src = this.previewUrl;
@@ -400,7 +400,7 @@ function bildCropper({ initialPreviewUrl }) {
 
             ausgabeCanvas.toBlob((blob) => {
                 if (!blob) {
-                    alert('Der Bildausschnitt konnte nicht verarbeitet werden. Bitte erneut versuchen.');
+                    alert(<?= json_encode(t('bild.js_ausschnitt'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                     return;
                 }
 

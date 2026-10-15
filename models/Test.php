@@ -108,12 +108,12 @@ class Test
     {
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
-            return ['success' => false, 'message' => 'Der Name des Tests darf nicht leer sein.'];
+            return ['success' => false, 'message' => t('tests.m_name_leer')];
         }
 
         $zielgruppe = (string) ($testData['zielgruppe'] ?? '');
         if (!in_array($zielgruppe, self::VALID_ZIELGRUPPEN, true)) {
-            return ['success' => false, 'message' => 'Ungültige Zielgruppe (Welpe/Erwachsen/Beide).'];
+            return ['success' => false, 'message' => t('tests.m_zielgruppe')];
         }
 
         $validatedAufgaben = self::validateAufgaben($aufgaben);
@@ -126,7 +126,7 @@ class Test
         $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id LIMIT 1');
         $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId]);
         if ($checkStmt->fetch()) {
-            return ['success' => false, 'message' => 'Ein Test mit dem Namen "' . $name . '" existiert bereits.'];
+            return ['success' => false, 'message' => t('tests.m_existiert', ['name' => $name])];
         }
 
         try {
@@ -149,11 +149,11 @@ class Test
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Test "' . $name . '" wurde angelegt.', 'test_id' => $testId];
+            return ['success' => true, 'message' => t('tests.m_angelegt', ['name' => $name]), 'test_id' => $testId];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Anlegen eines Tests: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Daten gespeichert.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_daten')];
         }
     }
 
@@ -177,17 +177,17 @@ class Test
     public static function update(int $testId, int $tenantId, array $testData, array $aufgaben, ?int $geaendertVon = null): array
     {
         if (!self::existsInTenant($testId, $tenantId)) {
-            return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
+            return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
         }
 
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
-            return ['success' => false, 'message' => 'Der Name des Tests darf nicht leer sein.'];
+            return ['success' => false, 'message' => t('tests.m_name_leer')];
         }
 
         $zielgruppe = (string) ($testData['zielgruppe'] ?? '');
         if (!in_array($zielgruppe, self::VALID_ZIELGRUPPEN, true)) {
-            return ['success' => false, 'message' => 'Ungültige Zielgruppe (Welpe/Erwachsen/Beide).'];
+            return ['success' => false, 'message' => t('tests.m_zielgruppe')];
         }
 
         $strukturSperren = self::hasDurchfuehrungen($testId);
@@ -204,7 +204,7 @@ class Test
         $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id AND id != :id LIMIT 1');
         $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId, ':id' => $testId]);
         if ($checkStmt->fetch()) {
-            return ['success' => false, 'message' => 'Ein Test mit dem Namen "' . $name . '" existiert bereits.'];
+            return ['success' => false, 'message' => t('tests.m_existiert', ['name' => $name])];
         }
 
         try {
@@ -248,11 +248,11 @@ class Test
 
             $pdo->commit();
 
-            return ['success' => true, 'message' => 'Test "' . $name . '" wurde aktualisiert.'];
+            return ['success' => true, 'message' => t('tests.m_aktualisiert', ['name' => $name])];
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Aktualisieren eines Tests: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Speichern ist ein Fehler aufgetreten. Es wurden keine Änderungen übernommen.'];
+            return ['success' => false, 'message' => t('allg.speicherfehler_aenderungen')];
         }
     }
 
@@ -268,14 +268,14 @@ class Test
     public static function delete(int $testId, int $tenantId, ?int $geaendertVon = null): array
     {
         if (!self::existsInTenant($testId, $tenantId)) {
-            return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
+            return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
         }
 
         $anzahl = self::countDurchfuehrungen($testId);
         if ($anzahl > 0) {
             return [
                 'success' => false,
-                'message' => 'Dieser Test wurde bereits ' . $anzahl . ' Mal durchgeführt und kann nicht gelöscht werden.',
+                'message' => t('tests.m_durchgefuehrt', ['anzahl' => $anzahl]),
             ];
         }
 
@@ -298,10 +298,10 @@ class Test
         } catch (Throwable $e) {
             $pdo->rollBack();
             error_log('Fehler beim Löschen eines Tests: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Beim Löschen ist ein Fehler aufgetreten. Es wurde nichts gelöscht.'];
+            return ['success' => false, 'message' => t('allg.loeschfehler')];
         }
 
-        return ['success' => true, 'message' => 'Test wurde gelöscht.'];
+        return ['success' => true, 'message' => t('tests.m_geloescht')];
     }
 
     /**
@@ -434,7 +434,7 @@ class Test
                 continue; // leere/nicht ausgefüllte Zeile überspringen
             }
             if (mb_strlen($titel) > 200) {
-                return ['success' => false, 'message' => 'Der Titel einer Aufgabe darf maximal 200 Zeichen lang sein.'];
+                return ['success' => false, 'message' => t('tests.m_titel_lang')];
             }
 
             $beschreibung = clean_input((string) ($aufgabe['beschreibung'] ?? ''));
@@ -446,19 +446,19 @@ class Test
                     continue; // leere/nicht ausgefüllte Ergebnis-Zeile überspringen
                 }
                 if (mb_strlen($bezeichnung) > 200) {
-                    return ['success' => false, 'message' => 'Die Bezeichnung eines Ergebnisses darf maximal 200 Zeichen lang sein.'];
+                    return ['success' => false, 'message' => t('tests.m_ergebnis_lang')];
                 }
 
                 $kategorie = (string) ($ergebnis['kategorie'] ?? '');
                 if (!in_array($kategorie, self::VALID_KATEGORIEN, true)) {
-                    return ['success' => false, 'message' => 'Ungültige Kategorie für ein Ergebnis: "' . $kategorie . '".'];
+                    return ['success' => false, 'message' => t('tests.m_kategorie', ['kategorie' => $kategorie])];
                 }
 
                 $cleanedErgebnisse[] = ['bezeichnung' => $bezeichnung, 'kategorie' => $kategorie];
             }
 
             if (empty($cleanedErgebnisse)) {
-                return ['success' => false, 'message' => 'Die Aufgabe "' . $titel . '" braucht mindestens ein mögliches Ergebnis.'];
+                return ['success' => false, 'message' => t('tests.m_aufgabe_ohne_ergebnis', ['titel' => $titel])];
             }
 
             $cleaned[] = [
@@ -469,7 +469,7 @@ class Test
         }
 
         if (empty($cleaned)) {
-            return ['success' => false, 'message' => 'Der Test braucht mindestens eine Aufgabe.'];
+            return ['success' => false, 'message' => t('tests.m_eine_aufgabe')];
         }
 
         return ['success' => true, 'message' => '', 'aufgaben' => $cleaned];

@@ -38,13 +38,13 @@ if ($editingId !== null) {
 
     if ($dog === null) {
         http_response_code(404);
-        die('Die angeforderte Testdurchführung wurde nicht gefunden.');
+        die(e(t('td.angefordert')));
     }
 
     $existing = TestDurchfuehrung::findByIdForDog($editingId, (int) $dog['id']);
     if ($existing === null) {
         http_response_code(404);
-        die('Die angeforderte Testdurchführung wurde nicht gefunden.');
+        die(e(t('td.angefordert')));
     }
 } else {
     $dogId = isset($_GET['dog_id']) ? (int) $_GET['dog_id'] : 0;
@@ -52,7 +52,7 @@ if ($editingId !== null) {
 
     if ($dog === null) {
         http_response_code(404);
-        die('Der angeforderte Hund wurde nicht gefunden.');
+        die(e(t('hunde.angefordert')));
     }
 }
 
@@ -142,20 +142,20 @@ if (!empty($existing['ergebnisse'])) {
     }
 }
 
-$statusLabels    = ['offen' => 'Offen', 'bestanden' => 'Bestanden', 'nicht_bestanden' => 'Nicht bestanden'];
-$kategorieLabels = ['bestanden' => 'Bestanden', 'neutral' => 'Neutral', 'nicht_bestanden' => 'Nicht bestanden'];
+$statusLabels    = ['offen' => t('status.offen'), 'bestanden' => t('status.bestanden'), 'nicht_bestanden' => t('status.nicht_bestanden')];
+$kategorieLabels = ['bestanden' => t('status.bestanden'), 'neutral' => t('status.neutral'), 'nicht_bestanden' => t('status.nicht_bestanden')];
 
-$pageTitle = $isEditMode ? 'Testdurchführung bearbeiten' : 'Testdurchführung erfassen';
+$pageTitle = $isEditMode ? t('td.bearbeiten') : t('hunde.td_erfassen');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <a href="/dog_detail.php?id=<?= (int) $dog['id'] ?>" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
-    ← Zurück zu <?= e($dog['name']) ?>
+    ← <?= e(t('td.zurueck_zu')) ?> <?= e($dog['name']) ?>
 </a>
 
 <h1 class="text-2xl font-extrabold text-fellDk mb-6">
-    <?= $isEditMode ? '✏️ Testdurchführung bearbeiten' : '➕ Testdurchführung erfassen' ?>
-    <span class="text-base font-normal text-fellDk/50">für <?= e($dog['name']) ?></span>
+    <?= $isEditMode ? '✏️ ' . e(t('td.bearbeiten')) : '➕ ' . e(t('hunde.td_erfassen')) ?>
+    <span class="text-base font-normal text-fellDk/50"><?= e(t('td.fuer')) ?> <?= e($dog['name']) ?></span>
 </h1>
 
 <?php if ($errorMessage !== null): ?>
@@ -167,9 +167,9 @@ require __DIR__ . '/views/partials/header.php';
 <?php if (empty($alleTests)): ?>
     <div class="bg-white/80 rounded-2xl shadow border border-sand p-6">
         <p class="text-sm text-fellDk/60">
-            Es wurden noch keine Tests im Test-Katalog angelegt.
+            <?= e(t('td.keine_tests')) ?>
             <?php if (can_manage_tests()): ?>
-                <a href="/test_form.php" class="text-tanne underline hover:text-tanneDk">Jetzt einen Test anlegen</a>.
+                <a href="/test_form.php" class="text-tanne underline hover:text-tanneDk"><?= e(t('td.jetzt_anlegen')) ?></a>.
             <?php endif; ?>
         </p>
     </div>
@@ -223,24 +223,24 @@ require __DIR__ . '/views/partials/header.php';
         <?= csrf_field() ?>
 
         <div class="bg-white/80 rounded-2xl shadow border border-sand p-6">
-            <h2 class="text-lg font-bold text-fellDk mb-4">Test</h2>
+            <h2 class="text-lg font-bold text-fellDk mb-4"><?= e(t('td.test')) ?></h2>
 
             <?php if ($isEditMode): ?>
                 <p class="text-sm font-semibold"><?= e($existing['test_name']) ?></p>
-                <p class="text-xs text-fellDk/50 mt-1">Der zugrunde liegende Test kann bei einer bestehenden Durchführung nicht mehr geändert werden.</p>
+                <p class="text-xs text-fellDk/50 mt-1"><?= e(t('td.test_fix')) ?></p>
             <?php else: ?>
-                <label class="block text-sm font-semibold mb-1">Zielgruppe filtern</label>
+                <label class="block text-sm font-semibold mb-1"><?= e(t('td.zielgruppe_filtern')) ?></label>
                 <select x-model="zielgruppeFilter" @change="selectedTestId = 0; wendeZielgruppenFilterAn()"
                         class="w-full rounded-lg border border-sand px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tanne mb-3">
-                    <option value="alle">Alle Tests</option>
-                    <option value="welpe">Nur Welpen-Tests</option>
-                    <option value="erwachsen">Nur Tests für erwachsene Hunde</option>
+                    <option value="alle"><?= e(t('td.alle_tests')) ?></option>
+                    <option value="welpe"><?= e(t('td.nur_welpen')) ?></option>
+                    <option value="erwachsen"><?= e(t('td.nur_erwachsen')) ?></option>
                 </select>
 
-                <label for="test_id" class="block text-sm font-semibold mb-1">Welcher Test wurde durchgeführt? *</label>
+                <label for="test_id" class="block text-sm font-semibold mb-1"><?= e(t('td.welcher')) ?></label>
                 <select id="test_id" name="test_id" required x-ref="testSelect" x-model.number="selectedTestId"
                         class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne">
-                    <option value="0">— Test wählen —</option>
+                    <option value="0">— <?= e(t('td.test_waehlen')) ?> —</option>
                     <?php foreach ($alleTests as $test): ?>
                         <option value="<?= (int) $test['id'] ?>" data-zielgruppe="<?= e($test['zielgruppe']) ?>" <?= $selectedTestId === (int) $test['id'] ? 'selected' : '' ?>><?= e($test['name']) ?></option>
                     <?php endforeach; ?>
@@ -250,10 +250,10 @@ require __DIR__ . '/views/partials/header.php';
 
         <?php foreach ($testDetails as $testId => $testDetail): ?>
             <div x-show="selectedTestId === <?= $testId ?>" x-cloak class="bg-white/80 rounded-2xl shadow border border-sand p-6">
-                <h2 class="text-lg font-bold text-fellDk mb-4">Aufgaben-Ergebnisse</h2>
+                <h2 class="text-lg font-bold text-fellDk mb-4"><?= e(t('td.aufgaben_ergebnisse')) ?></h2>
 
                 <?php if (empty($testDetail['aufgaben'])): ?>
-                    <p class="text-sm text-fellDk/50">Dieser Test hat keine Aufgaben.</p>
+                    <p class="text-sm text-fellDk/50"><?= e(t('td.keine_aufgaben')) ?></p>
                 <?php else: ?>
                     <div class="space-y-4">
                         <?php foreach ($testDetail['aufgaben'] as $aufgabe):
@@ -266,11 +266,11 @@ require __DIR__ . '/views/partials/header.php';
                                     <p class="text-xs text-fellDk/50 mb-2"><?= e($aufgabe['beschreibung']) ?></p>
                                 <?php endif; ?>
 
-                                <label class="block text-xs font-semibold mb-1">Beobachtetes Ergebnis</label>
+                                <label class="block text-xs font-semibold mb-1"><?= e(t('td.beobachtet')) ?></label>
                                 <select name="ergebnisse[<?= $aufgabeId ?>][ergebnis_id]"
                                         data-ergebnis-select @change="aktualisiereStatusVorschlag()"
                                         class="w-full rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne mb-2">
-                                    <option value="">— Ergebnis wählen —</option>
+                                    <option value="">— <?= e(t('td.ergebnis_waehlen')) ?> —</option>
                                     <?php foreach ($aufgabe['ergebnisse'] as $ergebnis):
                                         $ergebnisId = (int) $ergebnis['id'];
                                         $ausgewaehlt = $vorhandenesErgebnis !== null && (int) $vorhandenesErgebnis['ergebnis_id'] === $ergebnisId;
@@ -281,7 +281,7 @@ require __DIR__ . '/views/partials/header.php';
                                     <?php endforeach; ?>
                                 </select>
 
-                                <label class="block text-xs font-semibold mb-1">Notiz (optional)</label>
+                                <label class="block text-xs font-semibold mb-1"><?= e(t('td.notiz_optional')) ?></label>
                                 <input type="text" name="ergebnisse[<?= $aufgabeId ?>][notizen]"
                                        value="<?= e($vorhandenesErgebnis['notizen'] ?? '') ?>"
                                        class="w-full rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
@@ -293,38 +293,38 @@ require __DIR__ . '/views/partials/header.php';
         <?php endforeach; ?>
 
         <div class="bg-white/80 rounded-2xl shadow border border-sand p-6">
-            <h2 class="text-lg font-bold text-fellDk mb-4">Gesamtbewertung</h2>
+            <h2 class="text-lg font-bold text-fellDk mb-4"><?= e(t('td.gesamtbewertung')) ?></h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                    <label for="durchfuehrungsdatum" class="block text-sm font-semibold mb-1">Durchführungsdatum *</label>
+                    <label for="durchfuehrungsdatum" class="block text-sm font-semibold mb-1"><?= e(t('td.datum_pflicht')) ?></label>
                     <input type="date" id="durchfuehrungsdatum" name="durchfuehrungsdatum" required
                            max="<?= e(date('Y-m-d')) ?>"
                            value="<?= e($existing['durchfuehrungsdatum'] ?? date('Y-m-d')) ?>"
                            class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne">
                 </div>
                 <div>
-                    <label for="status" class="block text-sm font-semibold mb-1">Gesamtstatus *</label>
+                    <label for="status" class="block text-sm font-semibold mb-1"><?= e(t('td.status_pflicht')) ?></label>
                     <select id="status" name="status" required x-ref="statusSelect" @change="statusManuellGeaendert = true"
                             class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne">
                         <?php foreach ($statusLabels as $value => $label): ?>
                             <option value="<?= e($value) ?>" <?= ($existing['status'] ?? 'offen') === $value ? 'selected' : '' ?>><?= e($label) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="text-xs text-fellDk/50 mt-1">Wird anhand der Mehrheit der Ergebnisse vorgeschlagen (Neutral zählt nicht mit), bleibt aber änderbar.</p>
+                    <p class="text-xs text-fellDk/50 mt-1"><?= e(t('td.status_hinweis')) ?></p>
                 </div>
             </div>
 
-            <label for="notizen" class="block text-sm font-semibold mb-1">Notizen (optional)</label>
+            <label for="notizen" class="block text-sm font-semibold mb-1"><?= e(t('td.notizen_optional')) ?></label>
             <textarea id="notizen" name="notizen" rows="4"
                       class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"><?= e($existing['notizen'] ?? '') ?></textarea>
         </div>
 
         <div class="flex gap-3">
             <button type="submit" class="bg-tanne hover:bg-tanneDk text-creme font-bold px-8 py-3 rounded-full transition-colors">
-                <?= $isEditMode ? 'Änderungen speichern' : 'Testdurchführung speichern' ?>
+                <?= e($isEditMode ? t('allg.aenderungen_speichern') : t('td.speichern')) ?>
             </button>
-            <a href="/dog_detail.php?id=<?= (int) $dog['id'] ?>" class="text-fellDk/60 hover:text-fellDk font-semibold px-6 py-3">Abbrechen</a>
+            <a href="/dog_detail.php?id=<?= (int) $dog['id'] ?>" class="text-fellDk/60 hover:text-fellDk font-semibold px-6 py-3"><?= e(t('allg.abbrechen')) ?></a>
         </div>
     </form>
 <?php endif; ?>

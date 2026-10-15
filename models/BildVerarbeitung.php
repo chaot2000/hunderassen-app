@@ -60,11 +60,11 @@ class BildVerarbeitung
         if (!is_uploaded_file($file['tmp_name'])) {
             // Schutz gegen manipulierte Requests, die keinen echten
             // Upload-Vorgang durchlaufen haben.
-            return ['success' => false, 'message' => 'Ungültiger Datei-Upload.'];
+            return ['success' => false, 'message' => t('bild.ungueltig')];
         }
 
         if ($file['size'] > self::MAX_UPLOAD_MB * 1024 * 1024) {
-            return ['success' => false, 'message' => 'Das Bild ist zu groß (maximal ' . self::MAX_UPLOAD_MB . ' MB).'];
+            return ['success' => false, 'message' => t('bild.zu_gross', ['mb' => self::MAX_UPLOAD_MB])];
         }
 
         // MIME-Type NICHT aus dem Browser-Header übernehmen (leicht zu
@@ -72,12 +72,12 @@ class BildVerarbeitung
         // bestimmen lassen.
         $mimeType = self::erkenneEchtenMimeType($file['tmp_name']);
         if ($mimeType === null || !in_array($mimeType, self::ERLAUBTE_MIME_TYPES, true)) {
-            return ['success' => false, 'message' => 'Nur JPG-, PNG- oder WebP-Bilder sind erlaubt.'];
+            return ['success' => false, 'message' => t('bild.format')];
         }
 
         $bild = self::ladeBildRessource($file['tmp_name'], $mimeType);
         if ($bild === null) {
-            return ['success' => false, 'message' => 'Das Bild konnte nicht gelesen werden. Bitte eine andere Datei versuchen.'];
+            return ['success' => false, 'message' => t('bild.nicht_gelesen')];
         }
 
         $breite = imagesx($bild);
@@ -91,7 +91,7 @@ class BildVerarbeitung
         imagedestroy($bild);
 
         if ($blob === null) {
-            return ['success' => false, 'message' => 'Das Bild konnte nicht verarbeitet werden.'];
+            return ['success' => false, 'message' => t('bild.nicht_verarbeitet')];
         }
 
         return ['success' => true, 'blob' => $blob, 'mime' => $mimeType];
@@ -180,11 +180,11 @@ class BildVerarbeitung
     private static function fehlerTextFuer(int $errorCode): string
     {
         return match ($errorCode) {
-            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Das Bild ist zu groß für den Upload.',
-            UPLOAD_ERR_PARTIAL => 'Der Upload wurde abgebrochen. Bitte erneut versuchen.',
-            UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => 'Der Upload konnte serverseitig nicht verarbeitet werden.',
-            UPLOAD_ERR_EXTENSION => 'Der Upload wurde durch eine Server-Erweiterung blockiert.',
-            default => 'Beim Hochladen des Bildes ist ein unbekannter Fehler aufgetreten.',
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => t('bild.zu_gross_upload'),
+            UPLOAD_ERR_PARTIAL => t('bild.abgebrochen'),
+            UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => t('bild.server'),
+            UPLOAD_ERR_EXTENSION => t('bild.erweiterung'),
+            default => t('bild.unbekannt'),
         };
     }
 }

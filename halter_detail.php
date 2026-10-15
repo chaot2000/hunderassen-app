@@ -27,10 +27,10 @@ $halter   = $halterId ? Halter::findByIdForUser($halterId, $currentUserId, $isAd
 
 if ($halter === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('allg.nicht_gefunden');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk/50"><p>Dieser Halter wurde nicht gefunden.</p>
-          <a href="/halter.php" class="text-tanne underline">Zurück zur Übersicht</a></div>';
+    echo '<div class="text-center py-16 text-fellDk/50"><p>' . e(t('halter.nicht_gefunden')) . '</p>
+          <a href="/halter.php" class="text-tanne underline">' . e(t('allg.zurueck_uebersicht')) . '</a></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -41,13 +41,13 @@ $pageTitle = $halter['name'];
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<a href="/halter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; Zurück zur Übersicht</a>
+<a href="/halter.php" class="text-sm text-tanne hover:text-tanneDk underline">&larr; <?= e(t('allg.zurueck_uebersicht')) ?></a>
 
 <div class="bg-white/80 rounded-2xl shadow border border-sand p-4 sm:p-6 mt-4 max-w-2xl">
     <div class="flex flex-col sm:flex-row gap-4 items-start">
         <?php if (!empty($halter['hat_bild'])): ?>
             <img src="/halterbild.php?id=<?= (int) $halter['id'] ?>&v=<?= urlencode((string) ($halter['bild_updated_at'] ?? '')) ?>"
-                 alt="Foto von <?= e($halter['name']) ?>"
+                 alt="<?= e(t('bild.foto_von', ['name' => $halter['name']])) ?>"
                  class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-xl border border-sand shrink-0 mx-auto sm:mx-0">
         <?php else: ?>
             <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl border border-sand bg-creme flex items-center justify-center shrink-0 mx-auto sm:mx-0" aria-hidden="true">
@@ -59,26 +59,26 @@ require __DIR__ . '/views/partials/header.php';
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <h1 class="text-2xl font-extrabold text-fellDk break-words"><?= e($halter['name']) ?></h1>
                 <a href="/halter_form.php?id=<?= (int) $halter['id'] ?>" class="bg-pfote/10 text-fell font-semibold text-sm px-4 py-2 rounded-full hover:bg-pfote/20 transition-colors whitespace-nowrap">
-                    Bearbeiten
+                    <?= e(t('allg.bearbeiten')) ?>
                 </a>
             </div>
 
             <dl class="mt-4 space-y-2 text-sm">
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0">Telefon</dt>
+                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0"><?= e(t('allg.telefon')) ?></dt>
                     <dd><?= $halter['telefon'] ? e($halter['telefon']) : '—' ?></dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0">E-Mail</dt>
+                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0"><?= e(t('allg.email')) ?></dt>
                     <dd><?= $halter['email'] ? e($halter['email']) : '—' ?></dd>
                 </div>
                 <div class="flex gap-2">
-                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0">Adresse</dt>
+                    <dt class="font-semibold text-fellDk/70 w-28 shrink-0"><?= e(t('allg.adresse')) ?></dt>
                     <dd><?= $halter['adresse'] ? e($halter['adresse']) : '—' ?></dd>
                 </div>
                 <?php if (!empty($halter['notizen'])): ?>
                     <div class="flex gap-2">
-                        <dt class="font-semibold text-fellDk/70 w-28 shrink-0">Notizen</dt>
+                        <dt class="font-semibold text-fellDk/70 w-28 shrink-0"><?= e(t('allg.notizen')) ?></dt>
                         <dd class="whitespace-pre-line"><?= e($halter['notizen']) ?></dd>
                     </div>
                 <?php endif; ?>
@@ -89,12 +89,12 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="mt-6">
     <h2 class="text-lg font-bold text-fellDk mb-3">
-        Hunde von <?= e($halter['name']) ?>
+        <?= e(t('halter.hunde_von')) ?> <?= e($halter['name']) ?>
         <span class="text-sm font-normal text-fellDk/50">(<?= count($dogs) ?>)</span>
     </h2>
 
     <?php if (empty($dogs)): ?>
-        <p class="text-fellDk/50 text-sm">Diesem Halter sind aktuell keine Hunde zugeordnet.</p>
+        <p class="text-fellDk/50 text-sm"><?= e(t('halter.keine_hunde')) ?></p>
     <?php else: ?>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <?php foreach ($dogs as $dog): ?>

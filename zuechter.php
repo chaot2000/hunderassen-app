@@ -43,25 +43,25 @@ function format_ansprechpartner(?string $vorname, ?string $nachname): string
     return implode(' ', $teile) ?: '—';
 }
 
-$pageTitle = 'Züchter';
+$pageTitle = t('zuechter.titel');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <a href="/dashboard.php" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
-    ← Zur Übersicht
+    ← <?= e(t('allg.zur_uebersicht')) ?>
 </a>
 
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-    <h1 class="text-2xl font-extrabold text-fellDk"><?= $isAdmin ? 'Alle Züchter' : 'Meine Züchter' ?></h1>
+    <h1 class="text-2xl font-extrabold text-fellDk"><?= e(t($isAdmin ? 'zuechter.alle' : 'zuechter.meine')) ?></h1>
     <a href="/zuechter_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap text-center">
-        + Züchter anlegen
+        + <?= e(t('zuechter.anlegen')) ?>
     </a>
 </div>
 
 <?php if (empty($allZuechter)): ?>
     <div class="bg-white/80 rounded-2xl shadow border border-sand">
         <p class="text-center py-16 text-fellDk/50">
-            <?= $isAdmin ? 'Es wurden noch keine Züchter angelegt.' : 'Du hast noch keine Züchter angelegt.' ?>
+            <?= e(t($isAdmin ? 'zuechter.leer_admin' : 'zuechter.leer_user')) ?>
         </p>
     </div>
 <?php else: ?>
@@ -71,12 +71,12 @@ require __DIR__ . '/views/partials/header.php';
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-sand/30 text-left text-xs font-semibold uppercase tracking-wide text-fellDk/60">
-                        <th class="px-4 py-3">Zuchtname</th>
-                        <th class="px-4 py-3">Ansprechpartner</th>
-                        <th class="px-4 py-3">Telefon</th>
-                        <th class="px-4 py-3">E-Mail</th>
-                        <th class="px-4 py-3">Hunde</th>
-                        <th class="px-4 py-3 text-right">Aktionen</th>
+                        <th class="px-4 py-3"><?= e(t('zuechter.zuchtname')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.ansprechpartner')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.telefon')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.email')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.hunde')) ?></th>
+                        <th class="px-4 py-3 text-right"><?= e(t('allg.aktionen')) ?></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-sand">
@@ -98,12 +98,12 @@ require __DIR__ . '/views/partials/header.php';
                             <td class="px-4 py-3 text-fellDk/70"><?= $zuechter['email'] ? e($zuechter['email']) : '—' ?></td>
                             <td class="px-4 py-3"><?= (int) ($dogCounts[$zid] ?? 0) ?></td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <a href="/zuechter_form.php?id=<?= $zid ?>" class="text-tanne hover:text-tanneDk font-semibold mr-3">Bearbeiten</a>
+                                <a href="/zuechter_form.php?id=<?= $zid ?>" class="text-tanne hover:text-tanneDk font-semibold mr-3"><?= e(t('allg.bearbeiten')) ?></a>
                                 <form method="post" action="/zuechter.php" class="inline"
-                                      onsubmit="return confirm('<?= e($zuechter['zuchtname']) ?> wirklich löschen?<?= ($dogCounts[$zid] ?? 0) > 0 ? ' Zugeordnete Hunde verlieren dann ihren Züchter-Eintrag.' : '' ?>');">
+                                      onsubmit="return confirm(<?= e(json_encode(t('allg.loeschen_frage', ['name' => $zuechter['zuchtname']]) . (($dogCounts[$zid] ?? 0) > 0 ? ' ' . t('zuechter.loeschen_hunde') : ''), JSON_UNESCAPED_UNICODE)) ?>);">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="delete_zuechter_id" value="<?= $zid ?>">
-                                    <button type="submit" class="text-red-600 hover:text-red-800 font-semibold">Löschen</button>
+                                    <button type="submit" class="text-red-600 hover:text-red-800 font-semibold"><?= e(t('allg.loeschen')) ?></button>
                                 </form>
                             </td>
                         </tr>
@@ -126,19 +126,19 @@ require __DIR__ . '/views/partials/header.php';
                         <?php endif; ?>
                         <?= e($zuechter['zuchtname']) ?>
                     </a>
-                    <span class="text-xs text-fellDk/50 shrink-0 pt-0.5"><?= (int) ($dogCounts[$zid] ?? 0) ?> Hund(e)</span>
+                    <span class="text-xs text-fellDk/50 shrink-0 pt-0.5"><?= (int) ($dogCounts[$zid] ?? 0) ?> <?= e(t('allg.hund_e')) ?></span>
                 </div>
                 <p class="text-sm text-fellDk/70 mt-1"><?= e(format_ansprechpartner($zuechter['ansprechpartner_vorname'], $zuechter['ansprechpartner_nachname'])) ?></p>
                 <p class="text-sm text-fellDk/70"><?= $zuechter['telefon'] ? e($zuechter['telefon']) : '—' ?></p>
                 <p class="text-sm text-fellDk/70"><?= $zuechter['email'] ? e($zuechter['email']) : '—' ?></p>
 
                 <div class="flex gap-4 mt-3 pt-3 border-t border-sand">
-                    <a href="/zuechter_form.php?id=<?= $zid ?>" class="text-tanne hover:text-tanneDk font-semibold text-sm">Bearbeiten</a>
+                    <a href="/zuechter_form.php?id=<?= $zid ?>" class="text-tanne hover:text-tanneDk font-semibold text-sm"><?= e(t('allg.bearbeiten')) ?></a>
                     <form method="post" action="/zuechter.php" class="inline"
-                          onsubmit="return confirm('<?= e($zuechter['zuchtname']) ?> wirklich löschen?<?= ($dogCounts[$zid] ?? 0) > 0 ? ' Zugeordnete Hunde verlieren dann ihren Züchter-Eintrag.' : '' ?>');">
+                          onsubmit="return confirm(<?= e(json_encode(t('allg.loeschen_frage', ['name' => $zuechter['zuchtname']]) . (($dogCounts[$zid] ?? 0) > 0 ? ' ' . t('zuechter.loeschen_hunde') : ''), JSON_UNESCAPED_UNICODE)) ?>);">
                         <?= csrf_field() ?>
                         <input type="hidden" name="delete_zuechter_id" value="<?= $zid ?>">
-                        <button type="submit" class="text-red-600 hover:text-red-800 font-semibold text-sm">Löschen</button>
+                        <button type="submit" class="text-red-600 hover:text-red-800 font-semibold text-sm"><?= e(t('allg.loeschen')) ?></button>
                     </form>
                 </div>
             </div>

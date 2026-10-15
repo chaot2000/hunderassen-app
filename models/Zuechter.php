@@ -157,7 +157,7 @@ class Zuechter
             ':created_by'      => $createdBy,
         ]);
 
-        return ['success' => true, 'message' => 'Züchter "' . $validated['zuchtname'] . '" wurde angelegt.', 'zuechter_id' => (int) $pdo->lastInsertId()];
+        return ['success' => true, 'message' => t('zuechter.m_angelegt', ['name' => $validated['zuchtname']]), 'zuechter_id' => (int) $pdo->lastInsertId()];
     }
 
     /**
@@ -204,7 +204,7 @@ class Zuechter
             ':tenant_id' => $tenantId,
         ], $imageParams));
 
-        return ['success' => true, 'message' => 'Züchter "' . $validated['zuchtname'] . '" wurde aktualisiert.'];
+        return ['success' => true, 'message' => t('zuechter.m_aktualisiert', ['name' => $validated['zuchtname']])];
     }
 
     /**
@@ -223,10 +223,10 @@ class Zuechter
     {
         $zuchtname = clean_input((string) ($data['zuchtname'] ?? ''));
         if ($zuchtname === '') {
-            return ['success' => false, 'message' => 'Der Zuchtname darf nicht leer sein.'];
+            return ['success' => false, 'message' => t('zuechter.m_zuchtname_leer')];
         }
         if (mb_strlen($zuchtname) > 150) {
-            return ['success' => false, 'message' => 'Der Zuchtname darf maximal 150 Zeichen lang sein.'];
+            return ['success' => false, 'message' => t('zuechter.m_zuchtname_lang')];
         }
 
         $vorname  = clean_input((string) ($data['ansprechpartner_vorname'] ?? ''));
@@ -242,7 +242,7 @@ class Zuechter
 
         $email = clean_input((string) ($data['email'] ?? ''));
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return ['success' => false, 'message' => 'Die E-Mail-Adresse ist ungültig.'];
+            return ['success' => false, 'message' => t('allg.email_ungueltig')];
         }
         $email = $email !== '' ? $email : null;
 
@@ -256,10 +256,10 @@ class Zuechter
             }
             $webseite = clean_input($webseite);
             if (!filter_var($webseite, FILTER_VALIDATE_URL)) {
-                return ['success' => false, 'message' => 'Die Webseite ist keine gültige URL.'];
+                return ['success' => false, 'message' => t('zuechter.m_url')];
             }
             if (mb_strlen($webseite) > 255) {
-                return ['success' => false, 'message' => 'Die Webseiten-URL darf maximal 255 Zeichen lang sein.'];
+                return ['success' => false, 'message' => t('zuechter.m_url_lang')];
             }
         } else {
             $webseite = null;

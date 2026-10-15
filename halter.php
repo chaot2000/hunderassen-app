@@ -37,25 +37,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_halter_id'])) 
 $allHalter = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 $dogCounts = Halter::getDogCounts($currentUserId, $isAdmin, $tenantId);
 
-$pageTitle = 'Halter';
+$pageTitle = t('halter.titel');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <a href="/dashboard.php" class="inline-flex items-center gap-1.5 text-sm text-fellDk/60 hover:text-fellDk mb-4">
-    ← Zur Übersicht
+    ← <?= e(t('allg.zur_uebersicht')) ?>
 </a>
 
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-    <h1 class="text-2xl font-extrabold text-fellDk"><?= $isAdmin ? 'Alle Halter' : 'Meine Halter' ?></h1>
+    <h1 class="text-2xl font-extrabold text-fellDk"><?= e(t($isAdmin ? 'halter.alle' : 'halter.meine')) ?></h1>
     <a href="/halter_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap text-center">
-        + Halter anlegen
+        + <?= e(t('halter.anlegen')) ?>
     </a>
 </div>
 
 <?php if (empty($allHalter)): ?>
     <div class="bg-white/80 rounded-2xl shadow border border-sand">
         <p class="text-center py-16 text-fellDk/50">
-            <?= $isAdmin ? 'Es wurden noch keine Halter angelegt.' : 'Du hast noch keine Halter angelegt.' ?>
+            <?= e(t($isAdmin ? 'halter.leer_admin' : 'halter.leer_user')) ?>
         </p>
     </div>
 <?php else: ?>
@@ -66,11 +66,11 @@ require __DIR__ . '/views/partials/header.php';
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-sand/30 text-left text-xs font-semibold uppercase tracking-wide text-fellDk/60">
-                        <th class="px-4 py-3">Name</th>
-                        <th class="px-4 py-3">Telefon</th>
-                        <th class="px-4 py-3">E-Mail</th>
-                        <th class="px-4 py-3">Hunde</th>
-                        <th class="px-4 py-3 text-right">Aktionen</th>
+                        <th class="px-4 py-3"><?= e(t('allg.name')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.telefon')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.email')) ?></th>
+                        <th class="px-4 py-3"><?= e(t('allg.hunde')) ?></th>
+                        <th class="px-4 py-3 text-right"><?= e(t('allg.aktionen')) ?></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-sand">
@@ -91,12 +91,12 @@ require __DIR__ . '/views/partials/header.php';
                             <td class="px-4 py-3 text-fellDk/70"><?= $halter['email'] ? e($halter['email']) : '—' ?></td>
                             <td class="px-4 py-3"><?= (int) ($dogCounts[$hid] ?? 0) ?></td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <a href="/halter_form.php?id=<?= $hid ?>" class="text-tanne hover:text-tanneDk font-semibold mr-3">Bearbeiten</a>
+                                <a href="/halter_form.php?id=<?= $hid ?>" class="text-tanne hover:text-tanneDk font-semibold mr-3"><?= e(t('allg.bearbeiten')) ?></a>
                                 <form method="post" action="/halter.php" class="inline"
-                                      onsubmit="return confirm('<?= e($halter['name']) ?> wirklich löschen?<?= ($dogCounts[$hid] ?? 0) > 0 ? ' Zugeordnete Hunde verlieren dann ihren Halter-Eintrag.' : '' ?>');">
+                                      onsubmit="return confirm(<?= e(json_encode(t('allg.loeschen_frage', ['name' => $halter['name']]) . (($dogCounts[$hid] ?? 0) > 0 ? ' ' . t('halter.loeschen_hunde') : ''), JSON_UNESCAPED_UNICODE)) ?>);">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="delete_halter_id" value="<?= $hid ?>">
-                                    <button type="submit" class="text-red-600 hover:text-red-800 font-semibold">Löschen</button>
+                                    <button type="submit" class="text-red-600 hover:text-red-800 font-semibold"><?= e(t('allg.loeschen')) ?></button>
                                 </form>
                             </td>
                         </tr>
@@ -120,18 +120,18 @@ require __DIR__ . '/views/partials/header.php';
                         <?php endif; ?>
                         <?= e($halter['name']) ?>
                     </a>
-                    <span class="text-xs text-fellDk/50 shrink-0 pt-0.5"><?= (int) ($dogCounts[$hid] ?? 0) ?> Hund(e)</span>
+                    <span class="text-xs text-fellDk/50 shrink-0 pt-0.5"><?= (int) ($dogCounts[$hid] ?? 0) ?> <?= e(t('allg.hund_e')) ?></span>
                 </div>
                 <p class="text-sm text-fellDk/70 mt-1"><?= $halter['telefon'] ? e($halter['telefon']) : '—' ?></p>
                 <p class="text-sm text-fellDk/70"><?= $halter['email'] ? e($halter['email']) : '—' ?></p>
 
                 <div class="flex gap-4 mt-3 pt-3 border-t border-sand">
-                    <a href="/halter_form.php?id=<?= $hid ?>" class="text-tanne hover:text-tanneDk font-semibold text-sm">Bearbeiten</a>
+                    <a href="/halter_form.php?id=<?= $hid ?>" class="text-tanne hover:text-tanneDk font-semibold text-sm"><?= e(t('allg.bearbeiten')) ?></a>
                     <form method="post" action="/halter.php" class="inline"
-                          onsubmit="return confirm('<?= e($halter['name']) ?> wirklich löschen?<?= ($dogCounts[$hid] ?? 0) > 0 ? ' Zugeordnete Hunde verlieren dann ihren Halter-Eintrag.' : '' ?>');">
+                          onsubmit="return confirm(<?= e(json_encode(t('allg.loeschen_frage', ['name' => $halter['name']]) . (($dogCounts[$hid] ?? 0) > 0 ? ' ' . t('halter.loeschen_hunde') : ''), JSON_UNESCAPED_UNICODE)) ?>);">
                         <?= csrf_field() ?>
                         <input type="hidden" name="delete_halter_id" value="<?= $hid ?>">
-                        <button type="submit" class="text-red-600 hover:text-red-800 font-semibold text-sm">Löschen</button>
+                        <button type="submit" class="text-red-600 hover:text-red-800 font-semibold text-sm"><?= e(t('allg.loeschen')) ?></button>
                     </form>
                 </div>
             </div>
