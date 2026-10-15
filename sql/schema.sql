@@ -145,7 +145,7 @@ CREATE TABLE `breeds` (
     `gliederung`      ENUM('keine', 'automatisch', 'geprueft') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'keine', -- siehe admin_rassentexte.php
     `thedogapi_id`    VARCHAR(20)  NULL,        -- verknüpfte TheDogAPI-Rasse, falls abgeglichen
     `thedogapi_stand` DATETIME     NULL,        -- Zeitpunkt des letzten Abgleichs
-    `daten_uebernommen` DATETIME   NULL,        -- Stand der Übernahme ins Merkmalsmodell, siehe migration_2026_10_19_merkmale.sql
+    `daten_stand`     CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL, -- Prüfwert der alten Felder bei der Übernahme ins Merkmalsmodell
     `bild_blob`        LONGBLOB NULL,            -- verkleinertes Bild (max. 1200px Breite)
     `bild_mime`        VARCHAR(50) NULL,         -- z.B. 'image/jpeg', 'image/png', 'image/webp'
     `bild_updated_at`  DATETIME NULL,            -- für Cache-Busting bei der Auslieferung

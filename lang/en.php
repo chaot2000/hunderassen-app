@@ -456,4 +456,7 @@ return [
     'td.m_ergebnis_passt'              => 'The selected result does not belong to its task.',
     'td.m_datum_format'                => 'The date is not valid (format: YYYY-MM-DD).',
     'td.m_datum_zukunft'               => 'The date must not be in the future.',
+    // Merkmale und Textabschnitte (PLAN.md Abschnitt 10)
+    'abschnitt.zuchtzweck'       => 'Bred for',
+    'rasse.keine_merkmale'       => 'No characteristics recorded yet.',
 ];

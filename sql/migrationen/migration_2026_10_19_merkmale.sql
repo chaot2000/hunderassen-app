@@ -2,14 +2,14 @@
 -- Migration 2026-10-19: Merkmale und Textabschnitte (PLAN.md Abschnitt 10)
 --
 -- Neue Tabellen merkmale, merkmal_werte, rasse_merkmale, rasse_texte und
--- breeds.daten_uebernommen. Merkmale und Werte haben deutsche und
+-- breeds.daten_stand. Merkmale und Werte haben deutsche und
 -- englische Namen (Mapping statt Doppeleingabe je Rasse).
 --
 -- Die vorhandenen Daten (breed_sizes, Tags, Aktivitäten, Arbeitsprüfung,
--- Farben, Land, Texte) überträgt models/RassenDatenUebernahme.php beim
--- nächsten Aufruf einer Rasse (Quelle 'alt'), solange breeds.updated_at
--- neuer ist als daten_uebernommen. Alte Spalten bleiben bis zur
--- Aufräum-Migration.
+-- Farben, Land, Texte) überträgt models/RassenDaten.php beim nächsten
+-- Aufruf einer Rasse (Quelle 'alt'), sobald sich der Prüfwert über die
+-- alten Felder von breeds.daten_stand unterscheidet. Alte Spalten bleiben
+-- bis zur Aufräum-Migration.
 --
 -- Idempotent, MariaDB 10.11 und MySQL 8.x.
 -- Zurück: sql/migrationen/rollback_merkmale.sql
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `rasse_texte` (
     CONSTRAINT `fk_rt_breed` FOREIGN KEY (`breed_id`) REFERENCES `breeds` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'breeds' AND COLUMN_NAME = 'daten_uebernommen'), 'DO 0', 'ALTER TABLE `breeds` ADD COLUMN `daten_uebernommen` DATETIME NULL AFTER `thedogapi_stand`');
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'breeds' AND COLUMN_NAME = 'daten_stand'), 'DO 0', 'ALTER TABLE `breeds` ADD COLUMN `daten_stand` CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER `thedogapi_stand`');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Merkmale und Werte (INSERT IGNORE: ein zweiter Lauf ändert nichts)
