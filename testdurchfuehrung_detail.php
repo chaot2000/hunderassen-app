@@ -22,10 +22,11 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $durchfuehrungId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $ownerDogId      = $durchfuehrungId ? TestDurchfuehrung::findDogIdById($durchfuehrungId) : null;
-$dog             = $ownerDogId !== null ? Dog::findByIdForUser($ownerDogId, $currentUserId, $isAdmin) : null;
+$dog             = $ownerDogId !== null ? Dog::findByIdForUser($ownerDogId, $currentUserId, $isAdmin, $tenantId) : null;
 
 if ($dog === null) {
     http_response_code(404);
@@ -48,7 +49,9 @@ if ($durchfuehrung === null) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_durchfuehrung_id'])) {
     csrf_require_valid();
-    TestDurchfuehrung::delete((int) $_POST['delete_durchfuehrung_id']);
+    // Gelöscht wird die geprüfte Durchführung dieser Seite, nicht eine
+    // beliebige ID aus dem Formular.
+    TestDurchfuehrung::delete((int) $durchfuehrung['id'], (int) $dog['id']);
     header('Location: /dog_detail.php?id=' . (int) $dog['id']);
     exit;
 }

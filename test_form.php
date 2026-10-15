@@ -29,8 +29,10 @@ require_once __DIR__ . '/models/Test.php';
 secure_session_start();
 require_manage_tests();
 
+$tenantId = current_tenant_id();
+
 $editingId  = isset($_GET['id']) ? (int) $_GET['id'] : null;
-$existing   = $editingId ? Test::findById($editingId) : null;
+$existing   = $editingId ? Test::findById($editingId, $tenantId) : null;
 $isEditMode = $existing !== null;
 
 if ($editingId !== null && $existing === null) {
@@ -77,9 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isEditMode) {
-        $result = Test::update($editingId, $testData, $aufgaben);
+        $result = Test::update($editingId, $tenantId, $testData, $aufgaben);
     } else {
-        $result = Test::create($testData, $aufgaben, (int) current_user()['id']);
+        $result = Test::create($testData, $aufgaben, (int) current_user()['id'], $tenantId);
     }
 
     if ($result['success']) {

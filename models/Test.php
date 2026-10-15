@@ -3,7 +3,8 @@
  * models/Test.php
  *
  * Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test") —
- * geteilte Katalogdaten wie models/Breed.php, admin-gepflegt. Ein Test
+ * je Mandant eigener Katalog (tests.tenant_id). Jede öffentliche
+ * Methode, die einen Test liest oder ändert, verlangt den Mandanten. Ein Test
  * bündelt mehrere Aufgaben, jede Aufgabe mehrere mögliche Ergebnisse
  * (Kategorie: bestanden/neutral/nicht_bestanden).
  *
@@ -31,21 +32,22 @@ class Test
      *        Altersgruppen), null liefert alle Tests ungefiltert.
      * @return array<int, array<string, mixed>>
      */
-    public static function findAll(?string $zielgruppe = null): array
+    public static function findAll(int $tenantId, ?string $zielgruppe = null): array
     {
         $pdo = Database::getConnection();
 
         if ($zielgruppe !== null && in_array($zielgruppe, ['welpe', 'erwachsen'], true)) {
             $stmt = $pdo->prepare(
                 "SELECT id, name, beschreibung, zielgruppe, created_at FROM tests
-                 WHERE zielgruppe = :zielgruppe OR zielgruppe = 'beide'
+                 WHERE (zielgruppe = :zielgruppe OR zielgruppe = 'beide') AND tenant_id = :tenant_id
                  ORDER BY name"
             );
-            $stmt->execute([':zielgruppe' => $zielgruppe]);
+            $stmt->execute([':zielgruppe' => $zielgruppe, ':tenant_id' => $tenantId]);
             return $stmt->fetchAll();
         }
 
-        $stmt = $pdo->query('SELECT id, name, beschreibung, zielgruppe, created_at FROM tests ORDER BY name');
+        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at FROM tests WHERE tenant_id = :tenant_id ORDER BY name');
+        $stmt->execute([':tenant_id' => $tenantId]);
         return $stmt->fetchAll();
     }
 
@@ -54,12 +56,12 @@ class Test
      * Ergebnissen — ein Level tiefer verschachtelt als
      * Breed::findById() (dessen Kind-Arrays sind flach).
      */
-    public static function findById(int $testId): ?array
+    public static function findById(int $testId, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
 
-        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at, updated_at, created_by FROM tests WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $testId]);
+        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at, updated_at, created_by FROM tests WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
         $test = $stmt->fetch();
 
         if (!$test) {
@@ -98,9 +100,10 @@ class Test
     /**
      * @param array<string, mixed> $testData Erwartet Schlüssel: name, beschreibung, zielgruppe
      * @param array $aufgaben Liste von ['titel', 'beschreibung', 'ergebnisse' => [['bezeichnung', 'kategorie'], ...]]
+     * @param int $tenantId Tenant-ID für Scoping
      * @return array{success: bool, message: string, test_id?: int}
      */
-    public static function create(array $testData, array $aufgaben, int $createdByUserId): array
+    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId): array
     {
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
@@ -119,8 +122,8 @@ class Test
 
         $pdo = Database::getConnection();
 
-        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name LIMIT 1');
-        $checkStmt->execute([':name' => $name]);
+        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id LIMIT 1');
+        $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Ein Test mit dem Namen "' . $name . '" existiert bereits.'];
         }
@@ -130,9 +133,10 @@ class Test
 
             $beschreibung = clean_input((string) ($testData['beschreibung'] ?? ''));
             $stmt = $pdo->prepare(
-                'INSERT INTO tests (name, beschreibung, zielgruppe, created_by) VALUES (:name, :beschreibung, :zielgruppe, :created_by)'
+                'INSERT INTO tests (tenant_id, name, beschreibung, zielgruppe, created_by) VALUES (:tenant_id, :name, :beschreibung, :zielgruppe, :created_by)'
             );
             $stmt->execute([
+                ':tenant_id'   => $tenantId,
                 ':name'         => $name,
                 ':beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 ':zielgruppe'   => $zielgruppe,
@@ -169,8 +173,12 @@ class Test
      * @param array $aufgaben
      * @return array{success: bool, message: string}
      */
-    public static function update(int $testId, array $testData, array $aufgaben): array
+    public static function update(int $testId, int $tenantId, array $testData, array $aufgaben): array
     {
+        if (!self::existsInTenant($testId, $tenantId)) {
+            return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
+        }
+
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
             return ['success' => false, 'message' => 'Der Name des Tests darf nicht leer sein.'];
@@ -192,8 +200,8 @@ class Test
 
         $pdo = Database::getConnection();
 
-        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND id != :id LIMIT 1');
-        $checkStmt->execute([':name' => $name, ':id' => $testId]);
+        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id AND id != :id LIMIT 1');
+        $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId, ':id' => $testId]);
         if ($checkStmt->fetch()) {
             return ['success' => false, 'message' => 'Ein Test mit dem Namen "' . $name . '" existiert bereits.'];
         }
@@ -203,13 +211,15 @@ class Test
 
             $beschreibung = clean_input((string) ($testData['beschreibung'] ?? ''));
             $stmt = $pdo->prepare(
-                'UPDATE tests SET name = :name, beschreibung = :beschreibung, zielgruppe = :zielgruppe, updated_at = NOW() WHERE id = :id'
+                'UPDATE tests SET name = :name, beschreibung = :beschreibung, zielgruppe = :zielgruppe, updated_at = NOW()
+                 WHERE id = :id AND tenant_id = :tenant_id'
             );
             $stmt->execute([
                 ':name'         => $name,
                 ':beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 ':zielgruppe'   => $zielgruppe,
                 ':id'           => $testId,
+                ':tenant_id'    => $tenantId,
             ]);
 
             if (!$strukturSperren) {
@@ -238,8 +248,12 @@ class Test
      *
      * @return array{success: bool, message: string}
      */
-    public static function delete(int $testId): array
+    public static function delete(int $testId, int $tenantId): array
     {
+        if (!self::existsInTenant($testId, $tenantId)) {
+            return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
+        }
+
         $anzahl = self::countDurchfuehrungen($testId);
         if ($anzahl > 0) {
             return [
@@ -249,8 +263,8 @@ class Test
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id');
-        $stmt->execute([':id' => $testId]);
+        $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id AND tenant_id = :tenant_id');
+        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
 
         return ['success' => true, 'message' => 'Test wurde gelöscht.'];
     }
@@ -280,15 +294,17 @@ class Test
      *
      * @return array<int, int> [test_id => durchfuehrung_count]
      */
-    public static function getDurchfuehrungCounts(): array
+    public static function getDurchfuehrungCounts(int $tenantId): array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->query(
+        $stmt = $pdo->prepare(
             'SELECT t.id, COUNT(td.id) AS durchfuehrung_count
              FROM tests t
              LEFT JOIN test_durchfuehrungen td ON td.test_id = t.id
+             WHERE t.tenant_id = :tenant_id
              GROUP BY t.id'
         );
+        $stmt->execute([':tenant_id' => $tenantId]);
         $counts = [];
         foreach ($stmt->fetchAll() as $row) {
             $counts[(int) $row['id']] = (int) $row['durchfuehrung_count'];
@@ -302,15 +318,17 @@ class Test
      *
      * @return array<int, int> [test_id => aufgaben_count]
      */
-    public static function getAufgabenCounts(): array
+    public static function getAufgabenCounts(int $tenantId): array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->query(
+        $stmt = $pdo->prepare(
             'SELECT t.id, COUNT(ta.id) AS aufgaben_count
              FROM tests t
              LEFT JOIN test_aufgaben ta ON ta.test_id = t.id
+             WHERE t.tenant_id = :tenant_id
              GROUP BY t.id'
         );
+        $stmt->execute([':tenant_id' => $tenantId]);
         $counts = [];
         foreach ($stmt->fetchAll() as $row) {
             $counts[(int) $row['id']] = (int) $row['aufgaben_count'];
@@ -321,6 +339,14 @@ class Test
     // -------------------------------------------------------------
     // Private Hilfsmethoden
     // -------------------------------------------------------------
+
+    private static function existsInTenant(int $testId, int $tenantId): bool
+    {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare('SELECT 1 FROM tests WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+        return (bool) $stmt->fetchColumn();
+    }
 
     /**
      * Validiert eine Liste von Aufgaben inkl. ihrer verschachtelten

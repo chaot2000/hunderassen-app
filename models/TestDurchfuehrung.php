@@ -115,9 +115,9 @@ class TestDurchfuehrung
      * @param array $ergebnisse Liste von ['aufgabe_id' => int, 'ergebnis_id' => int, 'notizen' => ?string]
      * @return array{success: bool, message: string, durchfuehrung_id?: int}
      */
-    public static function create(int $dogId, int $testId, array $durchfuehrungData, array $ergebnisse, int $createdByUserId): array
+    public static function create(int $dogId, int $testId, array $durchfuehrungData, array $ergebnisse, int $createdByUserId, int $tenantId): array
     {
-        $validated = self::validate($testId, $durchfuehrungData, $ergebnisse);
+        $validated = self::validate($testId, $tenantId, $durchfuehrungData, $ergebnisse);
         if (!$validated['success']) {
             return $validated;
         }
@@ -154,18 +154,28 @@ class TestDurchfuehrung
     }
 
     /**
+     * Der Test einer Durchführung ist fix und wird aus der Datenbank
+     * gelesen, nicht aus dem Formular. $dogId muss vorher per
+     * Dog::findByIdForUser() geprüft sein.
+     *
      * @param array<string, mixed> $durchfuehrungData
      * @param array $ergebnisse
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, int $testId, array $durchfuehrungData, array $ergebnisse): array
+    public static function update(int $id, int $dogId, int $tenantId, array $durchfuehrungData, array $ergebnisse): array
     {
-        $validated = self::validate($testId, $durchfuehrungData, $ergebnisse);
+        $pdo = Database::getConnection();
+        $row = $pdo->prepare('SELECT test_id FROM test_durchfuehrungen WHERE id = :id AND dog_id = :dog_id LIMIT 1');
+        $row->execute([':id' => $id, ':dog_id' => $dogId]);
+        $testId = $row->fetchColumn();
+        if ($testId === false) {
+            return ['success' => false, 'message' => 'Die Testdurchführung wurde nicht gefunden.'];
+        }
+
+        $validated = self::validate((int) $testId, $tenantId, $durchfuehrungData, $ergebnisse);
         if (!$validated['success']) {
             return $validated;
         }
-
-        $pdo = Database::getConnection();
 
         try {
             $pdo->beginTransaction();
@@ -173,13 +183,14 @@ class TestDurchfuehrung
             $stmt = $pdo->prepare(
                 'UPDATE test_durchfuehrungen
                  SET durchfuehrungsdatum = :durchfuehrungsdatum, status = :status, notizen = :notizen, updated_at = NOW()
-                 WHERE id = :id'
+                 WHERE id = :id AND dog_id = :dog_id'
             );
             $stmt->execute([
                 ':durchfuehrungsdatum' => $validated['durchfuehrungsdatum'],
                 ':status'              => $validated['status'],
                 ':notizen'             => $validated['notizen'],
                 ':id'                  => $id,
+                ':dog_id'              => $dogId,
             ]);
 
             self::syncErgebnisse($pdo, $id, $validated['ergebnisse']);
@@ -197,12 +208,14 @@ class TestDurchfuehrung
     /**
      * Löscht eine Testdurchführung inkl. ihrer per-Aufgabe-Ergebnisse
      * (ON DELETE CASCADE test_durchfuehrung_ergebnisse -> test_durchfuehrungen).
+     * Nur, wenn sie zum (vorher geprüften) Hund gehört.
      */
-    public static function delete(int $id): bool
+    public static function delete(int $id, int $dogId): bool
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM test_durchfuehrungen WHERE id = :id');
-        return $stmt->execute([':id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM test_durchfuehrungen WHERE id = :id AND dog_id = :dog_id');
+        $stmt->execute([':id' => $id, ':dog_id' => $dogId]);
+        return $stmt->rowCount() > 0;
     }
 
     // -------------------------------------------------------------
@@ -219,9 +232,9 @@ class TestDurchfuehrung
      * @param array $ergebnisse
      * @return array{success: bool, message: string, durchfuehrungsdatum?: string, status?: string, notizen?: ?string, ergebnisse?: array}
      */
-    private static function validate(int $testId, array $durchfuehrungData, array $ergebnisse): array
+    private static function validate(int $testId, int $tenantId, array $durchfuehrungData, array $ergebnisse): array
     {
-        $test = Test::findById($testId);
+        $test = Test::findById($testId, $tenantId);
         if ($test === null) {
             return ['success' => false, 'message' => 'Der ausgewählte Test wurde nicht gefunden.'];
         }

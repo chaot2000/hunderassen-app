@@ -21,9 +21,10 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $dogId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-$dog   = $dogId ? Dog::findByIdForUser($dogId, $currentUserId, $isAdmin) : null;
+$dog   = $dogId ? Dog::findByIdForUser($dogId, $currentUserId, $isAdmin, $tenantId) : null;
 
 if ($dog === null) {
     http_response_code(404);

@@ -27,13 +27,14 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 $editingId = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $existing  = null;
 
 if ($editingId !== null) {
     $ownerDogId = TestDurchfuehrung::findDogIdById($editingId);
-    $dog = $ownerDogId !== null ? Dog::findByIdForUser($ownerDogId, $currentUserId, $isAdmin) : null;
+    $dog = $ownerDogId !== null ? Dog::findByIdForUser($ownerDogId, $currentUserId, $isAdmin, $tenantId) : null;
 
     if ($dog === null) {
         http_response_code(404);
@@ -47,7 +48,7 @@ if ($editingId !== null) {
     }
 } else {
     $dogId = isset($_GET['dog_id']) ? (int) $_GET['dog_id'] : 0;
-    $dog   = $dogId ? Dog::findByIdForUser($dogId, $currentUserId, $isAdmin) : null;
+    $dog   = $dogId ? Dog::findByIdForUser($dogId, $currentUserId, $isAdmin, $tenantId) : null;
 
     if ($dog === null) {
         http_response_code(404);
@@ -85,9 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isEditMode) {
-        $result = TestDurchfuehrung::update($editingId, $testId, $durchfuehrungData, $ergebnisse);
+        $result = TestDurchfuehrung::update($editingId, (int) $dog['id'], $tenantId, $durchfuehrungData, $ergebnisse);
     } else {
-        $result = TestDurchfuehrung::create((int) $dog['id'], $testId, $durchfuehrungData, $ergebnisse, $currentUserId);
+        $result = TestDurchfuehrung::create((int) $dog['id'], $testId, $durchfuehrungData, $ergebnisse, $currentUserId, $tenantId);
     }
 
     if ($result['success']) {
@@ -113,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing['ergebnisse']           = $ergebnisse;
 }
 
-$alleTests = Test::findAll();
+$alleTests = Test::findAll($tenantId);
 
 // Für jeden Test die volle Aufgaben-/Ergebnis-Struktur laden, damit die
 // passenden Aufgaben-Blöcke serverseitig vorgerendert werden können
@@ -122,7 +123,7 @@ $alleTests = Test::findAll();
 // Breed::getFilterCounts()).
 $testDetails = [];
 foreach ($alleTests as $test) {
-    $testDetails[(int) $test['id']] = Test::findById((int) $test['id']);
+    $testDetails[(int) $test['id']] = Test::findById((int) $test['id'], $tenantId);
 }
 
 $selectedTestId = (int) ($existing['test_id'] ?? ($_POST['test_id'] ?? 0));

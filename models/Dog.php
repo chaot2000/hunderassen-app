@@ -31,9 +31,9 @@ class Dog
     public const TOP_TAG_COUNT = 5;
 
     /**
-     * Liefert Hunde, gescoped auf den Nutzer: Admins sehen alle,
-     * normale Nutzer nur ihre eigenen (created_by). Optional zusätzlich
-     * per Freitextsuche auf dem Namen gefiltert.
+     * Liefert Hunde, gescoped auf den Nutzer und Tenant: Admins sehen alle
+     * Hunde im aktuellen Tenant, normale Nutzer nur ihre eigenen (created_by).
+     * Optional zusätzlich per Freitextsuche auf dem Namen gefiltert.
      *
      * Enthält bereits Rassename und eine kommaseparierte Liste der
      * Halternamen (per GROUP_CONCAT, da ein Hund jetzt mehrere Halter
@@ -42,7 +42,7 @@ class Dog
      *
      * @return array<int, array<string, mixed>>
      */
-    public static function search(string $term, int $userId, bool $isAdmin): array
+    public static function search(string $term, int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
@@ -55,8 +55,8 @@ class Dog
                 LEFT JOIN breeds b ON b.id = d.breed_id
                 LEFT JOIN dog_halter dh ON dh.dog_id = d.id
                 LEFT JOIN halter h ON h.id = dh.halter_id
-                WHERE 1 = 1";
-        $params = [];
+                WHERE d.tenant_id = :tenant_id";
+        $params = [':tenant_id' => $tenantId];
 
         if (!$isAdmin) {
             $sql .= ' AND d.created_by = :created_by';
@@ -85,15 +85,15 @@ class Dog
 
     /**
      * Detailansicht eines einzelnen Hundes, NUR wenn der Nutzer ihn
-     * sehen darf (Ersteller oder Admin) — sonst null (führt in den
-     * Seiten zu 404). Inkl. Rassename, Halter-Liste (mehrere möglich,
-     * siehe getHalters()) und Züchtername, sowie der TOP_TAG_COUNT
-     * wichtigsten Eigenschaften der verknüpften Rasse.
+     * sehen darf (Ersteller oder Admin) und im gleichen Tenant — sonst null.
+     * Inkl. Rassename, Halter-Liste (mehrere möglich, siehe getHalters())
+     * und Züchtername, sowie der TOP_TAG_COUNT wichtigsten Eigenschaften
+     * der verknüpften Rasse.
      *
      * Liefert bewusst NICHT den Bild-BLOB selbst mit, analog zu
      * Breed::findById() — dafür findImageByIdForUser().
      */
-    public static function findByIdForUser(int $id, int $userId, bool $isAdmin): ?array
+    public static function findByIdForUser(int $id, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
 
@@ -106,10 +106,10 @@ class Dog
              FROM dogs d
              LEFT JOIN breeds b ON b.id = d.breed_id
              LEFT JOIN zuechter z ON z.id = d.zuechter_id
-             WHERE d.id = :id
+             WHERE d.id = :id AND d.tenant_id = :tenant_id
              LIMIT 1'
         );
-        $stmt->execute([':id' => $id]);
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
         $dog = $stmt->fetch();
 
         if ($dog === false) {
@@ -150,17 +150,17 @@ class Dog
 
     /**
      * Liefert NUR die rohen Bilddaten (Blob + Mime-Type) eines Hundes,
-     * gescoped auf den Nutzer (Ersteller oder Admin) — sonst null.
+     * gescoped auf den Nutzer und Tenant (Ersteller oder Admin) — sonst null.
      * Getrennt von findByIdForUser(), damit das potenziell große BLOB
      * nicht bei jeder Listen-/Detailabfrage mitgeladen wird.
      *
      * @return array{blob: string, mime: string}|null
      */
-    public static function findImageByIdForUser(int $dogId, int $userId, bool $isAdmin): ?array
+    public static function findImageByIdForUser(int $dogId, int $userId, bool $isAdmin, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM dogs WHERE id = :id AND bild_blob IS NOT NULL LIMIT 1');
-        $stmt->execute([':id' => $dogId]);
+        $stmt = $pdo->prepare('SELECT bild_blob, bild_mime, created_by FROM dogs WHERE id = :id AND tenant_id = :tenant_id AND bild_blob IS NOT NULL LIMIT 1');
+        $stmt->execute([':id' => $dogId, ':tenant_id' => $tenantId]);
         $row = $stmt->fetch();
 
         if (!$row) {
@@ -200,13 +200,13 @@ class Dog
 
     /**
      * Liefert alle Hunde eines bestimmten Halters, gescoped auf den
-     * Nutzer — für die Halter-Detailseite (halter_detail.php). Nutzt
-     * die dog_halter-Pivot-Tabelle (ein Halter kann mehreren Hunden
+     * Nutzer und Tenant — für die Halter-Detailseite (halter_detail.php).
+     * Nutzt die dog_halter-Pivot-Tabelle (ein Halter kann mehreren Hunden
      * zugeordnet sein, unverändert zur bisherigen Logik).
      *
      * @return array<int, array<string, mixed>>
      */
-    public static function findByHalterForUser(int $halterId, int $userId, bool $isAdmin): array
+    public static function findByHalterForUser(int $halterId, int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
@@ -214,8 +214,8 @@ class Dog
                        d.bild_updated_at, (d.bild_blob IS NOT NULL) AS hat_bild
                 FROM dogs d
                 INNER JOIN dog_halter dh ON dh.dog_id = d.id
-                WHERE dh.halter_id = :halter_id';
-        $params = [':halter_id' => $halterId];
+                WHERE dh.halter_id = :halter_id AND d.tenant_id = :tenant_id';
+        $params = [':halter_id' => $halterId, ':tenant_id' => $tenantId];
         if (!$isAdmin) {
             $sql .= ' AND d.created_by = :uid';
             $params[':uid'] = $userId;
@@ -236,19 +236,19 @@ class Dog
 
     /**
      * Liefert alle Hunde eines bestimmten Züchters, gescoped auf den
-     * Nutzer — für die Züchter-Detailseite (zuechter_detail.php).
+     * Nutzer und Tenant — für die Züchter-Detailseite (zuechter_detail.php).
      *
      * @return array<int, array<string, mixed>>
      */
-    public static function findByZuechterForUser(int $zuechterId, int $userId, bool $isAdmin): array
+    public static function findByZuechterForUser(int $zuechterId, int $userId, bool $isAdmin, int $tenantId): array
     {
         $pdo = Database::getConnection();
 
         $sql = 'SELECT d.id, d.name, d.geburtsdatum, d.farbe,
                        d.bild_updated_at, (d.bild_blob IS NOT NULL) AS hat_bild
                 FROM dogs d
-                WHERE d.zuechter_id = :zuechter_id';
-        $params = [':zuechter_id' => $zuechterId];
+                WHERE d.zuechter_id = :zuechter_id AND d.tenant_id = :tenant_id';
+        $params = [':zuechter_id' => $zuechterId, ':tenant_id' => $tenantId];
         if (!$isAdmin) {
             $sql .= ' AND d.created_by = :uid';
             $params[':uid'] = $userId;
@@ -275,9 +275,9 @@ class Dog
      *        bereits verkleinerte Bilddaten, siehe BildVerarbeitung::verarbeiteUpload()
      * @return array{success: bool, message: string, dog_id?: int}
      */
-    public static function create(array $data, array $halterIds, int $createdBy, ?array $image = null): array
+    public static function create(array $data, array $halterIds, int $createdBy, bool $isAdmin, int $tenantId, ?array $image = null): array
     {
-        $validated = self::validate($data, $halterIds);
+        $validated = self::validate($data, $halterIds, $tenantId, $createdBy, $isAdmin, null);
         if (!$validated['success']) {
             return $validated;
         }
@@ -288,10 +288,11 @@ class Dog
             $pdo->beginTransaction();
 
             $stmt = $pdo->prepare(
-                'INSERT INTO dogs (name, geburtsdatum, farbe, breed_id, zuechter_id, bild_blob, bild_mime, bild_updated_at, created_by)
-                 VALUES (:name, :geburtsdatum, :farbe, :breed_id, :zuechter_id, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
+                'INSERT INTO dogs (tenant_id, name, geburtsdatum, farbe, breed_id, zuechter_id, bild_blob, bild_mime, bild_updated_at, created_by)
+                 VALUES (:tenant_id, :name, :geburtsdatum, :farbe, :breed_id, :zuechter_id, :bild_blob, :bild_mime, :bild_updated_at, :created_by)'
             );
             $stmt->execute([
+                ':tenant_id'      => $tenantId,
                 ':name'            => $validated['name'],
                 ':geburtsdatum'    => $validated['geburtsdatum'],
                 ':farbe'           => $validated['farbe'],
@@ -323,9 +324,13 @@ class Dog
      * @param bool $removeImage true = vorhandenes Bild entfernen (nur wirksam, wenn $image === null)
      * @return array{success: bool, message: string}
      */
-    public static function update(int $id, array $data, array $halterIds, ?array $image = null, bool $removeImage = false): array
+    public static function update(int $id, int $tenantId, int $userId, bool $isAdmin, array $data, array $halterIds, ?array $image = null, bool $removeImage = false): array
     {
-        $validated = self::validate($data, $halterIds);
+        if (self::findByIdForUser($id, $userId, $isAdmin, $tenantId) === null) {
+            return ['success' => false, 'message' => 'Der Hund wurde nicht gefunden.'];
+        }
+
+        $validated = self::validate($data, $halterIds, $tenantId, $userId, $isAdmin, $id);
         if (!$validated['success']) {
             return $validated;
         }
@@ -352,7 +357,7 @@ class Dog
                 'UPDATE dogs
                  SET name = :name, geburtsdatum = :geburtsdatum, farbe = :farbe,
                      breed_id = :breed_id, zuechter_id = :zuechter_id' . $imageSql . '
-                 WHERE id = :id'
+                 WHERE id = :id AND tenant_id = :tenant_id'
             );
             $stmt->execute(array_merge([
                 ':name'         => $validated['name'],
@@ -361,6 +366,7 @@ class Dog
                 ':breed_id'     => $validated['breed_id'],
                 ':zuechter_id'  => $validated['zuechter_id'],
                 ':id'           => $id,
+                ':tenant_id'    => $tenantId,
             ], $imageParams));
 
             self::syncHalters($pdo, $id, $validated['halter_ids']);
@@ -375,12 +381,13 @@ class Dog
         }
     }
 
-    public static function delete(int $id): bool
+    public static function delete(int $id, int $tenantId): bool
     {
-        $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM dogs WHERE id = :id');
-        return $stmt->execute([':id' => $id]);
         // dog_halter-Zeilen werden per ON DELETE CASCADE automatisch mitgelöscht.
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare('DELETE FROM dogs WHERE id = :id AND tenant_id = :tenant_id');
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
+        return $stmt->rowCount() > 0;
     }
 
     /**
@@ -409,12 +416,17 @@ class Dog
      * und update() gemeinsam genutzt, damit beide Pfade dieselben
      * Regeln durchsetzen.
      *
+     * Halter und Züchter müssen zum Mandanten gehören und, außer bei
+     * Admins, vom Nutzer selbst angelegt sein. Beim Bearbeiten
+     * ($dogId gesetzt) bleiben bereits verknüpfte Halter/Züchter
+     * erlaubt, auch wenn ein Admin sie zugeordnet hat.
+     *
      * @param array<string, mixed> $data
      * @param int[] $halterIds
      * @return array{success: bool, message: string, name?: string, geburtsdatum?: ?string,
      *               farbe?: ?string, breed_id?: ?int, zuechter_id?: ?int, halter_ids?: int[]}
      */
-    private static function validate(array $data, array $halterIds): array
+    private static function validate(array $data, array $halterIds, int $tenantId, int $userId, bool $isAdmin, ?int $dogId): array
     {
         $name = clean_input((string) ($data['name'] ?? ''));
         if ($name === '') {
@@ -453,27 +465,24 @@ class Dog
             }
         }
 
-        // WICHTIG: halter_ids/zuechter_id werden hier nur auf reine
-        // Existenz geprüft, NICHT auf Eigentümerschaft — die Auswahl
-        // im Formular (dog_form.php) zeigt dem Nutzer ohnehin nur die
-        // eigenen (bzw. bei Admins alle) Halter/Züchter an.
+        // Die Formularauswahl allein schützt nicht: eine fremde ID lässt
+        // sich von Hand ins Formular schreiben. Deshalb hier Mandant und
+        // Besitzer prüfen.
         $cleanHalterIds = array_values(array_unique(array_filter(array_map('intval', $halterIds))));
         if (!empty($cleanHalterIds)) {
-            $pdo = Database::getConnection();
-            $placeholders = implode(',', array_fill(0, count($cleanHalterIds), '?'));
-            $check = $pdo->prepare("SELECT COUNT(*) FROM halter WHERE id IN ({$placeholders})");
-            $check->execute($cleanHalterIds);
-            if ((int) $check->fetchColumn() !== count($cleanHalterIds)) {
+            $erlaubt = self::allowedIds('halter', $cleanHalterIds, $tenantId, $userId, $isAdmin);
+            if ($dogId !== null) {
+                $erlaubt = array_merge($erlaubt, array_map('intval', array_column(self::getHalters($dogId), 'id')));
+            }
+            if (array_diff($cleanHalterIds, $erlaubt) !== []) {
                 return ['success' => false, 'message' => 'Mindestens einer der ausgewählten Halter wurde nicht gefunden.'];
             }
         }
 
         $zuechterId = isset($data['zuechter_id']) && $data['zuechter_id'] !== '' ? (int) $data['zuechter_id'] : null;
         if ($zuechterId !== null) {
-            $pdo = Database::getConnection();
-            $check = $pdo->prepare('SELECT id FROM zuechter WHERE id = :id LIMIT 1');
-            $check->execute([':id' => $zuechterId]);
-            if (!$check->fetch()) {
+            $erlaubt = self::allowedIds('zuechter', [$zuechterId], $tenantId, $userId, $isAdmin);
+            if ($erlaubt === [] && !($dogId !== null && self::currentZuechterId($dogId) === $zuechterId)) {
                 return ['success' => false, 'message' => 'Der ausgewählte Züchter wurde nicht gefunden.'];
             }
         }
@@ -488,5 +497,43 @@ class Dog
             'zuechter_id'  => $zuechterId,
             'halter_ids'   => $cleanHalterIds,
         ];
+    }
+
+    /**
+     * Welche der IDs aus halter/zuechter liegen im Mandanten und dürfen
+     * vom Nutzer verknüpft werden (Admin: alle im Mandanten, sonst nur
+     * selbst angelegte)?
+     *
+     * @param 'halter'|'zuechter' $table
+     * @param int[] $ids
+     * @return int[]
+     */
+    private static function allowedIds(string $table, array $ids, int $tenantId, int $userId, bool $isAdmin): array
+    {
+        if (!in_array($table, ['halter', 'zuechter'], true)) {
+            throw new InvalidArgumentException('Unbekannte Tabelle: ' . $table);
+        }
+
+        $pdo = Database::getConnection();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "SELECT id FROM {$table} WHERE tenant_id = ? AND id IN ({$placeholders})";
+        $params = array_merge([$tenantId], $ids);
+        if (!$isAdmin) {
+            $sql .= ' AND created_by = ?';
+            $params[] = $userId;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    private static function currentZuechterId(int $dogId): ?int
+    {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare('SELECT zuechter_id FROM dogs WHERE id = :id LIMIT 1');
+        $stmt->execute([':id' => $dogId]);
+        $value = $stmt->fetchColumn();
+        return $value !== false && $value !== null ? (int) $value : null;
     }
 }
