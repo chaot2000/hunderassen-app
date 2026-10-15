@@ -26,7 +26,7 @@ $errorMessage = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_test_id'])) {
     csrf_require_valid();
-    $result = Test::delete((int) $_POST['delete_test_id'], $tenantId);
+    $result = Test::delete((int) $_POST['delete_test_id'], $tenantId, (int) current_user()['id']);
     if ($result['success']) {
         header('Location: /admin_manage_tests.php');
         exit;

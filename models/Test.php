@@ -20,6 +20,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/ContentRevision.php';
 
 class Test
 {
@@ -173,7 +174,7 @@ class Test
      * @param array $aufgaben
      * @return array{success: bool, message: string}
      */
-    public static function update(int $testId, int $tenantId, array $testData, array $aufgaben): array
+    public static function update(int $testId, int $tenantId, array $testData, array $aufgaben, ?int $geaendertVon = null): array
     {
         if (!self::existsInTenant($testId, $tenantId)) {
             return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
@@ -209,7 +210,21 @@ class Test
         try {
             $pdo->beginTransaction();
 
+            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE');
+            $altStmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            $alt = $altStmt->fetch() ?: [];
+            $alt['aufgaben'] = self::aufgabenSnapshot($pdo, $testId);
+
             $beschreibung = clean_input((string) ($testData['beschreibung'] ?? ''));
+            $neu = [
+                'name'         => $name,
+                'beschreibung' => $beschreibung !== '' ? $beschreibung : null,
+                'zielgruppe'   => $zielgruppe,
+            ];
+            if (!$strukturSperren) {
+                $neu['aufgaben'] = $validatedAufgaben['aufgaben'];
+            }
+
             $stmt = $pdo->prepare(
                 'UPDATE tests SET name = :name, beschreibung = :beschreibung, zielgruppe = :zielgruppe, updated_at = NOW()
                  WHERE id = :id AND tenant_id = :tenant_id'
@@ -228,6 +243,8 @@ class Test
                 $pdo->prepare('DELETE FROM test_aufgaben WHERE test_id = :test_id')->execute([':test_id' => $testId]);
                 self::insertAufgabenMitErgebnissen($pdo, $testId, $validatedAufgaben['aufgaben']);
             }
+
+            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, $neu, $geaendertVon, 'bearbeitung', $tenantId);
 
             $pdo->commit();
 
@@ -248,7 +265,7 @@ class Test
      *
      * @return array{success: bool, message: string}
      */
-    public static function delete(int $testId, int $tenantId): array
+    public static function delete(int $testId, int $tenantId, ?int $geaendertVon = null): array
     {
         if (!self::existsInTenant($testId, $tenantId)) {
             return ['success' => false, 'message' => 'Der Test wurde nicht gefunden.'];
@@ -263,10 +280,61 @@ class Test
         }
 
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id AND tenant_id = :tenant_id');
-        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+
+        try {
+            $pdo->beginTransaction();
+
+            // Texte und Aufgaben-Struktur vorher als Version sichern.
+            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE');
+            $altStmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            $alt = $altStmt->fetch() ?: [];
+            $alt['aufgaben'] = self::aufgabenSnapshot($pdo, $testId);
+            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, [], $geaendertVon, 'loeschung', $tenantId);
+
+            $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id AND tenant_id = :tenant_id');
+            $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            error_log('Fehler beim Löschen eines Tests: ' . $e->getMessage());
+            return ['success' => false, 'message' => 'Beim Löschen ist ein Fehler aufgetreten. Es wurde nichts gelöscht.'];
+        }
 
         return ['success' => true, 'message' => 'Test wurde gelöscht.'];
+    }
+
+    /**
+     * Aufgaben-/Ergebnisstruktur eines Tests im selben Format wie
+     * validateAufgaben() sie liefert, für den Vergleich und die
+     * Versionierung (ContentRevision, Feld "aufgaben"). Leere Struktur
+     * ergibt null, damit kein leeres JSON als Version entsteht.
+     *
+     * @return array<int, array{titel: string, beschreibung: ?string, ergebnisse: array<int, array{bezeichnung: string, kategorie: string}>}>|null
+     */
+    private static function aufgabenSnapshot(PDO $pdo, int $testId): ?array
+    {
+        $aufgabenStmt = $pdo->prepare('SELECT id, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id');
+        $aufgabenStmt->execute([':test_id' => $testId]);
+        $aufgaben = $aufgabenStmt->fetchAll();
+        if (empty($aufgaben)) {
+            return null;
+        }
+
+        $ergStmt = $pdo->prepare('SELECT bezeichnung, kategorie FROM test_ergebnisse WHERE aufgabe_id = :aufgabe_id ORDER BY id');
+        $snapshot = [];
+        foreach ($aufgaben as $aufgabe) {
+            $ergStmt->execute([':aufgabe_id' => $aufgabe['id']]);
+            $snapshot[] = [
+                'titel'        => (string) $aufgabe['titel'],
+                'beschreibung' => $aufgabe['beschreibung'] !== null && $aufgabe['beschreibung'] !== '' ? (string) $aufgabe['beschreibung'] : null,
+                'ergebnisse'   => array_map(
+                    fn($e) => ['bezeichnung' => (string) $e['bezeichnung'], 'kategorie' => (string) $e['kategorie']],
+                    $ergStmt->fetchAll()
+                ),
+            ];
+        }
+        return $snapshot;
     }
 
     /**
