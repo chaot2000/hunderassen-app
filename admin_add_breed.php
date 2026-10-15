@@ -16,6 +16,7 @@ require_once __DIR__ . '/models/Breed.php';
 require_once __DIR__ . '/models/Tag.php';
 require_once __DIR__ . '/models/Activity.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
+require_once __DIR__ . '/models/Uebersetzung.php';
 
 secure_session_start();
 require_manage_breeds();
@@ -49,6 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'beschreibung'       => $_POST['beschreibung'] ?? '',
         'gliederung'         => $_POST['gliederung'] ?? 'keine',
     ];
+    foreach (Breed::INHALT_FELDER as $feld) {
+        $breedData[$feld] = $_POST[$feld] ?? '';
+    }
 
     // Größenklassen aus dem dynamisch erzeugten Formular-Array einlesen.
     // Erwartetes POST-Format: sizes[0][groesse], sizes[0][ruede_min], ...
@@ -393,6 +397,92 @@ require __DIR__ . '/views/partials/header.php';
                         <option value="<?= $wert ?>" <?= (string) ($existing['gliederung'] ?? 'keine') === $wert ? 'selected' : '' ?>><?= e($label) ?></option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charakter, deutsch und englisch. Englisch kommt meist aus TheDogAPI. -->
+    <div
+        x-data='{ wb: <?= json_encode(Uebersetzung::woerterbuch(), JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) ?>, unbekannt: [],
+            uebersetzen() {
+                const en = this.$refs.tempEn.value.split(",").map(b => b.trim().toLowerCase()).filter(b => b);
+                this.unbekannt = en.filter(b => !this.wb[b]);
+                if (this.unbekannt.length === 0 && en.length) {
+                    this.$refs.tempDe.value = [...new Set(en.map(b => this.wb[b]))].join(", ");
+                }
+            } }'
+        class="bg-white/80 rounded-2xl shadow border border-sand p-6"
+    >
+        <h2 class="text-lg font-bold text-fellDk mb-1">Charakter und Englisch</h2>
+        <p class="text-sm text-fellDk/80 mb-4">Links deutsch, rechts englisch.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-start-2">
+                <label for="name_en" class="block text-sm font-semibold mb-1">Name (englisch)</label>
+                <input
+                    type="text" id="name_en" name="name_en" maxlength="120" lang="en"
+                    value="<?= e($existing['name_en'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+
+            <div>
+                <label for="temperament" class="block text-sm font-semibold mb-1">Temperament</label>
+                <input
+                    type="text" id="temperament" name="temperament" maxlength="255" x-ref="tempDe"
+                    placeholder="z. B. selbstbewusst, aufmerksam"
+                    value="<?= e($existing['temperament'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+            <div>
+                <label for="temperament_en" class="block text-sm font-semibold mb-1">Temperament (englisch)</label>
+                <input
+                    type="text" id="temperament_en" name="temperament_en" maxlength="255" lang="en" x-ref="tempEn"
+                    value="<?= e($existing['temperament_en'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+                <button type="button" @click="uebersetzen()" class="mt-2 min-h-[44px] px-3 rounded-lg border-2 border-tanne text-tanne font-semibold hover:bg-tanne hover:text-creme">
+                    Ins Deutsche übersetzen (Wörterbuch)
+                </button>
+                <p x-show="unbekannt.length" x-cloak class="text-sm text-fell mt-1" role="status">
+                    Nicht im Wörterbuch: <span x-text="unbekannt.join(', ')"></span>. Bitte von Hand übersetzen.
+                </p>
+            </div>
+
+            <div>
+                <label for="zuchtzweck" class="block text-sm font-semibold mb-1">Zuchtzweck</label>
+                <input
+                    type="text" id="zuchtzweck" name="zuchtzweck" maxlength="255"
+                    value="<?= e($existing['zuchtzweck'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+            <div>
+                <label for="zuchtzweck_en" class="block text-sm font-semibold mb-1">Zuchtzweck (englisch)</label>
+                <input
+                    type="text" id="zuchtzweck_en" name="zuchtzweck_en" maxlength="255" lang="en"
+                    value="<?= e($existing['zuchtzweck_en'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+
+            <div>
+                <label for="lebenserwartung" class="block text-sm font-semibold mb-1">Lebenserwartung in Jahren</label>
+                <input
+                    type="text" id="lebenserwartung" name="lebenserwartung" maxlength="50"
+                    placeholder="z. B. 12–15"
+                    value="<?= e($existing['lebenserwartung'] ?? '') ?>"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+            </div>
+
+            <div class="md:col-span-2">
+                <label for="beschreibung_en" class="block text-sm font-semibold mb-1">Beschreibung (englisch)</label>
+                <textarea
+                    id="beschreibung_en" name="beschreibung_en" rows="6" lang="en"
+                    class="w-full rounded-lg border border-sand px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-tanne"
+                ><?= e($existing['beschreibung_en'] ?? '') ?></textarea>
             </div>
         </div>
     </div>

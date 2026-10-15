@@ -18,6 +18,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/environment.php';
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/i18n.php'; // t() und aktuelle_sprache() für alle Seiten
 
 // =====================================================================
 // 1. Sicheres Session-Management

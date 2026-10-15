@@ -33,21 +33,54 @@ class Breed
     ];
 
     /**
-     * Neue Strukturfelder aus dem Formular, bereinigt. Ungültige
+     * Textfelder für Charakter und Übersetzung, deutsch und englisch.
+     * Werden wie die Strukturfelder in create() und update() geschrieben.
+     */
+    public const INHALT_FELDER = [
+        'name_en', 'temperament', 'temperament_en', 'lebenserwartung',
+        'zuchtzweck', 'zuchtzweck_en', 'beschreibung_en',
+    ];
+
+    /**
+     * Struktur- und Inhaltsfelder aus dem Formular, bereinigt. Ungültige
      * Auswahlwerte werden zu null bzw. 'keine'.
      *
-     * @return array{fci_sektion: ?string, fci_sektion_name: ?string, arbeitspruefung: ?string, gliederung: string}
+     * @return array<string, ?string>
      */
     private static function strukturFelder(array $breedData): array
     {
         $ap = (string) ($breedData['arbeitspruefung'] ?? '');
         $gl = (string) ($breedData['gliederung'] ?? 'keine');
-        return [
+        $felder = [
             'fci_sektion'      => clean_input($breedData['fci_sektion'] ?? '') ?: null,
             'fci_sektion_name' => clean_input($breedData['fci_sektion_name'] ?? '') ?: null,
             'arbeitspruefung'  => in_array($ap, ['mit', 'ohne', 'fakultativ'], true) ? $ap : null,
             'gliederung'       => in_array($gl, ['keine', 'automatisch', 'geprueft'], true) ? $gl : 'keine',
         ];
+        foreach (self::INHALT_FELDER as $feld) {
+            // Browser schicken Zeilenumbrüche als \r\n. Ohne Angleichen
+            // gälte ein unveränderter Text als geändert (neue Version).
+            $wert = str_replace("\r\n", "\n", (string) ($breedData[$feld] ?? ''));
+            $felder[$feld] = clean_input($wert) ?: null;
+        }
+        return $felder;
+    }
+
+    /** "fci_sektion = :fci_sektion, ..." bzw. ":fci_sektion, ..." für alle Felder aus strukturFelder(). */
+    private static function strukturSql(bool $alsZuweisung): string
+    {
+        $namen = array_merge(['fci_sektion', 'fci_sektion_name', 'arbeitspruefung', 'gliederung'], self::INHALT_FELDER);
+        return implode(', ', array_map(fn($f) => $alsZuweisung ? "{$f} = :{$f}" : ":{$f}", $namen));
+    }
+
+    /** @return array<string, ?string> Parameter mit Doppelpunkt für PDO */
+    private static function strukturParameter(array $struktur): array
+    {
+        $params = [];
+        foreach ($struktur as $feld => $wert) {
+            $params[':' . $feld] = $wert;
+        }
+        return $params;
     }
 
     /**
@@ -119,17 +152,14 @@ class Breed
 
             // beschreibung_original = Text beim Anlegen, wird danach nie
             // mehr überschrieben (siehe ContentRevision).
+            $strukturSpalten = str_replace(':', '', self::strukturSql(false));
             $insertBreed = $pdo->prepare(
-                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung, beschreibung_original, gliederung, bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
-                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :fci_sektion, :fci_sektion_name, :arbeitspruefung, :beschreibung, :beschreibung_original, :gliederung, :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
+                'INSERT INTO breeds (name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr, beschreibung, beschreibung_original, ' . $strukturSpalten . ', bild_blob, bild_mime, bild_updated_at, created_at, updated_at, created_by)
+                 VALUES (:name, :alternative_namen, :namenszusatz, :ursprungsland, :farben, :fci_klasse, :fci_nr, :beschreibung, :beschreibung_original, ' . self::strukturSql(false) . ', :bild_blob, :bild_mime, :bild_updated_at, NOW(), NOW(), :created_by)'
             );
-            $beschreibung = clean_input($breedData['beschreibung'] ?? '') ?: null;
+            $beschreibung = clean_input(str_replace("\r\n", "\n", (string) ($breedData['beschreibung'] ?? ''))) ?: null;
             $struktur = self::strukturFelder($breedData);
-            $insertBreed->execute([
-                ':fci_sektion'       => $struktur['fci_sektion'],
-                ':fci_sektion_name'  => $struktur['fci_sektion_name'],
-                ':arbeitspruefung'   => $struktur['arbeitspruefung'],
-                ':gliederung'        => $struktur['gliederung'],
+            $insertBreed->execute(self::strukturParameter($struktur) + [
                 ':name'              => $name,
                 ':alternative_namen' => clean_input($breedData['alternative_namen'] ?? '') ?: null,
                 ':namenszusatz'      => clean_input($breedData['namenszusatz'] ?? '') ?: null,
@@ -222,7 +252,7 @@ class Breed
 
             $altStmt = $pdo->prepare(
                 'SELECT name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr,
-                        fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung, gliederung
+                        beschreibung, ' . str_replace(':', '', self::strukturSql(false)) . '
                  FROM breeds WHERE id = :id FOR UPDATE'
             );
             $altStmt->execute([':id' => $breedId]);
@@ -236,7 +266,7 @@ class Breed
                 'farben'            => clean_input($breedData['farben'] ?? '') ?: null,
                 'fci_klasse'        => $fciKlasse,
                 'fci_nr'            => clean_input($breedData['fci_nr'] ?? '') ?: null,
-                'beschreibung'      => clean_input($breedData['beschreibung'] ?? '') ?: null,
+                'beschreibung'      => clean_input(str_replace("\r\n", "\n", (string) ($breedData['beschreibung'] ?? ''))) ?: null,
             ];
 
             $updateBreed = $pdo->prepare(
@@ -244,16 +274,11 @@ class Breed
                  SET name = :name, alternative_namen = :alternative_namen, namenszusatz = :namenszusatz,
                      ursprungsland = :ursprungsland, farben = :farben,
                      fci_klasse = :fci_klasse, fci_nr = :fci_nr, beschreibung = :beschreibung,
-                     fci_sektion = :fci_sektion, fci_sektion_name = :fci_sektion_name,
-                     arbeitspruefung = :arbeitspruefung, gliederung = :gliederung,
+                     ' . self::strukturSql(true) . ',
                      updated_at = NOW()' . $imageSql . '
                  WHERE id = :id'
             );
-            $updateBreed->execute(array_merge([
-                ':fci_sektion'       => $neu['fci_sektion'],
-                ':fci_sektion_name'  => $neu['fci_sektion_name'],
-                ':arbeitspruefung'   => $neu['arbeitspruefung'],
-                ':gliederung'        => $neu['gliederung'],
+            $updateBreed->execute(array_merge(self::strukturParameter(self::strukturFelder($breedData)), [
                 ':name'              => $neu['name'],
                 ':alternative_namen' => $neu['alternative_namen'],
                 ':namenszusatz'      => $neu['namenszusatz'],
@@ -333,8 +358,9 @@ class Breed
         $pdo = Database::getConnection();
 
         $stmt = $pdo->prepare(
-            'SELECT id, name, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr,
-                    fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung,
+            'SELECT id, name, name_en, alternative_namen, namenszusatz, ursprungsland, farben, fci_klasse, fci_nr,
+                    fci_sektion, fci_sektion_name, arbeitspruefung, beschreibung, beschreibung_en,
+                    temperament, temperament_en, lebenserwartung, zuchtzweck, zuchtzweck_en, thedogapi_id,
                     quelle_url, quelle_stand, gliederung,
                     (bild_blob IS NOT NULL) AS hat_bild, bild_updated_at,
                     created_at, updated_at, created_by

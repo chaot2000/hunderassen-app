@@ -52,6 +52,7 @@ CREATE TABLE `users` (
     `is_super_admin` TINYINT(1)  NOT NULL DEFAULT 0, -- mandantenübergreifend: verwaltet Mandanten, wählt tenant_id beim Anlegen von Benutzern
     `can_manage_breeds` TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Rassen-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
     `can_manage_tests`  TINYINT(1) NOT NULL DEFAULT 0, -- Portal-Recht: Test-Katalog verwalten (nur relevant bei role='user', Admin darf ohnehin alles)
+    `sprache`       ENUM('de', 'en') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'de', -- Sprache der Oberfläche, siehe config/i18n.php
     `is_active`     TINYINT(1)   NOT NULL DEFAULT 1, -- manuelles Sperren durch Admin möglich
     `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_by`    INT UNSIGNED NULL,                -- welcher Admin hat den Account angelegt
@@ -121,6 +122,7 @@ DROP TABLE IF EXISTS `breeds`;
 CREATE TABLE `breeds` (
     `id`                INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name`              VARCHAR(120) NOT NULL,
+    `name_en`           VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- englischer Name, z. B. aus TheDogAPI
     `alternative_namen` TEXT NULL,               -- alternative/gebräuchliche Bezeichnungen, z. B. Abkürzungen oder andere Sprachen
     `namenszusatz`      VARCHAR(255) NULL,        -- z. B. Fellvariante oder Zuchtlinie
     `ursprungsland`   VARCHAR(100) NULL,
@@ -132,9 +134,12 @@ CREATE TABLE `breeds` (
     `arbeitspruefung` ENUM('mit', 'ohne', 'fakultativ') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     `beschreibung`    TEXT NULL,
     `beschreibung_original` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Stand beim Anlegen bzw. bei Einführung der Versionierung, wird nie überschrieben
-    `temperament`     VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar
+    `beschreibung_en` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- englische Beschreibung (TheDogAPI description)
+    `temperament`     VARCHAR(255) NULL,        -- deutsch, per Wörterbuch aus temperament_en oder von Hand
+    `temperament_en`  VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- englisch, aus TheDogAPI
     `lebenserwartung` VARCHAR(50)  NULL,        -- aus TheDogAPI-Abgleich übernehmbar
-    `zuchtzweck`      VARCHAR(255) NULL,        -- aus TheDogAPI-Abgleich übernehmbar (bred_for)
+    `zuchtzweck`      VARCHAR(255) NULL,        -- deutsch, von Hand übersetzt
+    `zuchtzweck_en`   VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- englisch, aus TheDogAPI (bred_for)
     `quelle_url`      VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- Herkunft des Textes, z. B. VDH-Rasselexikon
     `quelle_stand`    DATE NULL,                -- Stand der Quelle
     `gliederung`      ENUM('keine', 'automatisch', 'geprueft') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'keine', -- siehe admin_rassentexte.php

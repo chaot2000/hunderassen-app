@@ -21,6 +21,8 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
 require_once __DIR__ . '/models/ContentRevision.php';
+require_once __DIR__ . '/models/TheDogApiFelder.php';
+require_once __DIR__ . '/models/Uebersetzung.php';
 
 secure_session_start();
 // Schreibt in den geteilten Rassenkatalog aller Mandanten, daher nur
@@ -33,21 +35,45 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 csrf_require_valid();
 
-// Die Review-Seite schickt die Auswahl als ein JSON-Feld. Einzelne
-// Formularfelder pro Rasse würden bei einer Pauschal-Auswahl über
-// max_input_vars (Standard 1000) kommen, PHP schneidet dann still ab.
-// items[...] bleibt als Weg ohne JavaScript erhalten.
-$items = $_POST['items'] ?? [];
-if (isset($_POST['items_json'])) {
-    $items = json_decode((string) $_POST['items_json'], true);
-}
-if (!is_array($items) || count($items) === 0) {
-    die('Keine Daten übermittelt.');
-}
-
 $pdo = Database::getConnection();
+$leer = fn($v): bool => $v === null || trim((string) $v) === '';
+$userId = (int) current_user()['id'];
 
 $ergebnisse = [];
+$offen = [];
+
+if (($_POST['aktion'] ?? '') === 'temperament_uebersetzen') {
+    // Sammelaktion: Rassen mit englischem, aber ohne deutsches Temperament
+    // über das Wörterbuch übersetzen. Unvollständige bleiben leer.
+    $rassen = $pdo->query("SELECT id, temperament_en FROM breeds
+                           WHERE (temperament IS NULL OR temperament = '') AND temperament_en <> ''")->fetchAll();
+    $stmt = $pdo->prepare("UPDATE breeds SET temperament = :t WHERE id = :id AND (temperament IS NULL OR temperament = '')");
+    foreach ($rassen as $r) {
+        $u = Uebersetzung::temperament($r['temperament_en']);
+        if ($u['text'] === null) {
+            $ergebnisse[] = ['id' => (int) $r['id'], 'status' => 'übersprungen (nicht im Wörterbuch: ' . implode(', ', $u['unbekannt']) . ')'];
+            continue;
+        }
+        $pdo->beginTransaction();
+        $stmt->execute([':t' => $u['text'], ':id' => $r['id']]);
+        ContentRevision::protokolliere($pdo, 'breeds', (int) $r['id'], ['temperament' => null], ['temperament' => $u['text']], $userId, 'import');
+        $pdo->commit();
+        $ergebnisse[] = ['id' => (int) $r['id'], 'status' => 'ergänzt (Temperament: ' . $u['text'] . ')'];
+    }
+    $items = [];
+} else {
+    // Die Review-Seite schickt die Auswahl als ein JSON-Feld. Einzelne
+    // Formularfelder pro Rasse würden bei einer Pauschal-Auswahl über
+    // max_input_vars (Standard 1000) kommen, PHP schneidet dann still ab.
+    // items[...] bleibt als Weg ohne JavaScript erhalten.
+    $items = $_POST['items'] ?? [];
+    if (isset($_POST['items_json'])) {
+        $items = json_decode((string) $_POST['items_json'], true);
+    }
+    if (!is_array($items) || count($items) === 0) {
+        die('Keine Daten übermittelt.');
+    }
+}
 
 // Bilder laden dauert pro Rasse bis zu 15 s. Damit eine große Auswahl
 // nicht an max_execution_time scheitert, wird nach ZEITBUDGET_SEK
@@ -56,7 +82,11 @@ $ergebnisse = [];
 // Felder gefüllt.
 const ZEITBUDGET_SEK = 20;
 $start = microtime(true);
-$offen = [];
+
+// Textfelder, die gefüllt werden können: alles aus TheDogAPI plus das
+// deutsche Temperament, das aus temperament_en übersetzt wird.
+$textFelder = array_merge(array_keys(TheDogApiFelder::TEXT), ['temperament']);
+$feldLabel = TheDogApiFelder::TEXT + ['temperament' => 'Temperament'];
 
 foreach ($items as $breedId => $daten) {
     $breedId = (int) $breedId;
@@ -72,29 +102,49 @@ foreach ($items as $breedId => $daten) {
     // Aktuellen Stand lesen: Es werden NUR leere Felder gefüllt, nie
     // vorhandene Werte oder Bilder überschrieben (Wunsch 16.10.2026).
     // Ändern lässt sich ein vorhandener Wert über "Rasse bearbeiten".
-    $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck, thedogapi_id, bild_blob IS NOT NULL AS hat_bild FROM breeds WHERE id = :id');
+    $altStmt = $pdo->prepare('SELECT ' . implode(', ', $textFelder) . ', thedogapi_id, bild_blob IS NOT NULL AS hat_bild FROM breeds WHERE id = :id');
     $altStmt->execute([':id' => $breedId]);
     $vorher = $altStmt->fetch();
     if (!$vorher) {
         $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (Rasse nicht gefunden)'];
         continue;
     }
-    $leer = fn($v): bool => $v === null || trim((string) $v) === '';
 
-    $updates = [];
-    $params = [':id' => $breedId];
+    $neu = [];        // Feld => Wert, nur leere Felder
     $behalten = [];
+    $hinweise = [];
 
-    foreach (['temperament', 'lebenserwartung', 'zuchtzweck'] as $feld) {
+    foreach (array_keys(TheDogApiFelder::TEXT) as $feld) {
         $wert = trim((string) ($daten[$feld] ?? ''));
         if (empty($daten['uebernehmen_' . $feld]) || $wert === '') {
             continue;
         }
         if (!$leer($vorher[$feld])) {
-            $behalten[] = $feld;
+            $behalten[] = $feldLabel[$feld];
             continue;
         }
-        $updates[] = "{$feld} = :{$feld}";
+        $neu[$feld] = $wert;
+    }
+
+    // Deutsches Temperament aus dem englischen, wenn das Häkchen gesetzt
+    // ist. Ist das englische schon da, wird es dafür genommen.
+    // Ein vorhandenes deutsches Temperament bleibt still stehen.
+    if (!empty($daten['uebernehmen_temperament_en']) && $leer($vorher['temperament'])) {
+        $en = $neu['temperament_en'] ?? $vorher['temperament_en'];
+        $u = Uebersetzung::temperament($en);
+        if ($u['text'] !== null) {
+            $neu['temperament'] = $u['text'];
+        } elseif ($u['unbekannt']) {
+            $hinweise[] = 'Temperament nicht übersetzt, unbekannt: ' . implode(', ', $u['unbekannt']);
+        }
+    }
+
+    $sets = [];
+    $params = [':id' => $breedId];
+    foreach ($neu as $feld => $wert) {
+        // Leer-Bedingung im UPDATE wiederholen: Hat jemand das Feld
+        // zwischen Lesen und Schreiben gefüllt, bleibt sein Wert stehen.
+        $sets[] = "{$feld} = IF({$feld} IS NULL OR {$feld} = '', :{$feld}, {$feld})";
         $params[':' . $feld] = $wert;
     }
 
@@ -107,11 +157,13 @@ foreach ($items as $breedId => $daten) {
             if ($bildStatus['success']) {
                 // bild_mime VOR bild_blob: MySQL wertet die Zuweisungen von
                 // links nach rechts aus, die IF-Bedingung soll den alten Stand sehen.
-                $updates[] = 'bild_mime = :bild_mime';
-                $updates[] = 'bild_blob = :bild_blob';
-                $updates[] = 'bild_updated_at = NOW()';
+                $sets[] = 'bild_mime = IF(bild_blob IS NULL, :bild_mime, bild_mime)';
+                $sets[] = 'bild_blob = IF(bild_blob IS NULL, :bild_blob, bild_blob)';
+                $sets[] = 'bild_updated_at = NOW()';
                 $params[':bild_blob'] = $bildStatus['blob'];
                 $params[':bild_mime'] = $bildStatus['mime'];
+            } else {
+                $hinweise[] = 'Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'];
             }
         }
     }
@@ -121,51 +173,30 @@ foreach ($items as $breedId => $daten) {
         if (!$leer($vorher['thedogapi_id']) && (string) $vorher['thedogapi_id'] !== $neueId) {
             $behalten[] = 'Zuordnung (schon mit anderer TheDogAPI-Rasse verknüpft)';
         } elseif ($neueId !== '') {
-            $updates[] = 'thedogapi_id = :thedogapi_id';
-            $updates[] = 'thedogapi_stand = NOW()';
+            $sets[] = 'thedogapi_id = :thedogapi_id';
+            $sets[] = 'thedogapi_stand = NOW()';
             $params[':thedogapi_id'] = $neueId;
+            $neu['thedogapi_id'] = $neueId;
         }
     }
 
-    $behaltenText = $behalten ? ' Nicht überschrieben: ' . implode(', ', $behalten) . '.' : '';
-    $bildFehler = ($bildStatus !== null && !$bildStatus['success']) ? ' (Bild-Übernahme fehlgeschlagen: ' . $bildStatus['message'] . ')' : '';
+    $zusatz = ($behalten ? ' Nicht überschrieben: ' . implode(', ', $behalten) . '.' : '')
+        . ($hinweise ? ' (' . implode('; ', $hinweise) . ')' : '');
 
-    if (count($updates) === 0) {
-        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts Neues)' . $behaltenText . $bildFehler];
+    if (count($sets) === 0) {
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'übersprungen (nichts Neues)' . $zusatz];
         continue;
-    }
-
-    // Leer-Bedingungen im UPDATE wiederholen: Hat jemand das Feld
-    // zwischen Lesen und Schreiben gefüllt, bleibt sein Wert stehen.
-    $sets = [];
-    foreach ($updates as $u) {
-        $feld = strtok($u, ' ');
-        $sets[] = match ($feld) {
-            'temperament', 'lebenserwartung', 'zuchtzweck' => "{$feld} = IF({$feld} IS NULL OR {$feld} = '', :{$feld}, {$feld})",
-            'bild_blob' => 'bild_blob = IF(bild_blob IS NULL, :bild_blob, bild_blob)',
-            'bild_mime' => 'bild_mime = IF(bild_blob IS NULL, :bild_mime, bild_mime)',
-            default => $u,
-        };
-    }
-    $sql = 'UPDATE breeds SET ' . implode(', ', $sets) . ' WHERE id = :id';
-    $stmt = $pdo->prepare($sql);
-
-    $neueWerte = [];
-    foreach (['temperament', 'lebenserwartung', 'zuchtzweck', 'thedogapi_id'] as $feld) {
-        if (array_key_exists(':' . $feld, $params)) {
-            $neueWerte[$feld] = $params[':' . $feld];
-        }
     }
 
     try {
         $pdo->beginTransaction();
-        $altStmt = $pdo->prepare('SELECT temperament, lebenserwartung, zuchtzweck, thedogapi_id FROM breeds WHERE id = :id FOR UPDATE');
+        $altStmt = $pdo->prepare('SELECT ' . implode(', ', $textFelder) . ', thedogapi_id FROM breeds WHERE id = :id FOR UPDATE');
         $altStmt->execute([':id' => $breedId]);
         $alt = $altStmt->fetch() ?: [];
-        $stmt->execute($params);
-        ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neueWerte, (int) current_user()['id'], 'import');
+        $pdo->prepare('UPDATE breeds SET ' . implode(', ', $sets) . ' WHERE id = :id')->execute($params);
+        ContentRevision::protokolliere($pdo, 'breeds', $breedId, $alt, $neu, $userId, 'import');
         $pdo->commit();
-        $ergebnisse[] = ['id' => $breedId, 'status' => 'ergänzt' . $behaltenText . $bildFehler];
+        $ergebnisse[] = ['id' => $breedId, 'status' => 'ergänzt' . $zusatz];
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

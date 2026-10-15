@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // damit sich Mandanten-Kürzel nicht durchprobieren lassen.
     $result = $tenant !== null
         ? User::attemptLogin($username, $password, (int) $tenant['id'])
-        : ['success' => false, 'message' => 'Benutzername oder Passwort ist falsch.'];
+        : ['success' => false, 'message' => t('login.falsch')];
 
     if ($result['success']) {
         login_user($result['user']);
@@ -59,15 +59,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $errorMessage = $result['message'];
 }
 
-$pageTitle = 'Anmelden';
+$pageTitle = t('login.titel');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
 <div class="max-w-md mx-auto bg-white/70 rounded-2xl shadow-lg p-8 mt-8 border border-sand">
     <div class="text-center mb-6">
         <span class="text-5xl" aria-hidden="true">🐶</span>
-        <h1 class="text-2xl font-extrabold text-fellDk mt-2">Willkommen zurück!</h1>
-        <p class="text-fellDk/70 text-sm mt-1">Bitte melde dich an, um fortzufahren.</p>
+        <h1 class="text-2xl font-extrabold text-fellDk mt-2"><?= e(t('login.willkommen')) ?></h1>
+        <p class="text-fellDk/70 text-sm mt-1"><?= e(t('login.bitte')) ?></p>
     </div>
 
     <?php if ($errorMessage !== null): ?>
@@ -80,10 +80,10 @@ require __DIR__ . '/views/partials/header.php';
         <?= csrf_field() ?>
 
         <?php if ($hostTenant !== null): ?>
-            <p class="text-sm text-fellDk/70">Mandant: <strong><?= e($hostTenant['name']) ?></strong></p>
+            <p class="text-sm text-fellDk/70"><?= e(t('login.mandant_anzeige')) ?> <strong><?= e($hostTenant['name']) ?></strong></p>
         <?php elseif ($zeigeMandantFeld): ?>
             <div>
-                <label for="mandant" class="block text-sm font-semibold mb-1">Mandant</label>
+                <label for="mandant" class="block text-sm font-semibold mb-1"><?= e(t('login.mandant')) ?></label>
                 <input
                     type="text"
                     id="mandant"
@@ -96,12 +96,12 @@ require __DIR__ . '/views/partials/header.php';
                     aria-describedby="mandant-hinweis"
                     class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
                 >
-                <p id="mandant-hinweis" class="text-xs text-fellDk/60 mt-1">Kürzel deines Vereins oder Teams. Leer lassen, wenn du keins bekommen hast.</p>
+                <p id="mandant-hinweis" class="text-xs text-fellDk/60 mt-1"><?= e(t('login.mandant_hinweis')) ?></p>
             </div>
         <?php endif; ?>
 
         <div>
-            <label for="username" class="block text-sm font-semibold mb-1">Benutzername</label>
+            <label for="username" class="block text-sm font-semibold mb-1"><?= e(t('login.benutzername')) ?></label>
             <input
                 type="text"
                 id="username"
@@ -114,7 +114,7 @@ require __DIR__ . '/views/partials/header.php';
         </div>
 
         <div>
-            <label for="password" class="block text-sm font-semibold mb-1">Passwort</label>
+            <label for="password" class="block text-sm font-semibold mb-1"><?= e(t('login.passwort')) ?></label>
             <input
                 type="password"
                 id="password"
@@ -129,12 +129,12 @@ require __DIR__ . '/views/partials/header.php';
             type="submit"
             class="w-full bg-tanne hover:bg-tanneDk text-creme font-bold py-2.5 rounded-full transition-colors"
         >
-            Anmelden
+            <?= e(t('login.knopf')) ?>
         </button>
     </form>
 
     <p class="text-xs text-fellDk/50 text-center mt-6">
-        Noch keinen Zugang? Bitte wende dich an eine Administratorin oder einen Administrator.
+        <?= e(t('login.kein_zugang')) ?>
     </p>
 </div>
 

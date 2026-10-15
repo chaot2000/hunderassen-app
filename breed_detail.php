@@ -362,6 +362,32 @@ require __DIR__ . '/views/partials/header.php';
                     <dt class="text-sm font-bold text-fellDk">Ursprungsland</dt>
                     <dd class="text-sm text-fellDk"><?= !empty($breed['ursprungsland']) ? e($breed['ursprungsland']) : '<span class="text-fellDk/80">keine Angabe</span>' ?></dd>
                 </div>
+                <?php
+                // Nur gefüllte Zeilen. Fehlt das Deutsche, steht das Englische
+                // aus TheDogAPI da, als englisch gekennzeichnet.
+                $lebenserwartung = trim((string) ($breed['lebenserwartung'] ?? ''));
+                if ($lebenserwartung !== '' && !preg_match('/jahr|year/i', $lebenserwartung)) {
+                    $lebenserwartung = preg_replace('/\s*-\s*/', '–', $lebenserwartung) . ' Jahre';
+                }
+                $charakterZeilen = [
+                    'Temperament'     => [$breed['temperament'] ?? '', $breed['temperament_en'] ?? ''],
+                    'Zuchtzweck'      => [$breed['zuchtzweck'] ?? '', $breed['zuchtzweck_en'] ?? ''],
+                    'Lebenserwartung' => [$lebenserwartung, ''],
+                ];
+                foreach ($charakterZeilen as $titel => [$deutsch, $englisch]):
+                    if (trim((string) $deutsch) === '' && trim((string) $englisch) === '') {
+                        continue;
+                    }
+                ?>
+                <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
+                    <dt class="text-sm font-bold text-fellDk"><?= e($titel) ?></dt>
+                    <?php if (trim((string) $deutsch) !== ''): ?>
+                        <dd class="text-sm text-fellDk"><?= e($deutsch) ?></dd>
+                    <?php else: ?>
+                        <dd class="text-sm text-fellDk"><span lang="en"><?= e($englisch) ?></span> <span class="text-fellDk/80">(englisch, noch nicht übersetzt)</span></dd>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
             </dl>
         </section>
     </div>
