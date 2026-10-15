@@ -37,7 +37,7 @@ $alleZuechter  = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 const DASHBOARD_HUNDE_VORSCHAU = 6;
 $hundeVorschau = array_slice($alleHunde, 0, DASHBOARD_HUNDE_VORSCHAU);
 
-$pageTitle = 'Übersicht';
+$pageTitle = t('nav.uebersicht');
 require __DIR__ . '/views/partials/header.php';
 ?>
 
@@ -45,10 +45,10 @@ require __DIR__ . '/views/partials/header.php';
     <?= render_dog_icon(44, '#2C4130', '#3F5A3F') ?>
     <div>
         <h1 class="text-2xl font-extrabold text-fellDk">
-            Hallo, <?= e(current_user()['username'] ?? '') ?>!
+            <?= e(t('dash.hallo', ['name' => current_user()['username'] ?? ''])) ?>
         </h1>
         <p class="text-sm text-fellDk/60">
-            <?= $isAdmin ? 'Hier ist die Übersicht über das gesamte Portal.' : 'Hier ist deine persönliche Übersicht.' ?>
+            <?= e(t($isAdmin ? 'dash.intro_admin' : 'dash.intro_user')) ?>
         </p>
     </div>
 </div>
@@ -58,27 +58,27 @@ require __DIR__ . '/views/partials/header.php';
     <a href="/dogs.php" class="bg-white/80 rounded-2xl shadow border border-sand p-5 hover:shadow-md hover:border-tanne/40 transition-all">
         <span class="text-3xl" aria-hidden="true">🐕</span>
         <p class="text-2xl font-extrabold text-fellDk mt-2"><?= count($alleHunde) ?></p>
-        <p class="text-sm text-fellDk/60"><?= $isAdmin ? 'Hunde im Portal' : 'Meine Hunde' ?></p>
+        <p class="text-sm text-fellDk/60"><?= e(t($isAdmin ? 'dash.zahl_hunde_portal' : 'dash.zahl_hunde_meine')) ?></p>
     </a>
     <a href="/halter.php" class="bg-white/80 rounded-2xl shadow border border-sand p-5 hover:shadow-md hover:border-tanne/40 transition-all">
         <span class="text-3xl" aria-hidden="true">🧑</span>
         <p class="text-2xl font-extrabold text-fellDk mt-2"><?= count($alleHalter) ?></p>
-        <p class="text-sm text-fellDk/60"><?= $isAdmin ? 'Halter im Portal' : 'Meine Halter' ?></p>
+        <p class="text-sm text-fellDk/60"><?= e(t($isAdmin ? 'dash.zahl_halter_portal' : 'dash.zahl_halter_meine')) ?></p>
     </a>
     <a href="/zuechter.php" class="bg-white/80 rounded-2xl shadow border border-sand p-5 hover:shadow-md hover:border-tanne/40 transition-all">
         <span class="text-3xl" aria-hidden="true">🏠</span>
         <p class="text-2xl font-extrabold text-fellDk mt-2"><?= count($alleZuechter) ?></p>
-        <p class="text-sm text-fellDk/60"><?= $isAdmin ? 'Züchter im Portal' : 'Meine Züchter' ?></p>
+        <p class="text-sm text-fellDk/60"><?= e(t($isAdmin ? 'dash.zahl_zuechter_portal' : 'dash.zahl_zuechter_meine')) ?></p>
     </a>
 </div>
 
 <!-- Meine Hunde -->
 <div class="flex items-center justify-between mb-4">
-    <h2 class="text-lg font-extrabold text-fellDk"><?= $isAdmin ? 'Neueste Hunde' : 'Meine Hunde' ?></h2>
+    <h2 class="text-lg font-extrabold text-fellDk"><?= e(t($isAdmin ? 'dash.neueste_hunde' : 'dash.zahl_hunde_meine')) ?></h2>
     <div class="flex items-center gap-3">
-        <a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk font-semibold hover:underline">Alle anzeigen →</a>
+        <a href="/dogs.php" class="text-sm text-tanne hover:text-tanneDk font-semibold hover:underline"><?= e(t('dash.alle_anzeigen')) ?> →</a>
         <a href="/dog_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-4 py-2 rounded-full transition-colors whitespace-nowrap">
-            + Hund anlegen
+            + <?= e(t('dash.hund_anlegen')) ?>
         </a>
     </div>
 </div>
@@ -87,7 +87,7 @@ require __DIR__ . '/views/partials/header.php';
     <div class="bg-white/80 rounded-2xl shadow border border-sand mb-10">
         <p class="text-center py-12 text-fellDk/50">
             <span class="text-4xl block mb-2" aria-hidden="true">🦴</span>
-            <?= $isAdmin ? 'Es wurden noch keine Hunde angelegt.' : 'Du hast noch keine Hunde angelegt.' ?>
+            <?= e(t($isAdmin ? 'dash.leer_admin' : 'dash.leer_user')) ?>
         </p>
     </div>
 <?php else: ?>
@@ -108,10 +108,10 @@ require __DIR__ . '/views/partials/header.php';
                 <div class="p-4">
                     <h3 class="font-bold text-fellDk"><?= e($dog['name']) ?></h3>
                     <p class="text-sm text-fellDk/70 mt-0.5">
-                        <?= $dog['breed_name'] ? e($dog['breed_name']) : 'Rasse unbekannt' ?>
+                        <?= $dog['breed_name'] ? e(in_sprache($dog['breed_name'], $dog['breed_name_en'] ?? null)) : e(t('dash.rasse_unbekannt')) ?>
                     </p>
                     <p class="text-xs text-fellDk/50 mt-1">
-                        Halter: <?= $dog['halter_namen'] ? e($dog['halter_namen']) : '—' ?>
+                        <?= e(t('dash.halter')) ?> <?= $dog['halter_namen'] ? e($dog['halter_namen']) : '—' ?>
                     </p>
                 </div>
             </a>
@@ -124,15 +124,15 @@ require __DIR__ . '/views/partials/header.php';
     <a href="/rassen.php" class="flex items-center gap-4 bg-white/80 rounded-2xl shadow border border-sand p-5 hover:shadow-md hover:border-tanne/40 transition-all">
         <span class="text-3xl" aria-hidden="true">🔍</span>
         <div>
-            <p class="font-bold text-fellDk">Rassen durchsuchen</p>
-            <p class="text-sm text-fellDk/60">Den geteilten Rassen-Katalog stöbern und filtern.</p>
+            <p class="font-bold text-fellDk"><?= e(t('dash.rassen_titel')) ?></p>
+            <p class="text-sm text-fellDk/60"><?= e(t('dash.rassen_text')) ?></p>
         </div>
     </a>
     <a href="/zuechter.php" class="flex items-center gap-4 bg-white/80 rounded-2xl shadow border border-sand p-5 hover:shadow-md hover:border-tanne/40 transition-all">
         <span class="text-3xl" aria-hidden="true">🏠</span>
         <div>
-            <p class="font-bold text-fellDk">Züchter verwalten</p>
-            <p class="text-sm text-fellDk/60"><?= $isAdmin ? 'Alle Züchter-Kontakte im Portal.' : 'Deine Züchter-Kontakte.' ?></p>
+            <p class="font-bold text-fellDk"><?= e(t('dash.zuechter_titel')) ?></p>
+            <p class="text-sm text-fellDk/60"><?= e(t($isAdmin ? 'dash.zuechter_admin' : 'dash.zuechter_user')) ?></p>
         </div>
     </a>
 </div>

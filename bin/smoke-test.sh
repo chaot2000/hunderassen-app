@@ -857,6 +857,7 @@ else
     check_status "Dashboard nach dem Umstellen" "$BASE_URL/dashboard.php" "200"
     check_body_contains "Kopf englisch" ">Log out<"
     check_body_contains "html lang=en" '<html lang="en">'
+    check_body_contains "Dashboard-Inhalt englisch" "Browse breeds"
     check_status "Konto auf Englisch" "$BASE_URL/account.php" "200"
     check_body_contains "Kontoseite englisch" "Change password"
     SPR_ZIEL=$(curl -s -o /dev/null -D - -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST \
