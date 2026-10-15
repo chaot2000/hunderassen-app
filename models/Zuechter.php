@@ -95,15 +95,6 @@ class Zuechter
      * Ungeprüfter Zugriff für interne Zwecke (Berechtigungsprüfung ist
      * dann bereits an anderer Stelle passiert).
      */
-    public static function findById(int $id): ?array
-    {
-        $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT ' . self::SELECT_FIELDS . ' FROM zuechter WHERE id = :id LIMIT 1');
-        $stmt->execute([':id' => $id]);
-        $zuechter = $stmt->fetch();
-        return $zuechter ?: null;
-    }
-
     /**
      * Anzahl der Hunde pro Züchter — für die Übersichtsliste.
      * @return array<int, int>
@@ -173,7 +164,7 @@ class Zuechter
      * @param array|null $image Neues Bild (überschreibt bestehendes), oder null = unverändert lassen
      * @param bool $removeImage true = vorhandenes Bild entfernen (nur wirksam, wenn $image === null)
      */
-    public static function update(int $id, array $data, ?array $image = null, bool $removeImage = false): array
+    public static function update(int $id, int $tenantId, array $data, ?array $image = null, bool $removeImage = false): array
     {
         $validated = self::validate($data);
         if (!$validated['success']) {
@@ -198,7 +189,7 @@ class Zuechter
             'UPDATE zuechter
              SET zuchtname = :zuchtname, ansprechpartner_vorname = :vorname, ansprechpartner_nachname = :nachname,
                  adresse = :adresse, telefon = :telefon, email = :email, webseite = :webseite, notizen = :notizen' . $imageSql . '
-             WHERE id = :id'
+             WHERE id = :id AND tenant_id = :tenant_id'
         );
         $stmt->execute(array_merge([
             ':zuchtname' => $validated['zuchtname'],
@@ -210,6 +201,7 @@ class Zuechter
             ':webseite'  => $validated['webseite'],
             ':notizen'   => $validated['notizen'],
             ':id'        => $id,
+            ':tenant_id' => $tenantId,
         ], $imageParams));
 
         return ['success' => true, 'message' => 'Züchter "' . $validated['zuchtname'] . '" wurde aktualisiert.'];
@@ -219,11 +211,12 @@ class Zuechter
      * Löscht einen Züchter. Hunde, die auf ihn verweisen, verlieren
      * lediglich die Zuordnung (dogs.zuechter_id -> NULL).
      */
-    public static function delete(int $id): bool
+    public static function delete(int $id, int $tenantId): bool
     {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('DELETE FROM zuechter WHERE id = :id');
-        return $stmt->execute([':id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM zuechter WHERE id = :id AND tenant_id = :tenant_id');
+        $stmt->execute([':id' => $id, ':tenant_id' => $tenantId]);
+        return $stmt->rowCount() > 0;
     }
 
     private static function validate(array $data): array

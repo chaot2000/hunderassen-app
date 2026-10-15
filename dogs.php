@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_dog_id'])) {
     $dog   = Dog::findByIdForUser($dogId, $currentUserId, $isAdmin, $tenantId);
 
     if ($dog !== null) {
-        Dog::delete($dogId);
+        Dog::delete($dogId, $tenantId);
     }
 
     header('Location: /dogs.php');

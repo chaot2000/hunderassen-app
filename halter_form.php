@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $removeImage = isset($_POST['bild_entfernen']) && $_POST['bild_entfernen'] === '1';
 
         if ($isEditMode) {
-            $result = Halter::update($editingId, $halterData, $image, $removeImage);
+            $result = Halter::update($editingId, $tenantId, $halterData, $image, $removeImage);
         } else {
             $result = Halter::create($halterData, $currentUserId, $tenantId, $image);
         }

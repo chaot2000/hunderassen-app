@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_halter_id'])) 
     $hid    = (int) $_POST['delete_halter_id'];
     $halter = Halter::findByIdForUser($hid, $currentUserId, $isAdmin, $tenantId);
     if ($halter !== null) {
-        Halter::delete($hid);
+        Halter::delete($hid, $tenantId);
     }
     header('Location: /halter.php');
     exit;
