@@ -1,166 +1,130 @@
 -- =====================================================================
--- Migration 2026-07-10: Multi-Tenant-Fähigkeit
--- 
--- Fügt Mandantenfähigkeit (Multi-Tenancy) zur Anwendung hinzu.
--- Strategie: Shared Database + Shared Schema mit tenant_id Spalten.
+-- Migration 2026-07-10 (überarbeitet 2026-10-15): Mandantenfähigkeit
 --
--- Kompatibel mit: MySQL 5.7+ / MariaDB 10.3+
+-- Shared Database + Shared Schema: tenant_id in users, dogs, halter,
+-- zuechter, tests. Rassen, Tags und Aktivitäten bleiben global.
+--
+-- Idempotent: jeder Schritt prüft vorher über information_schema, ob er
+-- schon erledigt ist. Ein zweiter Lauf ändert nichts. Läuft auf
+-- MariaDB 10.11 (all-inkl) und MySQL 8.x (Laragon), ohne Stored
+-- Procedures, also auch im SQL-Fenster von phpMyAdmin.
+--
+-- Nach der Migration ist das älteste Admin-Konto Super-Admin, falls es
+-- noch keinen gibt. Siehe DEPLOYMENT_MULTI_TENANT.md.
+--
+-- Zurück: sql/migrationen/rollback_multi_tenant.sql
+--
+-- Muster jedes Blocks:
+--   SET @sql := IF(<schon erledigt?>, 'DO 0', '<ALTER ...>');
+--   PREPARE / EXECUTE / DEALLOCATE
 -- =====================================================================
 
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ---------------------------------------------------------------------
--- 1. Neue Tabelle: tenants
--- Verwaltet alle Mandanten der Anwendung
+-- 1. Tabelle tenants und Default-Mandant (id 1)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `tenants` (
     `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `name`        VARCHAR(100) NOT NULL,           -- Anzeigename des Mandanten
-    `subdomain`   VARCHAR(50)  NOT NULL,           -- Subdomain für Identifikation (z.B. "kunde1")
-    `is_active`   TINYINT(1)   NOT NULL DEFAULT 1, -- Mandanten können deaktiviert werden
+    `name`        VARCHAR(100) NOT NULL,
+    `subdomain`   VARCHAR(50)  NOT NULL,
+    `is_active`   TINYINT(1)   NOT NULL DEFAULT 1,
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_subdomain` (`subdomain`),
     KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------
--- 2. Default-Tenant erstellen (für bestehende Daten)
--- ---------------------------------------------------------------------
 INSERT IGNORE INTO `tenants` (`id`, `name`, `subdomain`, `is_active`, `created_at`)
 VALUES (1, 'Default', 'default', 1, NOW());
 
 -- ---------------------------------------------------------------------
--- 3. users Tabelle erweitern
+-- 2. users: tenant_id (bestehende Zeilen -> Mandant 1), Index, FK
 -- ---------------------------------------------------------------------
-ALTER TABLE `users` 
-    ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
-    ADD INDEX `idx_tenant_id` (`tenant_id`);
-
--- Bestehende Users dem Default-Tenant zuordnen
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `users` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 UPDATE `users` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
-
--- Constraint hinzufügen (nachdem alle Werte gesetzt sind)
-ALTER TABLE `users` 
-    ADD CONSTRAINT `fk_users_tenant` 
-    FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- Unique Constraint ändern: username muss pro Tenant eindeutig sein
-ALTER TABLE `users` 
-    DROP INDEX `uq_username`,
-    ADD UNIQUE KEY `uq_tenant_username` (`tenant_id`, `username`);
-
--- ---------------------------------------------------------------------
--- 4. dogs Tabelle erweitern
--- ---------------------------------------------------------------------
-ALTER TABLE `dogs` 
-    ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
-    ADD INDEX `idx_tenant_id` (`tenant_id`);
-
-UPDATE `dogs` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
-
-ALTER TABLE `dogs` 
-    ADD CONSTRAINT `fk_dogs_tenant` 
-    FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- ---------------------------------------------------------------------
--- 5. halter Tabelle erweitern
--- ---------------------------------------------------------------------
-ALTER TABLE `halter` 
-    ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
-    ADD INDEX `idx_tenant_id` (`tenant_id`);
-
-UPDATE `halter` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
-
-ALTER TABLE `halter` 
-    ADD CONSTRAINT `fk_halter_tenant` 
-    FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- ---------------------------------------------------------------------
--- 6. zuechter Tabelle erweitern
--- ---------------------------------------------------------------------
-ALTER TABLE `zuechter` 
-    ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
-    ADD INDEX `idx_tenant_id` (`tenant_id`);
-
-UPDATE `zuechter` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
-
-ALTER TABLE `zuechter` 
-    ADD CONSTRAINT `fk_zuechter_tenant` 
-    FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- ---------------------------------------------------------------------
--- 7. tests Tabelle erweitern
--- ---------------------------------------------------------------------
-ALTER TABLE `tests` 
-    ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
-    ADD INDEX `idx_tenant_id` (`tenant_id`);
-
-UPDATE `tests` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
-
-ALTER TABLE `tests` 
-    ADD CONSTRAINT `fk_tests_tenant` 
-    FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- ---------------------------------------------------------------------
--- 8. Optional: breeds, tags, activities als tenant-spezifisch machen
--- 
--- HINWEIS: Diese Tabellen können auch global bleiben (ohne tenant_id),
--- wenn sie als geteilte Katalogdaten für alle Mandanten dienen sollen.
--- Für strikte Mandanten-Trennung kommentieren Sie die folgenden Blöcke ein.
--- ---------------------------------------------------------------------
-
--- -- breeds Tabelle erweitern (für strikte Trennung)
--- ALTER TABLE `breeds` 
---     ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
---     ADD INDEX `idx_tenant_id` (`tenant_id`);
--- 
--- UPDATE `breeds` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
--- 
--- ALTER TABLE `breeds` 
---     ADD CONSTRAINT `fk_breeds_tenant` 
---     FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- -- tags Tabelle erweitern (für strikte Trennung)
--- ALTER TABLE `tags` 
---     ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
---     ADD INDEX `idx_tenant_id` (`tenant_id`);
--- 
--- UPDATE `tags` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
--- 
--- ALTER TABLE `tags` 
---     ADD CONSTRAINT `fk_tags_tenant` 
---     FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- -- activities Tabelle erweitern (für strikte Trennung)
--- ALTER TABLE `activities` 
---     ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`,
---     ADD INDEX `idx_tenant_id` (`tenant_id`);
--- 
--- UPDATE `activities` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
--- 
--- ALTER TABLE `activities` 
---     ADD CONSTRAINT `fk_activities_tenant` 
---     FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT;
-
--- ---------------------------------------------------------------------
--- 9. tenant_id Spalten zu NOT NULL machen (nach Migration)
--- ---------------------------------------------------------------------
 ALTER TABLE `users` MODIFY COLUMN `tenant_id` INT UNSIGNED NOT NULL;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'idx_tenant_id'), 'DO 0', 'ALTER TABLE `users` ADD INDEX `idx_tenant_id` (`tenant_id`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND CONSTRAINT_NAME = 'fk_users_tenant' AND CONSTRAINT_TYPE = 'FOREIGN KEY'), 'DO 0', 'ALTER TABLE `users` ADD CONSTRAINT `fk_users_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------------------------------------------------------------------
+-- 3. dogs: tenant_id (bestehende Zeilen -> Mandant 1), Index, FK
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dogs' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `dogs` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+UPDATE `dogs` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
 ALTER TABLE `dogs` MODIFY COLUMN `tenant_id` INT UNSIGNED NOT NULL;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dogs' AND INDEX_NAME = 'idx_tenant_id'), 'DO 0', 'ALTER TABLE `dogs` ADD INDEX `idx_tenant_id` (`tenant_id`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'dogs' AND CONSTRAINT_NAME = 'fk_dogs_tenant' AND CONSTRAINT_TYPE = 'FOREIGN KEY'), 'DO 0', 'ALTER TABLE `dogs` ADD CONSTRAINT `fk_dogs_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------------------------------------------------------------------
+-- 4. halter: tenant_id (bestehende Zeilen -> Mandant 1), Index, FK
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'halter' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `halter` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+UPDATE `halter` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
 ALTER TABLE `halter` MODIFY COLUMN `tenant_id` INT UNSIGNED NOT NULL;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'halter' AND INDEX_NAME = 'idx_tenant_id'), 'DO 0', 'ALTER TABLE `halter` ADD INDEX `idx_tenant_id` (`tenant_id`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'halter' AND CONSTRAINT_NAME = 'fk_halter_tenant' AND CONSTRAINT_TYPE = 'FOREIGN KEY'), 'DO 0', 'ALTER TABLE `halter` ADD CONSTRAINT `fk_halter_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------------------------------------------------------------------
+-- 5. zuechter: tenant_id (bestehende Zeilen -> Mandant 1), Index, FK
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zuechter' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `zuechter` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+UPDATE `zuechter` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
 ALTER TABLE `zuechter` MODIFY COLUMN `tenant_id` INT UNSIGNED NOT NULL;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zuechter' AND INDEX_NAME = 'idx_tenant_id'), 'DO 0', 'ALTER TABLE `zuechter` ADD INDEX `idx_tenant_id` (`tenant_id`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'zuechter' AND CONSTRAINT_NAME = 'fk_zuechter_tenant' AND CONSTRAINT_TYPE = 'FOREIGN KEY'), 'DO 0', 'ALTER TABLE `zuechter` ADD CONSTRAINT `fk_zuechter_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------------------------------------------------------------------
+-- 6. tests: tenant_id (bestehende Zeilen -> Mandant 1), Index, FK
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tests' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `tests` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+UPDATE `tests` SET `tenant_id` = 1 WHERE `tenant_id` IS NULL;
 ALTER TABLE `tests` MODIFY COLUMN `tenant_id` INT UNSIGNED NOT NULL;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tests' AND INDEX_NAME = 'idx_tenant_id'), 'DO 0', 'ALTER TABLE `tests` ADD INDEX `idx_tenant_id` (`tenant_id`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'tests' AND CONSTRAINT_NAME = 'fk_tests_tenant' AND CONSTRAINT_TYPE = 'FOREIGN KEY'), 'DO 0', 'ALTER TABLE `tests` ADD CONSTRAINT `fk_tests_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SET FOREIGN_KEY_CHECKS = 1;
+-- ---------------------------------------------------------------------
+-- 7. Eindeutigkeit pro Mandant statt global
+--    users.uq_username        -> uq_tenant_username (tenant_id, username)
+--    tests.uq_test_name       -> uq_tenant_test_name (tenant_id, name)
+--    Neuer Schlüssel zuerst, dann der alte weg.
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uq_tenant_username'), 'DO 0', 'ALTER TABLE `users` ADD UNIQUE KEY `uq_tenant_username` (`tenant_id`, `username`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uq_username'), 'ALTER TABLE `users` DROP INDEX `uq_username`', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tests' AND INDEX_NAME = 'uq_tenant_test_name'), 'DO 0', 'ALTER TABLE `tests` ADD UNIQUE KEY `uq_tenant_test_name` (`tenant_id`, `name`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tests' AND INDEX_NAME = 'uq_test_name'), 'ALTER TABLE `tests` DROP INDEX `uq_test_name`', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- =====================================================================
--- MIGRATION ABGESCHLOSSEN
--- 
--- Nächste Schritte:
--- 1. config/tenant.php erstellen für Tenant-Resolving
--- 2. config/auth.php für Tenant-Kontext in Session erweitern
--- 3. Model-Schicht für Tenant-Scoping anpassen
--- 4. Admin-Views für Tenant-Management erweitern
--- =====================================================================
+-- ---------------------------------------------------------------------
+-- 8. Super-Admin: Spalte, und falls noch keiner existiert, wird das
+--    älteste Admin-Konto in Mandant 1 Super-Admin.
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_super_admin'), 'DO 0', 'ALTER TABLE `users` ADD COLUMN `is_super_admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `role`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @super_id := IF(
+    EXISTS(SELECT 1 FROM `users` WHERE `is_super_admin` = 1),
+    NULL,
+    (SELECT MIN(`id`) FROM `users` WHERE `role` = 'admin' AND `tenant_id` = 1)
+);
+UPDATE `users` SET `is_super_admin` = 1 WHERE `id` = @super_id;
+
+-- Kontrolle (Ausgabe im SQL-Fenster):
+SELECT `id`, `username`, `role`, `is_super_admin` FROM `users` WHERE `is_super_admin` = 1;
