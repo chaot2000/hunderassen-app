@@ -26,6 +26,7 @@ require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/models/TheDogApiFelder.php';
+require_once __DIR__ . '/models/TheDogApiAbgleich.php';
 require_once __DIR__ . '/models/Uebersetzung.php';
 
 secure_session_start();
@@ -41,132 +42,6 @@ define('THEDOGAPI_KEY', trim((string) ($thedogapiConfig['api_key'] ?? '')));
 const THEDOGAPI_URL  = 'https://api.thedogapi.com/v1/breeds';
 const CACHE_DATEI    = __DIR__ . '/cache_thedogapi_breeds.json';
 const CACHE_MAX_ALTER_SEK = 86400; // 1 Tag – TheDogAPI ändert sich selten
-
-// Nur Treffer ab diesem Score werden überhaupt vorgeschlagen (0-100,
-// siehe berechneMatchScore()). Alles darunter wird als "kein Treffer"
-// behandelt und taucht am Ende der Liste als unmatched auf.
-const MATCH_SCHWELLE = 55;
-
-// -----------------------------------------------------------------
-// Übersetzungs-Wörterbuch für die häufigsten kynologischen Begriffe.
-// Notwendig, weil VDH-Namen deutsch und TheDogAPI-Namen englisch
-// sind — reine String-Ähnlichkeit (z.B. Levenshtein) versagt sonst
-// bei fast allen Rassen. Bewusst NICHT vollständig, sondern auf die
-// häufigsten Bestandteile beschränkt; seltene/exotische Rassen landen
-// dann eher in der "kein automatischer Treffer"-Gruppe und werden von
-// Hand zugeordnet (siehe manuelle Override-Liste weiter unten).
-// -----------------------------------------------------------------
-const BEGRIFFS_UEBERSETZUNG = [
-    'schäferhund' => 'shepherd dog',
-    'schaferhund' => 'shepherd dog',
-    'terrier' => 'terrier',
-    'dogge' => 'mastiff',
-    'bulldogge' => 'bulldog',
-    'spaniel' => 'spaniel',
-    'retriever' => 'retriever',
-    'pinscher' => 'pinscher',
-    'schnauzer' => 'schnauzer',
-    'setter' => 'setter',
-    'pudel' => 'poodle',
-    'windhund' => 'greyhound',
-    'bracke' => 'hound',
-    'laufhund' => 'hound',
-    'vorstehhund' => 'pointer',
-    'wachtelhund' => 'spaniel',
-    'sennenhund' => 'mountain dog',
-    'berghund' => 'mountain dog',
-    'hütehund' => 'sheepdog',
-    'hutehund' => 'sheepdog',
-    'treibhund' => 'cattle dog',
-    'zwerg' => 'miniature',
-    'riesen' => 'giant',
-    'kurzhaar' => 'shorthaired',
-    'langhaar' => 'longhaired',
-    'rauhaar' => 'wirehaired',
-    'drahthaar' => 'wirehaired',
-    'glatthaar' => 'smooth',
-    'shar pei' => 'shar-pei',
-    'chow chow' => 'chow chow',
-    'dackel' => 'dachshund',
-    'teckel' => 'dachshund',
-    'spitz' => 'spitz',
-    'malinois' => 'malinois',
-    'deutsch' => 'german',
-    'deutscher' => 'german',
-    'englisch' => 'english',
-    'englische' => 'english',
-    'französisch' => 'french',
-    'französische' => 'french',
-    'belgisch' => 'belgian',
-    'belgische' => 'belgian',
-    'amerikanisch' => 'american',
-    'amerikanische' => 'american',
-    'irisch' => 'irish',
-    'irische' => 'irish',
-    'schottisch' => 'scottish',
-    'schottische' => 'scottish',
-    'sibirisch' => 'siberian',
-    'russisch' => 'russian',
-    'russische' => 'russian',
-    'ungarisch' => 'hungarian',
-    'ungarische' => 'hungarian',
-    'österreichisch' => 'austrian',
-    'schweizer' => 'swiss',
-    'spanisch' => 'spanish',
-    'spanische' => 'spanish',
-    'portugiesisch' => 'portuguese',
-    'portugiesische' => 'portuguese',
-    'italienisch' => 'italian',
-    'italienische' => 'italian',
-    'holländisch' => 'dutch',
-    'holländische' => 'dutch',
-    'niederländisch' => 'dutch',
-];
-
-// -----------------------------------------------------------------
-// Manuelle Override-Liste: für Rassen, deren deutscher und englischer
-// Name komplett unterschiedlich sind (keine Wortstamm-Überlappung
-// möglich) und die daher auch nach Übersetzung nicht automatisch
-// gefunden würden. Bei Bedarf einfach ergänzen — Format:
-// 'exakter VDH-Name (klein geschrieben)' => 'exakter TheDogAPI-Name'
-// -----------------------------------------------------------------
-const MANUELLE_ZUORDNUNG = [
-    'deutscher schäferhund' => 'German Shepherd Dog',
-    'labrador retriever' => 'Labrador Retriever',
-    'golden retriever' => 'Golden Retriever',
-    'berner sennenhund' => 'Bernese Mountain Dog',
-    'zwergpinscher' => 'Miniature Pinscher',
-    'rauhaardackel' => 'Dachshund',
-    'kurzhaardackel' => 'Dachshund',
-    'langhaardackel' => 'Dachshund',
-    'mops' => 'Pug',
-    'malteser' => 'Maltese',
-    'chihuahua' => 'Chihuahua',
-    'boxer' => 'Boxer',
-    'dobermann' => 'Dobermann',
-    'rottweiler' => 'Rottweiler',
-    'weimaraner' => 'Weimaraner',
-    'foxterrier' => 'Fox Terrier',
-    'jack russell terrier' => 'Jack Russell Terrier',
-    'bologneser' => 'Bolognese',
-    'havaneser' => 'Havanese',
-    'shih tzu' => 'Shih Tzu',
-    'basset hound' => 'Basset Hound',
-    'beagle' => 'Beagle',
-    'bloodhound' => 'Bloodhound',
-    'dalmatiner' => 'Dalmatian',
-    'neufundländer' => 'Newfoundland',
-    'bernhardiner' => 'St. Bernard',
-    'leonberger' => 'Leonberger',
-    'chow chow' => 'Chow Chow',
-    'shar pei' => 'Shar Pei',
-    'akita' => 'Akita',
-    'shiba inu' => 'Shiba Inu',
-    'siberian husky' => 'Siberian Husky',
-    'alaskan malamute' => 'Alaskan Malamute',
-    'border collie' => 'Border Collie',
-    'australian shepherd' => 'Australian Shepherd',
-];
 
 // ===================================================================
 // 1) TheDogAPI-Daten holen (mit Datei-Cache, um nicht bei jedem
@@ -213,106 +88,18 @@ function ladeTheDogApiBreeds(): array
 }
 
 // ===================================================================
-// 2) Matching
-// ===================================================================
-function normalisiere(string $text): string
-{
-    $text = mb_strtolower(trim($text));
-    $text = str_replace(['ä', 'ö', 'ü', 'ß'], ['a', 'o', 'u', 'ss'], $text);
-    $text = preg_replace('/[^a-z0-9\s]/', ' ', $text);
-    $text = preg_replace('/\s+/', ' ', $text);
-    return trim($text);
-}
-
-function uebersetzeBegriffe(string $normalisierterVdhName): string
-{
-    $ersetzt = $normalisierterVdhName;
-    foreach (BEGRIFFS_UEBERSETZUNG as $de => $en) {
-        $deNorm = normalisiere($de);
-        if (str_contains($ersetzt, $deNorm)) {
-            $ersetzt = str_replace($deNorm, $en, $ersetzt);
-        }
-    }
-    return $ersetzt;
-}
-
-/**
- * Liefert einen Score 0-100 für die Ähnlichkeit zwischen einem
- * VDH-Rassenamen und einem TheDogAPI-Rassenamen.
- */
-function berechneMatchScore(string $vdhName, string $apiName): int
-{
-    $vdhNorm = normalisiere($vdhName);
-    $apiNorm = normalisiere($apiName);
-
-    // 1) Manuelle Zuordnung hat immer Vorrang -> 100
-    if (isset(MANUELLE_ZUORDNUNG[$vdhNorm]) && normalisiere(MANUELLE_ZUORDNUNG[$vdhNorm]) === $apiNorm) {
-        return 100;
-    }
-
-    // 2) Exakte Übereinstimmung nach Übersetzung
-    $vdhUebersetzt = uebersetzeBegriffe($vdhNorm);
-    if ($vdhUebersetzt === $apiNorm) {
-        return 95;
-    }
-
-    // 3) similar_text auf übersetzter Variante
-    similar_text($vdhUebersetzt, $apiNorm, $prozentUebersetzt);
-
-    // 4) similar_text auf unübersetzter Variante (falls Name eh schon
-    //    ähnlich klingt, z.B. "Boxer" -> "Boxer")
-    similar_text($vdhNorm, $apiNorm, $prozentRoh);
-
-    return (int) round(max($prozentUebersetzt, $prozentRoh));
-}
-
-function findeBestesMatch(string $vdhName, array $apiBreeds): ?array
-{
-    $vdhNorm = normalisiere($vdhName);
-
-    // Manuelle Zuordnung zuerst prüfen
-    if (isset(MANUELLE_ZUORDNUNG[$vdhNorm])) {
-        $zielName = normalisiere(MANUELLE_ZUORDNUNG[$vdhNorm]);
-        foreach ($apiBreeds as $b) {
-            if (normalisiere($b['name']) === $zielName) {
-                return ['breed' => $b, 'score' => 100];
-            }
-        }
-    }
-
-    $bester = null;
-    $besterScore = 0;
-    foreach ($apiBreeds as $b) {
-        $score = berechneMatchScore($vdhName, $b['name']);
-        if ($score > $besterScore) {
-            $besterScore = $score;
-            $bester = $b;
-        }
-    }
-
-    if ($bester !== null && $besterScore >= MATCH_SCHWELLE) {
-        return ['breed' => $bester, 'score' => $besterScore];
-    }
-
-    return null;
-}
-
-// ===================================================================
-// 3) VDH-Rassen aus der DB laden (nur die, die noch nicht abgeglichen
-//    wurden — thedogapi_id IS NULL — außer ?alle=1 wird übergeben)
+// 2) VDH-Rassen laden. Gezeigt werden Rassen ohne Zuordnung und Rassen,
+//    deren vorhandene Zuordnung von einem sicheren Treffer abweicht
+//    (Altlast aus dem ersten Import, Juli 2026). Mit ?alle=1 alle.
 // ===================================================================
 $pdo = Database::getConnection();
 
 $nurOffene = !isset($_GET['alle']);
-$sql = 'SELECT id, name, name_en, beschreibung, beschreibung_en, temperament, temperament_en, lebenserwartung, zuchtzweck, zuchtzweck_en, bild_blob IS NOT NULL AS hat_bild
-        FROM breeds';
-if ($nurOffene) {
-    $sql .= ' WHERE thedogapi_id IS NULL';
-}
-$sql .= ' ORDER BY name';
-
-$stmt = $pdo->query($sql);
-$vdhRassen = $stmt->fetchAll();
+$vdhRassen = $pdo->query(
+    'SELECT id, name, name_en, alternative_namen, thedogapi_id, beschreibung, beschreibung_en, temperament, temperament_en,
+            lebenserwartung, zuchtzweck, zuchtzweck_en, bild_blob IS NOT NULL AS hat_bild
+     FROM breeds ORDER BY name'
+)->fetchAll();
 
 $apiBreeds = ladeTheDogApiBreeds();
 
@@ -328,22 +115,43 @@ foreach ($apiBreeds as &$b) {
 unset($b);
 
 // ===================================================================
-// 4) Matching durchführen
+// 3) Zuordnen (Regeln in models/TheDogApiAbgleich.php). Berechnet wird
+//    ohne die vorhandene Zuordnung, damit falsche Altlasten auffallen.
 // ===================================================================
+$apiNachId = [];
+foreach ($apiBreeds as $b) {
+    $apiNachId[(string) $b['id']] = $b;
+}
 $treffer = [];
 $ohneTreffer = [];
+$abweichend = 0;
 
 foreach ($vdhRassen as $rasse) {
-    $match = findeBestesMatch($rasse['name'], $apiBreeds);
-    if ($match !== null) {
-        $treffer[] = [
-            'vdh' => $rasse,
-            'api' => $match['breed'],
-            'score' => $match['score'],
-        ];
-    } else {
-        $ohneTreffer[] = $rasse;
+    $vorhanden = trim((string) ($rasse['thedogapi_id'] ?? ''));
+    $match = TheDogApiAbgleich::bestesMatch(['thedogapi_id' => null] + $rasse, $apiBreeds);
+    $weichtAb = $vorhanden !== '' && $match !== null && $match['score'] >= TheDogApiAbgleich::SICHER
+        && (string) $match['breed']['id'] !== $vorhanden
+        // TheDogAPI führt manche Rassen doppelt (gleicher Name, andere ID)
+        && TheDogApiAbgleich::aufbereiten((string) $match['breed']['name']) !== TheDogApiAbgleich::aufbereiten((string) ($apiNachId[$vorhanden]['name'] ?? ''));
+    if ($vorhanden !== '' && !$weichtAb) {
+        // Vorhandene Zuordnung bestätigt (oder kein besserer Treffer): bleibt
+        if ($nurOffene) {
+            continue;
+        }
+        $match = isset($apiNachId[$vorhanden]) ? ['breed' => $apiNachId[$vorhanden], 'score' => 100, 'grund' => 'schon zugeordnet'] : $match;
     }
+    if ($match === null) {
+        $ohneTreffer[] = $rasse;
+        continue;
+    }
+    $abweichend += $weichtAb ? 1 : 0;
+    $treffer[] = [
+        'vdh' => $rasse,
+        'api' => $match['breed'],
+        'score' => $match['score'],
+        'grund' => $match['grund'],
+        'bisher' => $weichtAb ? ($apiNachId[$vorhanden]['name'] ?? ('ID ' . $vorhanden)) : null,
+    ];
 }
 
 // Nach Score absteigend sortieren, damit sichere Treffer oben stehen
@@ -395,13 +203,17 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="tdapi-info">
     <?= count($treffer) ?> automatische Treffer gefunden
-    (<?= count(array_filter($treffer, fn($t) => $t['score'] >= 85)) ?> sicher ≥85,
-     <?= count(array_filter($treffer, fn($t) => $t['score'] >= MATCH_SCHWELLE && $t['score'] < 85)) ?> unsicher),
+    (<?= count(array_filter($treffer, fn($t) => $t['score'] >= TheDogApiAbgleich::SICHER)) ?> sicher,
+     <?= count(array_filter($treffer, fn($t) => $t['score'] < TheDogApiAbgleich::SICHER)) ?> unsicher),
     <?= count($ohneTreffer) ?> ohne Treffer.
     Es wird <strong>noch nichts in der Datenbank geändert</strong> — erst nach Klick auf
     "Ausgewählte übernehmen" unten, das geht an Stufe 2.<br>
     Übernommen werden nur <strong>leere</strong> Felder und nur, wenn noch kein Bild da ist; vorhandene Werte bleiben immer.
     Vorausgewählt sind nur sichere Treffer (≥85). Textänderungen und die Zuordnung landen in den Versionen der Rasse.
+    <?php if ($abweichend > 0): ?>
+        <br><strong><?= $abweichend ?> Rassen sind bisher mit einer anderen TheDogAPI-Rasse verknüpft.</strong>
+        Sie stehen unten mit dem Hinweis „bisher“. Erst das Häkchen „Zuordnung korrigieren“ ändert die Verknüpfung.
+    <?php endif; ?>
     <?php if ($nurOffene): ?>
         <br><a href="?alle=1" class="underline">Auch bereits abgeglichene Rassen erneut anzeigen</a>
     <?php endif; ?>
@@ -426,13 +238,14 @@ if ($ohneDeutsch > 0): ?>
 // könnten: TheDogAPI hat einen Wert und bei uns ist es noch leer.
 $pauschalFelder = ['bild' => 'Bild']
     + array_replace(TheDogApiFelder::TEXT, ['temperament_en' => 'Temperament (englisch, deutsch per Wörterbuch)'])
-    + ['markieren' => 'Als „abgeglichen“ markieren'];
+    + ['markieren' => 'Als „abgeglichen“ markieren', 'korrigieren' => 'Abweichende Zuordnung korrigieren'];
 $moeglich = array_fill_keys(array_keys($pauschalFelder), ['alle' => 0, 'sicher' => 0]);
 foreach ($treffer as $t) {
     foreach ($pauschalFelder as $feld => $_) {
         $geht = match ($feld) {
             'bild' => $t['api']['_bild_url'] !== '' && !$t['vdh']['hat_bild'],
-            'markieren' => true,
+            'markieren' => $t['bisher'] === null,
+            'korrigieren' => $t['bisher'] !== null,
             default => TheDogApiFelder::wert($t['api'], $feld) !== '' && trim((string) ($t['vdh'][$feld] ?? '')) === '',
         };
         if ($geht) {
@@ -472,16 +285,19 @@ foreach ($treffer as $t) {
     $vdh = $t['vdh'];
     $api = $t['api'];
     $score = $t['score'];
-    $klasse = $score >= 85 ? 'hoch' : ($score >= 70 ? 'mittel' : 'niedrig');
+    $klasse = $score >= TheDogApiAbgleich::SICHER ? 'hoch' : ($score >= 70 ? 'mittel' : 'niedrig');
     $rowId = (int) $vdh['id'];
     // Nur sichere Treffer sind vorausgewählt, unsichere muss man bewusst ankreuzen.
-    $sicher = $score >= 85;
+    $sicher = $score >= TheDogApiAbgleich::SICHER;
 ?>
 <div class="tdapi-card <?= $klasse ?>" data-rasse="<?= $rowId ?>" data-sicher="<?= $sicher ? '1' : '0' ?>">
     <h3>
         <?= e($vdh['name']) ?> ↔ <?= e($api['name']) ?>
-        <span class="tdapi-score">Score: <?= $score ?>%</span>
+        <span class="tdapi-score">Score: <?= $score ?>% · <?= e($t['grund']) ?></span>
     </h3>
+    <?php if ($t['bisher'] !== null): ?>
+        <p style="font-size:.85rem;color:#8a3b1d;margin:0 0 .5rem 0;">Bisher verknüpft mit <strong><?= e($t['bisher']) ?></strong>. Das wird nur mit „Zuordnung korrigieren“ geändert.</p>
+    <?php endif; ?>
 
     <input type="hidden" name="items[<?= $rowId ?>][thedogapi_id]" value="<?= e((string)$api['id']) ?>">
 
@@ -535,7 +351,11 @@ foreach ($treffer as $t) {
         </label>
         <input type="hidden" name="items[<?= $rowId ?>][bild_url]" value="<?= e($api['_bild_url']) ?>">
         <?php endif; ?>
-        <label><input type="checkbox" data-feld="markieren" name="items[<?= $rowId ?>][markieren]" value="1" <?= $sicher ? 'checked' : '' ?>> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
+        <?php if ($t['bisher'] !== null): ?>
+            <label><input type="checkbox" data-feld="korrigieren" name="items[<?= $rowId ?>][korrigieren]" value="1"> Zuordnung korrigieren (statt <?= e($t['bisher']) ?>)</label>
+        <?php else: ?>
+            <label><input type="checkbox" data-feld="markieren" name="items[<?= $rowId ?>][markieren]" value="1" <?= $sicher ? 'checked' : '' ?>> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
+        <?php endif; ?>
     </div>
 </div>
 <?php endforeach; ?>
@@ -612,7 +432,8 @@ foreach ($treffer as $t) {
 <p style="font-size:.85rem;color:#666;">
     Diese Rassen konnten nicht sicher zugeordnet werden — meist exotischere Rassen ohne
     Eintrag in TheDogAPI, oder Namen, die die Übersetzungstabelle nicht abdeckt.
-    Bei Bedarf <code>MANUELLE_ZUORDNUNG</code> im Script ergänzen und neu laden.
+    Abhilfe: unter „Rasse bearbeiten“ den englischen Namen eintragen, genau wie bei TheDogAPI.
+    Dann wird die Rasse beim nächsten Laden sicher zugeordnet. Feste Zuordnungen stehen in <code>models/TheDogApiAbgleich.php</code>.
 </p>
 <?php foreach ($ohneTreffer as $r): ?>
     <div class="tdapi-unmatched"><?= e($r['name']) ?></div>

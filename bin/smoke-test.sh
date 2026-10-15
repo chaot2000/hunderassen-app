@@ -784,6 +784,19 @@ else
     check_status "Bild von fremder Adresse" "$BASE_URL/admin_thedogapi_apply.php" "200" \
         "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"bild_url\":\"http://127.0.0.1:8000/login.php\",\"uebernehmen_bild\":\"1\"}}"
     check_body_contains "Fremde Bildadresse wird abgelehnt" "nicht von TheDogAPI"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Zuordnung setzen" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"thedogapi_id\":\"5\",\"markieren\":\"1\"}}"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Andere Zuordnung ohne Korrektur" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"thedogapi_id\":\"6\",\"markieren\":\"1\"}}"
+    check_body_contains "Vorhandene Zuordnung bleibt" "schon mit anderer TheDogAPI-Rasse verknüpft"
+    TDA_CSRF=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/admin_rassentexte.php" | grep -oP 'name="csrf_token" value="\K[^"]+' | head -1 || true)
+    check_status "Zuordnung ausdrücklich korrigieren" "$BASE_URL/admin_thedogapi_apply.php" "200" \
+        "-X POST --data-urlencode csrf_token=$TDA_CSRF --data-urlencode items_json={\"1\":{\"thedogapi_id\":\"6\",\"korrigieren\":\"1\"}}"
+    check_body_contains "Korrektur gemeldet" "Zuordnung korrigiert"
+    check_status "Versionen zeigen die Korrektur" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "TheDogAPI-Zuordnung als Version" "TheDogAPI-Zuordnung"
     check_status "Rasse bearbeiten zeigt englisches Temperament" "$BASE_URL/admin_add_breed.php?id=1" "200"
     check_body_contains "Feld temperament_en ist gefüllt" 'value="CI-Erstwert"'
     TDA_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)

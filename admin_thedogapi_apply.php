@@ -168,6 +168,20 @@ foreach ($items as $breedId => $daten) {
         }
     }
 
+    // Ausdrücklich gewünschte Korrektur einer falschen Altzuordnung: die
+    // einzige Stelle, an der ein vorhandener Wert überschrieben wird.
+    // Die alte ID steht danach in den Versionen der Rasse.
+    $neueId = trim((string) ($daten['thedogapi_id'] ?? ''));
+    if (!empty($daten['korrigieren']) && $neueId !== '' && preg_match('/^\d{1,10}$/', $neueId)
+        && (string) $vorher['thedogapi_id'] !== $neueId) {
+        $sets[] = 'thedogapi_id = :thedogapi_id';
+        $sets[] = 'thedogapi_stand = NOW()';
+        $params[':thedogapi_id'] = $neueId;
+        $neu['thedogapi_id'] = $neueId;
+        $hinweise[] = 'Zuordnung korrigiert';
+        $daten['markieren'] = null;
+    }
+
     if (!empty($daten['markieren'])) {
         $neueId = trim((string) ($daten['thedogapi_id'] ?? ''));
         if (!$leer($vorher['thedogapi_id']) && (string) $vorher['thedogapi_id'] !== $neueId) {
