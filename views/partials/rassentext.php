@@ -52,7 +52,7 @@ function render_rassentext_sprungleiste(array $abschnitte): string
     foreach ($abschnitte as $a) {
         $f = rassentext_farbe($a['titel']);
         $html .= '<a href="#' . e(rassentext_anker($a['titel'])) . '" class="' . $f['block'] . ' ' . $f['text']
-            . ' text-sm font-bold px-3 py-2 min-h-[44px] inline-flex items-center rounded-sm hover:brightness-110 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-fellDk transition">'
+            . ' text-sm font-bold px-3 py-2 min-h-[44px] inline-flex items-center rounded-sm hover:underline underline-offset-4 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-fellDk transition">'
             . e($a['titel']) . '</a>';
     }
     return $html . '</nav>';

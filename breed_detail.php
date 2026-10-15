@@ -90,8 +90,37 @@ function render_spannenbalken(?float $min, ?float $max, float $skala, string $fa
     $bis = max(0.0, min(100.0, (($max ?? $min) / $skala) * 100));
     $breite = max(1.5, $bis - $von);
     return '<div class="relative h-3 bg-sand/60 rounded-sm" aria-hidden="true">'
-        . '<div class="absolute inset-y-0 ' . $farbe . ' rounded-sm" style="left:' . round($von, 2) . '%;width:' . round($breite, 2) . '%"></div>'
+        . render_skalenmarken($skala)
+        . '<div class="absolute inset-y-0 ' . $farbe . ' rounded-sm" style="left:' . round($von, 2) . '%;width:' . round($breite, 2) . '%;min-width:6px"></div>'
         . '</div>';
+}
+
+/** Feine Striche alle 30 Einheiten, wie ein Lineal unter dem Balken. */
+function render_skalenmarken(float $skala): string
+{
+    $html = '';
+    for ($w = 30; $w < $skala; $w += 30) {
+        $html .= '<span class="absolute inset-y-0 w-px bg-fellDk/30" style="left:' . round($w / $skala * 100, 2) . '%"></span>';
+    }
+    return $html;
+}
+
+/** Beschriftung der Skala unter den Balken (0, 30, 60, 90 …). */
+function render_skalenzeile(float $skala, string $einheit): string
+{
+    $html = '<div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] gap-3 mt-1" aria-hidden="true"><span></span><div class="relative h-4 font-mono text-xs text-fellDk/80">';
+    for ($w = 0; $w <= $skala; $w += 30) {
+        $pos = round($w / $skala * 100, 2);
+        if ($w + 30 > $skala) {
+            // Letzte Marke rechtsbündig mit Einheit, damit nichts über den Rand ragt
+            $html .= '<span class="absolute right-0">' . $w . ' ' . e($einheit) . '</span>';
+        } elseif ($w === 0) {
+            $html .= '<span class="absolute left-0">0</span>';
+        } else {
+            $html .= '<span class="absolute -translate-x-1/2" style="left:' . $pos . '%">' . $w . '</span>';
+        }
+    }
+    return $html . '</div></div>';
 }
 
 // Skalen: feste Obergrenzen, damit Rassen untereinander vergleichbar
@@ -125,7 +154,7 @@ require __DIR__ . '/views/partials/header.php';
 
     <!-- Kopfmodul -->
     <header class="grid grid-cols-1 lg:grid-cols-12">
-        <div class="lg:col-span-7 bg-tanne text-creme px-5 sm:px-10 pt-6 pb-28 sm:pb-32 rounded-t-lg lg:rounded-tr-none lg:rounded-l-lg">
+        <div class="lg:col-span-7 bg-tanne text-creme px-5 sm:px-10 pt-6 pb-8 lg:pb-32 rounded-t-lg lg:rounded-tr-none lg:rounded-l-lg">
             <a href="/rassen.php" class="inline-flex items-center gap-1.5 min-h-[44px] py-2 text-sm font-semibold text-creme underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pfote rounded-sm">
                 <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
                 Alle Rassen
@@ -149,25 +178,33 @@ require __DIR__ . '/views/partials/header.php';
             <?php endif; ?>
 
             <?php if ($text['kurzportraet'] !== null): ?>
-                <p class="mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch]"><?= e($text['kurzportraet']) ?></p>
-            <?php else: ?>
-                <p class="mt-6 text-base leading-relaxed max-w-[60ch] text-creme/90">Für diese Rasse gibt es noch keine Beschreibung.</p>
+                <?php $lang = mb_strlen($text['kurzportraet']) > 220; ?>
+                <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?>>
+                    <!-- Am Handy optisch gekürzt, damit die Aktion im ersten Bild bleibt; der volle Text steht im DOM. -->
+                    <p class="mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch] <?= $lang ? 'line-clamp-4 sm:line-clamp-none' : '' ?>" <?= $lang ? ':class="ganz && \'line-clamp-none\'"' : '' ?>><?= e($text['kurzportraet']) ?></p>
+                    <?php if ($lang): ?>
+                        <button type="button" x-show="!ganz" @click="ganz = true" class="sm:hidden mt-2 min-h-[44px] py-2 text-sm font-bold text-creme underline underline-offset-4">Weiterlesen</button>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
 
-        <div class="lg:col-span-5 relative min-h-[240px] sm:min-h-[300px] bg-sand overflow-hidden lg:rounded-r-lg">
+        <div class="lg:col-span-5 relative min-h-[180px] sm:min-h-[300px] <?= !empty($breed['hat_bild']) ? 'bg-sand' : 'bg-tanneDk' ?> overflow-hidden lg:rounded-r-lg">
             <?php if (!empty($breed['hat_bild'])): ?>
                 <img src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
                      alt="<?= e($breed['name']) ?>"
-                     class="absolute inset-0 w-full h-full object-cover">
+                     class="absolute inset-0 w-full h-full object-cover object-[50%_25%]">
             <?php else: ?>
-                <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                    <?= render_dog_icon(112, '#B5502E', '#3F5A3F') ?>
-                    <p class="text-sm font-semibold text-fellDk">Noch kein Foto</p>
-                    <?php if ($darfPflegen): ?>
-                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="text-sm font-bold text-tanneDk underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
-                    <?php endif; ?>
+                <!-- Ohne Foto trägt eine gesetzte Farbfläche: große Gruppennummer und Signet -->
+                <span class="absolute -top-6 right-2 font-mono font-medium text-[7rem] sm:text-[12rem] leading-none text-creme/15 select-none" aria-hidden="true"><?= $gruppe !== null ? $gruppe : '' ?></span>
+                <div class="absolute inset-0 flex items-center justify-center pb-20 lg:pb-24">
+                    <span class="hidden lg:block"><?= render_dog_icon(200, '#B5502E', '#E4DEC8') ?></span>
+                    <span class="lg:hidden"><?= render_dog_icon(88, '#B5502E', '#E4DEC8') ?></span>
                 </div>
+                <p class="sr-only">Noch kein Foto.</p>
+                <?php if ($darfPflegen): ?>
+                    <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 left-4 lg:left-auto lg:right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
 
@@ -175,7 +212,7 @@ require __DIR__ . '/views/partials/header.php';
         <div class="lg:col-span-12 -mt-24 sm:-mt-24 relative z-10 flex flex-col">
             <p class="balken self-start w-full lg:w-[78%] bg-fell text-creme px-5 sm:px-10 py-4 text-lg sm:text-xl font-black leading-snug">
                 <?php if ($gruppe !== null): ?>
-                    <span class="font-mono font-medium mr-2">FCI <?= $gruppe ?></span>
+                    <span class="mr-2">FCI <span class="font-mono font-medium"><?= $gruppe ?></span></span>
                     <?= e(Breed::FCI_GRUPPEN[$gruppe] ?? 'Gruppe ' . $gruppe) ?>
                 <?php else: ?>
                     FCI-Gruppe nicht hinterlegt
@@ -183,19 +220,19 @@ require __DIR__ . '/views/partials/header.php';
             </p>
             <?php if (!empty($breed['fci_sektion']) || !empty($breed['fci_sektion_name'])): ?>
                 <p class="balken self-end w-[92%] lg:w-[56%] lg:mr-[22%] bg-pfote text-fellDk px-5 sm:px-8 py-3 text-base sm:text-lg font-bold">
-                    <?php if (!empty($breed['fci_sektion'])): ?><span class="font-mono font-medium mr-2">Sektion <?= e($breed['fci_sektion']) ?></span><?php endif; ?>
+                    <?php if (!empty($breed['fci_sektion'])): ?><span class="mr-2">Sektion <span class="font-mono font-medium"><?= e($breed['fci_sektion']) ?></span></span><?php endif; ?>
                     <?= e($breed['fci_sektion_name'] ?? '') ?>
                 </p>
             <?php endif; ?>
             <p class="balken self-start w-[86%] lg:w-[48%] lg:ml-[8%] bg-fellDk text-creme px-5 sm:px-8 py-3 text-sm sm:text-base font-bold flex flex-wrap gap-x-6 gap-y-1">
                 <span><?= e($arbeitspruefungLabels[$breed['arbeitspruefung'] ?? ''] ?? 'Arbeitsprüfung: keine Angabe') ?></span>
-                <span>Standard <span class="font-mono font-medium"><?= !empty($breed['fci_nr']) ? 'Nr. ' . e($breed['fci_nr']) : 'ohne Nr.' ?></span></span>
+                <span>Standard <?= !empty($breed['fci_nr']) ? 'Nr. <span class="font-mono font-medium">' . e($breed['fci_nr']) . '</span>' : 'ohne Nr.' ?></span>
             </p>
         </div>
     </header>
 
     <!-- Aktionen -->
-    <div class="mt-6 flex flex-wrap items-center gap-3">
+    <div class="mt-4 sm:mt-6 flex flex-wrap items-center gap-3">
         <a href="/dog_form.php?rasse=<?= (int) $breed['id'] ?>"
            class="inline-flex items-center min-h-[44px] bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2 rounded-lg transition-colors focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-pfote">
             Hund dieser Rasse anlegen
@@ -220,7 +257,7 @@ require __DIR__ . '/views/partials/header.php';
                 <p class="mt-3 text-sm text-fellDk/80">Keine Maße hinterlegt.</p>
             <?php else: ?>
                 <p class="mt-1 text-xs text-fellDk/80">
-                    Skala 0–<?= (int) $maxCm ?> cm und 0–<?= (int) $maxKg ?> kg.
+                    Balken auf fester Skala.
                     <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-tanne rounded-sm" aria-hidden="true"></span>Rüde</span>
                     <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-fell rounded-sm" aria-hidden="true"></span>Hündin</span>
                 </p>
@@ -242,24 +279,30 @@ require __DIR__ . '/views/partials/header.php';
                         <?php else: ?>
                             <p class="text-sm font-bold text-fellDk mb-2">Größenklasse: <?= e($groessenLabels[$size['groesse']] ?? $size['groesse']) ?></p>
                         <?php endif; ?>
-                        <dl class="space-y-3">
-                            <?php foreach ($werte as $art => $zeilen):
-                                $einheit = $art === 'Gewicht' ? 'kg' : 'cm';
-                                $skala = $art === 'Gewicht' ? $maxKg : $maxCm;
-                                // Nur Zeilen mit Werten zeigen
-                                $zeilen = array_filter($zeilen, fn($z) => $z[1] !== null || $z[2] !== null);
-                            ?>
-                                <?php foreach ($zeilen as [$geschlecht, $min, $max, $farbe]): ?>
-                                    <div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] items-center gap-3">
-                                        <dt class="text-sm text-fellDk">
-                                            <?= e($art) ?> <?= e($geschlecht) ?>
-                                            <span class="block font-mono text-sm font-medium"><?= e(format_spanne($min, $max, $einheit) ?? '–') ?></span>
-                                        </dt>
-                                        <dd><?= render_spannenbalken($min, $max, $skala, $farbe) ?></dd>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endforeach; ?>
-                        </dl>
+                        <?php foreach ($werte as $art => $zeilen):
+                            $einheit = $art === 'Gewicht' ? 'kg' : 'cm';
+                            $skala = $art === 'Gewicht' ? $maxKg : $maxCm;
+                            // Nur Zeilen mit Werten zeigen
+                            $zeilen = array_filter($zeilen, fn($z) => $z[1] !== null || $z[2] !== null);
+                            if (empty($zeilen)) {
+                                continue;
+                            }
+                        ?>
+                            <div class="mb-4">
+                                <dl class="space-y-3">
+                                    <?php foreach ($zeilen as [$geschlecht, $min, $max, $farbe]): ?>
+                                        <div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] items-center gap-3">
+                                            <dt class="text-sm text-fellDk">
+                                                <?= e($art) ?> <?= e($geschlecht) ?>
+                                                <span class="block font-mono text-sm font-medium"><?= e(format_spanne($min, $max, $einheit) ?? '–') ?></span>
+                                            </dt>
+                                            <dd><?= render_spannenbalken($min, $max, $skala, $farbe) ?></dd>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </dl>
+                                <?= render_skalenzeile($skala, $einheit) ?>
+                            </div>
+                        <?php endforeach; ?>
                         <?php if (count(array_filter([
                             $size['schulterhoehe_ruede_min_cm'], $size['schulterhoehe_ruede_max_cm'], $size['schulterhoehe_haendin_min_cm'], $size['schulterhoehe_haendin_max_cm'],
                             $size['gewicht_ruede_min_kg'], $size['gewicht_ruede_max_kg'], $size['gewicht_haendin_min_kg'], $size['gewicht_haendin_max_kg'],
@@ -325,6 +368,9 @@ require __DIR__ . '/views/partials/header.php';
                 <?php endif; ?>
             </div>
         <?php else: ?>
+            <?php if (($breed['gliederung'] ?? '') === 'automatisch' && !empty($text['abschnitte'])): ?>
+                <p class="text-sm text-fellDk mb-3">Die Abschnitte wurden automatisch zugeordnet und sind noch nicht geprüft.</p>
+            <?php endif; ?>
             <?= render_rassentext_sprungleiste($text['abschnitte']) ?>
             <?= render_rassentext_abschnitte($text) ?>
         <?php endif; ?>
