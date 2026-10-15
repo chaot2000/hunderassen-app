@@ -221,10 +221,13 @@ function get_client_ip(): string
  * gesperrt ist (>= MAX_LOGIN_ATTEMPTS Fehlversuche innerhalb der
  * letzten LOCKOUT_MINUTES).
  *
+ * Gezählt wird pro Mandant: Fehlversuche für "admin" in Mandant B
+ * sperren "admin" in Mandant A nicht, auch nicht über dieselbe IP.
+ *
  * Gibt die verbleibende Sperrzeit in Sekunden zurück, oder 0 falls
  * keine Sperre aktiv ist.
  */
-function get_lockout_remaining_seconds(string $username): int
+function get_lockout_remaining_seconds(string $username, int $tenantId): int
 {
     $pdo = Database::getConnection();
     $ip  = get_client_ip();
@@ -232,11 +235,13 @@ function get_lockout_remaining_seconds(string $username): int
     $stmt = $pdo->prepare(
         'SELECT attempted_at FROM login_attempts
          WHERE success = 0
+           AND tenant_id = :tenant_id
            AND (username = :username OR ip_address = :ip)
            AND attempted_at >= (NOW() - INTERVAL :lockout_minutes MINUTE)
          ORDER BY attempted_at DESC
          LIMIT :max_attempts'
     );
+    $stmt->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
     $stmt->bindValue(':username', $username, PDO::PARAM_STR);
     $stmt->bindValue(':ip', $ip, PDO::PARAM_STR);
     $stmt->bindValue(':lockout_minutes', LOCKOUT_MINUTES, PDO::PARAM_INT);
@@ -260,18 +265,19 @@ function get_lockout_remaining_seconds(string $username): int
 /**
  * Protokolliert einen Login-Versuch (erfolgreich oder fehlgeschlagen).
  */
-function log_login_attempt(string $username, bool $success): void
+function log_login_attempt(string $username, bool $success, int $tenantId): void
 {
     $pdo = Database::getConnection();
 
     $stmt = $pdo->prepare(
-        'INSERT INTO login_attempts (username, ip_address, success, attempted_at)
-         VALUES (:username, :ip, :success, NOW())'
+        'INSERT INTO login_attempts (tenant_id, username, ip_address, success, attempted_at)
+         VALUES (:tenant_id, :username, :ip, :success, NOW())'
     );
     $stmt->execute([
-        ':username' => $username,
-        ':ip'       => get_client_ip(),
-        ':success'  => $success ? 1 : 0,
+        ':tenant_id' => $tenantId,
+        ':username'  => $username,
+        ':ip'        => get_client_ip(),
+        ':success'   => $success ? 1 : 0,
     ]);
 }
 
@@ -282,7 +288,7 @@ function log_login_attempt(string $username, bool $success): void
  * nur success=0-Einträge zählt — diese Funktion ist daher nur ein
  * sprechender Alias für den Login-Erfolgsfall).
  */
-function reset_login_attempts(string $username): void
+function reset_login_attempts(string $username, int $tenantId): void
 {
-    log_login_attempt($username, true);
+    log_login_attempt($username, true, $tenantId);
 }

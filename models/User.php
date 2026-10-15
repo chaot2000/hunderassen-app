@@ -24,7 +24,7 @@ class User
     {
         $username = clean_input($username);
 
-        $lockoutSeconds = get_lockout_remaining_seconds($username);
+        $lockoutSeconds = get_lockout_remaining_seconds($username, $tenantId);
         if ($lockoutSeconds > 0) {
             $minutes = (int) ceil($lockoutSeconds / 60);
             return ['success' => false, 'message' => 'Zu viele fehlgeschlagene Login-Versuche. Bitte warten Sie noch ca. ' . $minutes . ' Minute(n).'];
@@ -44,21 +44,21 @@ class User
         $genericError = 'Benutzername oder Passwort ist falsch.';
 
         if (!$user) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => $genericError];
         }
 
         if ((int) $user['is_active'] !== 1) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => 'Dieser Account wurde deaktiviert. Bitte wenden Sie sich an einen Administrator.'];
         }
 
         if (!password_verify($password, $user['password_hash'])) {
-            log_login_attempt($username, false);
+            log_login_attempt($username, false, $tenantId);
             return ['success' => false, 'message' => $genericError];
         }
 
-        log_login_attempt($username, true);
+        log_login_attempt($username, true, $tenantId);
         unset($user['password_hash']);
 
         return ['success' => true, 'message' => 'Login erfolgreich.', 'user' => $user];

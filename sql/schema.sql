@@ -67,17 +67,21 @@ CREATE TABLE `users` (
 -- Tabelle: login_attempts
 -- Brute-Force-Schutz: 5 Fehlversuche -> 15 Minuten Sperre.
 -- Trackt sowohl Username als auch IP, damit beide Sperrarten greifen.
+-- Gezählt wird pro Mandant (tenant_id). Kein FK: reine Protokolltabelle,
+-- Einträge von vor der Mandanten-Migration haben tenant_id NULL.
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS `login_attempts`;
 CREATE TABLE `login_attempts` (
     `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id`    INT UNSIGNED NULL,
     `username`     VARCHAR(50)  NOT NULL,             -- Eingabe, auch wenn User nicht existiert
     `ip_address`   VARCHAR(45)  NOT NULL,              -- IPv4 oder IPv6
     `success`      TINYINT(1)   NOT NULL DEFAULT 0,
     `attempted_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_username_time` (`username`, `attempted_at`),
-    KEY `idx_ip_time` (`ip_address`, `attempted_at`)
+    KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+    KEY `idx_tenant_time` (`tenant_id`, `attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------

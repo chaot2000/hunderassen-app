@@ -114,7 +114,16 @@ SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SC
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ---------------------------------------------------------------------
--- 8. Super-Admin: Spalte, und falls noch keiner existiert, wird das
+-- 8. login_attempts: Fehlversuche pro Mandant zählen. Alte Einträge
+--    behalten tenant_id NULL und zählen für keinen Mandanten mehr.
+-- ---------------------------------------------------------------------
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_attempts' AND COLUMN_NAME = 'tenant_id'), 'DO 0', 'ALTER TABLE `login_attempts` ADD COLUMN `tenant_id` INT UNSIGNED NULL AFTER `id`');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_attempts' AND INDEX_NAME = 'idx_tenant_time'), 'DO 0', 'ALTER TABLE `login_attempts` ADD INDEX `idx_tenant_time` (`tenant_id`, `attempted_at`)');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------------------------------------------------------------------
+-- 9. Super-Admin: Spalte, und falls noch keiner existiert, wird das
 --    älteste Admin-Konto in Mandant 1 Super-Admin.
 -- ---------------------------------------------------------------------
 SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'is_super_admin'), 'DO 0', 'ALTER TABLE `users` ADD COLUMN `is_super_admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `role`');
