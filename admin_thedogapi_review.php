@@ -374,7 +374,9 @@ require __DIR__ . '/views/partials/header.php';
      <?= count(array_filter($treffer, fn($t) => $t['score'] >= MATCH_SCHWELLE && $t['score'] < 85)) ?> unsicher),
     <?= count($ohneTreffer) ?> ohne Treffer.
     Es wird <strong>noch nichts in der Datenbank geändert</strong> — erst nach Klick auf
-    "Ausgewählte übernehmen" unten, das geht an Stufe 2.
+    "Ausgewählte übernehmen" unten, das geht an Stufe 2.<br>
+    Übernommen werden nur <strong>leere</strong> Felder und nur, wenn noch kein Bild da ist; vorhandene Werte bleiben immer.
+    Vorausgewählt sind nur sichere Treffer (≥85). Textänderungen und die Zuordnung landen in den Versionen der Rasse.
     <?php if ($nurOffene): ?>
         <br><a href="?alle=1" class="underline">Auch bereits abgeglichene Rassen erneut anzeigen</a>
     <?php endif; ?>
@@ -389,6 +391,8 @@ require __DIR__ . '/views/partials/header.php';
     $score = $t['score'];
     $klasse = $score >= 85 ? 'hoch' : ($score >= 70 ? 'mittel' : 'niedrig');
     $rowId = (int) $vdh['id'];
+    // Nur sichere Treffer sind vorausgewählt, unsichere muss man bewusst ankreuzen.
+    $sicher = $score >= 85;
 ?>
 <div class="tdapi-card <?= $klasse ?>">
     <h3>
@@ -435,16 +439,17 @@ require __DIR__ . '/views/partials/header.php';
     </div>
 
     <div class="tdapi-checkboxen">
-        <label><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_temperament]" value="1"> Temperament übernehmen</label>
-        <label><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_lebenserwartung]" value="1"> Lebenserwartung übernehmen</label>
-        <label><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_zuchtzweck]" value="1"> Zuchtzweck übernehmen</label>
+        <?php foreach (['temperament' => 'Temperament', 'lebenserwartung' => 'Lebenserwartung', 'zuchtzweck' => 'Zuchtzweck'] as $feld => $feldLabel): $hatWert = trim((string) ($vdh[$feld] ?? '')) !== ''; ?>
+            <label<?= $hatWert ? ' style="color:#666"' : '' ?>><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_<?= $feld ?>]" value="1" <?= $hatWert ? 'disabled' : '' ?>>
+                <?= $feldLabel ?> übernehmen<?= $hatWert ? ' (schon vorhanden, bleibt)' : '' ?></label>
+        <?php endforeach; ?>
         <?php if (!empty($api['image']['url'])): ?>
-        <label><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_bild]" value="1" <?= $vdh['hat_bild'] ? '' : 'checked' ?>>
-            Bild übernehmen <?= $vdh['hat_bild'] ? '(überschreibt vorhandenes!)' : '(noch kein Bild vorhanden)' ?>
+        <label<?= $vdh['hat_bild'] ? ' style="color:#666"' : '' ?>><input type="checkbox" name="items[<?= $rowId ?>][uebernehmen_bild]" value="1" <?= $vdh['hat_bild'] ? 'disabled' : ($sicher ? 'checked' : '') ?>>
+            Bild übernehmen <?= $vdh['hat_bild'] ? '(Bild vorhanden, bleibt)' : '(noch kein Bild vorhanden)' ?>
         </label>
         <input type="hidden" name="items[<?= $rowId ?>][bild_url]" value="<?= e($api['image']['url']) ?>">
         <?php endif; ?>
-        <label><input type="checkbox" name="items[<?= $rowId ?>][markieren]" value="1" checked> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
+        <label><input type="checkbox" name="items[<?= $rowId ?>][markieren]" value="1" <?= $sicher ? 'checked' : '' ?>> Als "abgeglichen" markieren (thedogapi_id + Datum setzen)</label>
     </div>
 </div>
 <?php endforeach; ?>
