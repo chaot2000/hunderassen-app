@@ -83,6 +83,12 @@ class Breed
         return $params;
     }
 
+    /** Name der FCI-Gruppe in der aktuellen Sprache, null bei unbekannter Nummer. */
+    public static function fciGruppenName(int $nr): ?string
+    {
+        return isset(self::FCI_GRUPPEN[$nr]) ? t('fci.gruppe.' . $nr) : null;
+    }
+
     /**
      * Teilt "Originalname, deutscher Name" (so kommen viele Namen aus dem
      * VDH-Import) für die Anzeige auf. Ändert keine Daten.
@@ -454,13 +460,15 @@ class Breed
         if ($searchTerm !== '') {
             // Sucht sowohl im Hauptnamen als auch in den alternativen
             // Bezeichnungen (z.B. "Alsatian" findet auch "Deutscher
-            // Schäferhund", falls dort als alternative_namen hinterlegt).
-            $where[]             = '(b.name LIKE :search OR b.alternative_namen LIKE :search_alt)';
+            // Schäferhund", falls dort als alternative_namen hinterlegt)
+            // und im englischen Namen aus TheDogAPI.
+            $where[]             = '(b.name LIKE :search OR b.alternative_namen LIKE :search_alt OR b.name_en LIKE :search_en)';
             $params[':search']   = '%' . $searchTerm . '%';
+            $params[':search_en'] = '%' . $searchTerm . '%';
             $params[':search_alt'] = '%' . $searchTerm . '%';
         }
 
-        $sql = 'SELECT DISTINCT b.id, b.name, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, (b.bild_blob IS NOT NULL) AS hat_bild
+        $sql = 'SELECT DISTINCT b.id, b.name, b.name_en, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, (b.bild_blob IS NOT NULL) AS hat_bild
                 FROM breeds b';
 
         if (!empty($groessen)) {
@@ -582,7 +590,7 @@ class Breed
         $pdo = Database::getConnection();
 
         $othersStmt = $pdo->prepare(
-            'SELECT id, name, ursprungsland, fci_klasse, bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
+            'SELECT id, name, name_en, ursprungsland, fci_klasse, bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
              FROM breeds WHERE id != :id'
         );
         $othersStmt->execute([':id' => $breedId]);
@@ -624,31 +632,31 @@ class Breed
             if ($current['fci_klasse'] !== null && $other['fci_klasse'] !== null
                 && (int) $other['fci_klasse'] === (int) $current['fci_klasse']) {
                 $score += self::SIMILARITY_WEIGHT_FCI_GRUPPE;
-                $gruende[] = 'Gleiche FCI-Gruppe';
+                $gruende[] = t('aehnlich.fci');
             }
 
             $sharedGroessen = count(array_intersect($currentGroessen, $sizesByBreed[$otherId] ?? []));
             if ($sharedGroessen > 0) {
                 $score += $sharedGroessen * self::SIMILARITY_WEIGHT_GROESSE;
-                $gruende[] = $sharedGroessen . ' gemeinsame Größenklasse' . ($sharedGroessen > 1 ? 'n' : '');
+                $gruende[] = t($sharedGroessen > 1 ? 'aehnlich.groessen_n' : 'aehnlich.groessen_1', ['anzahl' => $sharedGroessen]);
             }
 
             $sharedTags = count(array_intersect($currentTagIds, $tagsByBreed[$otherId] ?? []));
             if ($sharedTags > 0) {
                 $score += $sharedTags * self::SIMILARITY_WEIGHT_TAG;
-                $gruende[] = $sharedTags . ' gemeinsame' . ($sharedTags > 1 ? '' : 's') . ' Merkmal' . ($sharedTags > 1 ? 'e' : '');
+                $gruende[] = t($sharedTags > 1 ? 'aehnlich.merkmale_n' : 'aehnlich.merkmale_1', ['anzahl' => $sharedTags]);
             }
 
             $sharedActivities = count(array_intersect($currentActivityIds, $activitiesByBreed[$otherId] ?? []));
             if ($sharedActivities > 0) {
                 $score += $sharedActivities * self::SIMILARITY_WEIGHT_ACTIVITY;
-                $gruende[] = $sharedActivities . ' gemeinsame Aktivität' . ($sharedActivities > 1 ? 'en' : '');
+                $gruende[] = t($sharedActivities > 1 ? 'aehnlich.aktivitaeten_n' : 'aehnlich.aktivitaeten_1', ['anzahl' => $sharedActivities]);
             }
 
             if ($current['ursprungsland'] !== null && $other['ursprungsland'] !== null
                 && $other['ursprungsland'] === $current['ursprungsland']) {
                 $score += self::SIMILARITY_WEIGHT_URSPRUNGSLAND;
-                $gruende[] = 'Gleiches Ursprungsland';
+                $gruende[] = t('aehnlich.land');
             }
 
             if ($score > 0) {

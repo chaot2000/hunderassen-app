@@ -32,6 +32,21 @@ function rassentext_farbe(string $titel): array
     };
 }
 
+/** Angezeigter Titel: bekannte Abschnitte übersetzt, eigene Titel unverändert. */
+function rassentext_titel(string $titel): string
+{
+    $schluessel = match ($titel) {
+        'Wesen'                    => 'abschnitt.wesen',
+        'Haltung und Erziehung'    => 'abschnitt.haltung',
+        'Pflege'                   => 'abschnitt.pflege',
+        'Aussehen'                 => 'abschnitt.aussehen',
+        'Herkunft und Geschichte'  => 'abschnitt.herkunft',
+        'Angaben aus dem Standard' => 'abschnitt.standard',
+        default                    => null,
+    };
+    return $schluessel !== null ? t($schluessel) : $titel;
+}
+
 function rassentext_anker(string $titel): string
 {
     $slug = strtr(mb_strtolower($titel), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
@@ -48,12 +63,12 @@ function render_rassentext_sprungleiste(array $abschnitte): string
     if (count($abschnitte) < 2) {
         return '';
     }
-    $html = '<nav aria-label="Abschnitte" class="flex flex-wrap gap-2 mb-8">';
+    $html = '<nav aria-label="' . e(t('rasse.abschnitte')) . '" class="flex flex-wrap gap-2 mb-8">';
     foreach ($abschnitte as $a) {
         $f = rassentext_farbe($a['titel']);
         $html .= '<a href="#' . e(rassentext_anker($a['titel'])) . '" class="' . $f['block'] . ' ' . $f['text']
             . ' text-sm font-bold px-3 py-2 min-h-[44px] inline-flex items-center rounded-sm hover:underline underline-offset-4 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-fellDk transition">'
-            . e($a['titel']) . '</a>';
+            . e(rassentext_titel($a['titel'])) . '</a>';
     }
     return $html . '</nav>';
 }
@@ -78,7 +93,7 @@ function render_rassentext_abschnitte(array $anzeige): string
         $html .= '<section aria-labelledby="' . e($anker) . '-titel" id="' . e($anker) . '" class="scroll-mt-6 lg:grid lg:grid-cols-12 lg:gap-10 mb-12">'
             . '<div class="lg:col-span-4 mb-4 lg:mb-0">'
             . '<h2 id="' . e($anker) . '-titel" class="' . $f['block'] . ' ' . $f['text'] . ' lg:sticky lg:top-6 text-xl sm:text-2xl font-black leading-tight px-5 py-4 rounded-sm">'
-            . e($a['titel']) . '</h2></div>'
+            . e(rassentext_titel($a['titel'])) . '</h2></div>'
             . '<div class="lg:col-span-8 space-y-4">';
         foreach ($a['absaetze'] as $p) {
             $html .= '<p class="text-[1.0625rem] leading-[1.75] text-fellDk max-w-[60ch]">' . nl2br(e($p)) . '</p>';

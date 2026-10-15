@@ -29,10 +29,10 @@ $breed   = $breedId ? Breed::findById($breedId) : null;
 
 if ($breed === null) {
     http_response_code(404);
-    $pageTitle = 'Nicht gefunden';
+    $pageTitle = t('rasse.nicht_gefunden_titel');
     require __DIR__ . '/views/partials/header.php';
-    echo '<div class="text-center py-16 text-fellDk"><p>Diese Rasse wurde nicht gefunden.</p>
-          <a href="/rassen.php" class="text-tanne font-semibold underline">Zurück zu den Rassen</a></div>';
+    echo '<div class="text-center py-16 text-fellDk"><p>' . e(t('rasse.nicht_gefunden')) . '</p>
+          <a href="/rassen.php" class="text-tanne font-semibold underline">' . e(t('rasse.zurueck_rassen')) . '</a></div>';
     require __DIR__ . '/views/partials/footer.php';
     exit;
 }
@@ -41,19 +41,33 @@ $similarBreeds = Breed::getSimilar($breedId, 6);
 $darfPflegen   = can_manage_breeds();
 $namen         = Breed::namensteile((string) $breed['name']);
 $gruppe        = $breed['fci_klasse'] !== null ? (int) $breed['fci_klasse'] : null;
-$text          = RassentextGliederung::fuerAnzeige($breed['beschreibung']);
+$englisch      = aktuelle_sprache() === 'en';
+
+// Auf Englisch: englischer Name als Überschrift, der Originalname darunter.
+if ($englisch && trim((string) ($breed['name_en'] ?? '')) !== '') {
+    $original = (string) $breed['name'];
+    $namen = ['haupt' => (string) $breed['name_en'], 'zweit' => $original !== $breed['name_en'] ? $original : null];
+}
+
+// Text: auf Englisch die englische Beschreibung (TheDogAPI), sonst der
+// deutsche Text. Fehlt die englische, bleibt der deutsche mit Hinweis.
+$textSprache = 'de';
+$text = RassentextGliederung::fuerAnzeige($breed['beschreibung']);
+if ($englisch && trim((string) ($breed['beschreibung_en'] ?? '')) !== '') {
+    $textSprache = 'en';
+    $text = RassentextGliederung::fuerAnzeige($breed['beschreibung_en']);
+}
+$textFremd = $englisch && $textSprache === 'de';
 $versionen     = $darfPflegen ? ContentRevision::zaehle('breeds', $breedId, null) : 0;
 
-$groessenLabels = [
-    'klein'      => 'Klein',
-    'mittel'     => 'Mittel',
-    'gross'      => 'Groß',
-    'sehr_gross' => 'Sehr groß',
-];
+$groessenLabels = [];
+foreach (['klein', 'mittel', 'gross', 'sehr_gross'] as $g) {
+    $groessenLabels[$g] = t('groesse.' . $g);
+}
 $arbeitspruefungLabels = [
-    'mit'        => 'mit Arbeitsprüfung',
-    'ohne'       => 'ohne Arbeitsprüfung',
-    'fakultativ' => 'Arbeitsprüfung fakultativ',
+    'mit'        => t('rasse.ap_mit'),
+    'ohne'       => t('rasse.ap_ohne'),
+    'fakultativ' => t('rasse.ap_fakultativ'),
 ];
 
 /** "46–58 cm", "ab 46 cm", "bis 58 cm" oder null */
@@ -64,10 +78,10 @@ function format_spanne(?float $min, ?float $max, string $einheit): ?string
         return $fmt($min) . '–' . $fmt($max) . ' ' . $einheit;
     }
     if ($min !== null) {
-        return 'ab ' . $fmt($min) . ' ' . $einheit;
+        return t('rasse.ab', ['wert' => $fmt($min) . ' ' . $einheit]);
     }
     if ($max !== null) {
-        return 'bis ' . $fmt($max) . ' ' . $einheit;
+        return t('rasse.bis', ['wert' => $fmt($max) . ' ' . $einheit]);
     }
     return null;
 }
@@ -136,7 +150,7 @@ foreach ($breed['sizes'] as $s) {
     }
 }
 
-$pageTitle = $breed['name'];
+$pageTitle = $namen['haupt'];
 require __DIR__ . '/views/partials/header.php';
 ?>
 
@@ -157,7 +171,7 @@ require __DIR__ . '/views/partials/header.php';
         <div class="lg:col-span-7 bg-tanne text-creme px-5 sm:px-10 pt-6 pb-8 lg:pb-32 rounded-t-lg lg:rounded-tr-none lg:rounded-l-lg">
             <a href="/rassen.php" class="inline-flex items-center gap-1.5 min-h-[44px] py-2 text-sm font-semibold text-creme underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pfote rounded-sm">
                 <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
-                Alle Rassen
+                <?= e(t('rasse.alle_rassen')) ?>
             </a>
 
             <h1 id="rasse-name" class="mt-6 text-4xl sm:text-6xl font-black tracking-tight leading-[0.95] break-words" style="text-wrap: balance">
@@ -167,23 +181,23 @@ require __DIR__ . '/views/partials/header.php';
                 <p class="mt-3 text-lg sm:text-xl font-bold text-creme">
                     <?= e($namen['zweit']) ?>
                     <?php if (str_ends_with($namen['zweit'], '…')): ?>
-                        <span class="block text-sm font-semibold text-creme/90 mt-1">Name in der Quelle gekürzt.</span>
+                        <span class="block text-sm font-semibold text-creme/90 mt-1"><?= e(t('rasse.name_gekuerzt')) ?></span>
                     <?php endif; ?>
                 </p>
             <?php endif; ?>
             <?php if (!empty($breed['alternative_namen']) || !empty($breed['namenszusatz'])): ?>
                 <p class="mt-2 text-sm text-creme/90">
-                    <?= e(trim(($breed['namenszusatz'] ?? '') . ' ' . (!empty($breed['alternative_namen']) ? 'auch: ' . $breed['alternative_namen'] : ''))) ?>
+                    <?= e(trim(($breed['namenszusatz'] ?? '') . ' ' . (!empty($breed['alternative_namen']) ? t('rasse.auch', ['namen' => $breed['alternative_namen']]) : ''))) ?>
                 </p>
             <?php endif; ?>
 
             <?php if ($text['kurzportraet'] !== null): ?>
                 <?php $lang = mb_strlen($text['kurzportraet']) > 160; ?>
-                <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?>>
+                <div <?= $lang ? 'x-data="{ ganz: false }"' : '' ?> lang="<?= $textSprache ?>">
                     <!-- Am Handy optisch gekürzt, damit die Aktion im ersten Bild bleibt; der volle Text steht im DOM. -->
                     <p class="mt-5 sm:mt-6 text-base sm:text-lg leading-relaxed max-w-[60ch] <?= $lang ? 'line-clamp-3 sm:line-clamp-none' : '' ?>" <?= $lang ? ':class="ganz && \'line-clamp-none\'"' : '' ?>><?= e($text['kurzportraet']) ?></p>
                     <?php if ($lang): ?>
-                        <button type="button" x-show="!ganz" @click="ganz = true" class="sm:hidden mt-2 min-h-[44px] py-2 text-sm font-bold text-creme underline underline-offset-4">Weiterlesen</button>
+                        <button type="button" x-show="!ganz" @click="ganz = true" class="sm:hidden mt-2 min-h-[44px] py-2 text-sm font-bold text-creme underline underline-offset-4"><?= e(t('rasse.weiterlesen')) ?></button>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -192,7 +206,7 @@ require __DIR__ . '/views/partials/header.php';
         <?php if (!empty($breed['hat_bild'])): ?>
             <div class="lg:col-span-5 relative min-h-[220px] sm:min-h-[300px] bg-sand overflow-hidden lg:rounded-r-lg">
                 <img src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
-                     alt="<?= e($breed['name']) ?>"
+                     alt="<?= e($namen['haupt']) ?>"
                      class="absolute inset-0 w-full h-full object-cover object-[50%_25%]">
             </div>
         <?php else: ?>
@@ -200,18 +214,18 @@ require __DIR__ . '/views/partials/header.php';
                 <!-- Schmal (unter lg): eine Zeile mit kleinem Signet, damit die Aktion im ersten Bild bleibt -->
                 <div class="lg:hidden flex items-center gap-3 px-5 min-h-[56px]">
                     <?= render_dog_icon(32, '#B5502E', '#E4DEC8') ?>
-                    <span class="text-sm font-semibold text-creme">Noch kein Foto</span>
+                    <span class="text-sm font-semibold text-creme"><?= e(t('rasse.kein_foto')) ?></span>
                     <?php if ($darfPflegen): ?>
-                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="ml-auto text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
+                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="ml-auto text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center"><?= e(t('rasse.foto_hinzufuegen')) ?></a>
                     <?php endif; ?>
                 </div>
                 <!-- Breit: gesetzte Farbfläche mit großer Gruppennummer und Signet -->
                 <div class="hidden lg:block absolute inset-0">
                     <span class="absolute -top-6 right-2 font-mono font-medium text-[12rem] leading-none text-creme/15 select-none" aria-hidden="true"><?= $gruppe !== null ? $gruppe : '' ?></span>
                     <div class="absolute inset-0 flex items-center justify-center pb-24"><?= render_dog_icon(200, '#B5502E', '#E4DEC8') ?></div>
-                    <p class="sr-only">Noch kein Foto.</p>
+                    <p class="sr-only"><?= e(t('rasse.kein_foto')) ?>.</p>
                     <?php if ($darfPflegen): ?>
-                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center">Foto hinzufügen</a>
+                        <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center"><?= e(t('rasse.foto_hinzufuegen')) ?></a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -222,20 +236,20 @@ require __DIR__ . '/views/partials/header.php';
             <p class="balken self-start w-full lg:w-[78%] bg-fell text-creme px-5 sm:px-10 py-4 text-lg sm:text-xl font-black leading-snug">
                 <?php if ($gruppe !== null): ?>
                     <span class="mr-2">FCI <span class="font-mono font-medium"><?= $gruppe ?></span></span>
-                    <?= e(Breed::FCI_GRUPPEN[$gruppe] ?? 'Gruppe ' . $gruppe) ?>
+                    <?= e(Breed::fciGruppenName($gruppe) ?? t('rasse.gruppe', ['nr' => $gruppe])) ?>
                 <?php else: ?>
-                    FCI-Gruppe nicht hinterlegt
+                    <?= e(t('rasse.fci_fehlt')) ?>
                 <?php endif; ?>
             </p>
             <?php if (!empty($breed['fci_sektion']) || !empty($breed['fci_sektion_name'])): ?>
                 <p class="balken self-end w-[92%] lg:w-[56%] lg:mr-[22%] bg-pfote text-fellDk px-5 sm:px-8 py-3 text-base sm:text-lg font-bold">
-                    <?php if (!empty($breed['fci_sektion'])): ?><span class="mr-2">Sektion <span class="font-mono font-medium"><?= e($breed['fci_sektion']) ?></span></span><?php endif; ?>
+                    <?php if (!empty($breed['fci_sektion'])): ?><span class="mr-2"><?= e(t('rasse.sektion')) ?> <span class="font-mono font-medium"><?= e($breed['fci_sektion']) ?></span></span><?php endif; ?>
                     <?= e($breed['fci_sektion_name'] ?? '') ?>
                 </p>
             <?php endif; ?>
             <p class="balken self-start w-[86%] lg:w-[48%] lg:ml-[8%] bg-fellDk text-creme px-5 sm:px-8 py-3 text-sm sm:text-base font-bold flex flex-wrap gap-x-6 gap-y-1">
-                <span><?= e($arbeitspruefungLabels[$breed['arbeitspruefung'] ?? ''] ?? 'Arbeitsprüfung: keine Angabe') ?></span>
-                <span>Standard <?= !empty($breed['fci_nr']) ? 'Nr. <span class="font-mono font-medium">' . e($breed['fci_nr']) . '</span>' : 'ohne Nr.' ?></span>
+                <span><?= e($arbeitspruefungLabels[$breed['arbeitspruefung'] ?? ''] ?? t('rasse.ap_keine')) ?></span>
+                <span><?= e(t('rasse.standard')) ?> <?= !empty($breed['fci_nr']) ? e(t('rasse.nr_kurz')) . ' <span class="font-mono font-medium">' . e($breed['fci_nr']) . '</span>' : e(t('rasse.ohne_nr')) ?></span>
             </p>
         </div>
     </header>
@@ -244,16 +258,16 @@ require __DIR__ . '/views/partials/header.php';
     <div class="mt-4 sm:mt-6 flex flex-wrap items-center gap-3">
         <a href="/dog_form.php?rasse=<?= (int) $breed['id'] ?>"
            class="inline-flex items-center min-h-[44px] bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2 rounded-lg transition-colors focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-pfote">
-            Hund dieser Rasse anlegen
+            <?= e(t('rasse.hund_anlegen')) ?>
         </a>
         <?php if ($darfPflegen): ?>
             <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>"
                class="inline-flex items-center min-h-[44px] border-2 border-fellDk text-fellDk hover:bg-fellDk hover:text-creme font-bold text-sm px-5 py-2 rounded-lg transition-colors">
-                Bearbeiten
+                <?= e(t('rassen.bearbeiten')) ?>
             </a>
             <a href="/content_versionen.php?typ=rasse&amp;id=<?= (int) $breed['id'] ?>"
                class="inline-flex items-center min-h-[44px] text-fellDk font-semibold text-sm px-2 py-2 underline underline-offset-4 hover:text-tanneDk">
-                Versionen (<?= $versionen ?>)
+                <?= e(t('rasse.versionen', ['anzahl' => $versionen])) ?>
             </a>
         <?php endif; ?>
     </div>
@@ -261,24 +275,24 @@ require __DIR__ . '/views/partials/header.php';
     <!-- Steckbrief: Maße und Merkmale -->
     <div class="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
         <section aria-labelledby="masse-titel" class="lg:col-span-5 border-t-4 border-fellDk pt-4">
-            <h2 id="masse-titel" class="text-xl font-black text-fellDk">Größe und Gewicht</h2>
+            <h2 id="masse-titel" class="text-xl font-black text-fellDk"><?= e(t('rasse.masse_titel')) ?></h2>
             <?php if (empty($breed['sizes'])): ?>
-                <p class="mt-3 text-sm text-fellDk/80">Keine Maße hinterlegt.</p>
+                <p class="mt-3 text-sm text-fellDk/80"><?= e(t('rasse.keine_masse')) ?></p>
             <?php else: ?>
                 <p class="mt-1 text-xs text-fellDk/80">
-                    Balken auf fester Skala.
-                    <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-tanne rounded-sm" aria-hidden="true"></span>Rüde</span>
-                    <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-fell rounded-sm" aria-hidden="true"></span>Hündin</span>
+                    <?= e(t('rasse.skala')) ?>
+                    <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-tanne rounded-sm" aria-hidden="true"></span><?= e(t('rasse.ruede')) ?></span>
+                    <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-3 h-3 bg-fell rounded-sm" aria-hidden="true"></span><?= e(t('rasse.huendin')) ?></span>
                 </p>
                 <?php foreach ($breed['sizes'] as $size):
                     $werte = [
-                        'Schulterhöhe' => [
-                            ['Rüde', als_zahl($size['schulterhoehe_ruede_min_cm']), als_zahl($size['schulterhoehe_ruede_max_cm']), 'bg-tanne'],
-                            ['Hündin', als_zahl($size['schulterhoehe_haendin_min_cm']), als_zahl($size['schulterhoehe_haendin_max_cm']), 'bg-fell'],
+                        'hoehe' => [
+                            [t('rasse.ruede'), als_zahl($size['schulterhoehe_ruede_min_cm']), als_zahl($size['schulterhoehe_ruede_max_cm']), 'bg-tanne'],
+                            [t('rasse.huendin'), als_zahl($size['schulterhoehe_haendin_min_cm']), als_zahl($size['schulterhoehe_haendin_max_cm']), 'bg-fell'],
                         ],
-                        'Gewicht' => [
-                            ['Rüde', als_zahl($size['gewicht_ruede_min_kg']), als_zahl($size['gewicht_ruede_max_kg']), 'bg-tanne'],
-                            ['Hündin', als_zahl($size['gewicht_haendin_min_kg']), als_zahl($size['gewicht_haendin_max_kg']), 'bg-fell'],
+                        'gewicht' => [
+                            [t('rasse.ruede'), als_zahl($size['gewicht_ruede_min_kg']), als_zahl($size['gewicht_ruede_max_kg']), 'bg-tanne'],
+                            [t('rasse.huendin'), als_zahl($size['gewicht_haendin_min_kg']), als_zahl($size['gewicht_haendin_max_kg']), 'bg-fell'],
                         ],
                     ];
                 ?>
@@ -286,11 +300,12 @@ require __DIR__ . '/views/partials/header.php';
                         <?php if (count($breed['sizes']) > 1): ?>
                             <h3 class="text-sm font-black uppercase tracking-wide text-fellDk mb-2"><?= e($groessenLabels[$size['groesse']] ?? $size['groesse']) ?></h3>
                         <?php else: ?>
-                            <p class="text-sm font-bold text-fellDk mb-2">Größenklasse: <?= e($groessenLabels[$size['groesse']] ?? $size['groesse']) ?></p>
+                            <p class="text-sm font-bold text-fellDk mb-2"><?= e(t('rasse.groessenklasse', ['klasse' => $groessenLabels[$size['groesse']] ?? $size['groesse']])) ?></p>
                         <?php endif; ?>
                         <?php foreach ($werte as $art => $zeilen):
-                            $einheit = $art === 'Gewicht' ? 'kg' : 'cm';
-                            $skala = $art === 'Gewicht' ? $maxKg : $maxCm;
+                            $einheit = $art === 'gewicht' ? 'kg' : 'cm';
+                            $skala = $art === 'gewicht' ? $maxKg : $maxCm;
+                            $artName = t($art === 'gewicht' ? 'rasse.gewicht' : 'rasse.schulterhoehe');
                             // Nur Zeilen mit Werten zeigen
                             $zeilen = array_filter($zeilen, fn($z) => $z[1] !== null || $z[2] !== null);
                             if (empty($zeilen)) {
@@ -302,7 +317,7 @@ require __DIR__ . '/views/partials/header.php';
                                     <?php foreach ($zeilen as [$geschlecht, $min, $max, $farbe]): ?>
                                         <div class="grid grid-cols-[7.5rem_1fr] sm:grid-cols-[8.5rem_1fr] items-center gap-3">
                                             <dt class="text-sm text-fellDk">
-                                                <?= e($art) ?> <?= e($geschlecht) ?>
+                                                <?= e($artName) ?> <?= e($geschlecht) ?>
                                                 <span class="block font-mono text-sm font-medium"><?= e(format_spanne($min, $max, $einheit) ?? '–') ?></span>
                                             </dt>
                                             <dd><?= render_spannenbalken($min, $max, $skala, $farbe) ?></dd>
@@ -316,7 +331,7 @@ require __DIR__ . '/views/partials/header.php';
                             $size['schulterhoehe_ruede_min_cm'], $size['schulterhoehe_ruede_max_cm'], $size['schulterhoehe_haendin_min_cm'], $size['schulterhoehe_haendin_max_cm'],
                             $size['gewicht_ruede_min_kg'], $size['gewicht_ruede_max_kg'], $size['gewicht_haendin_min_kg'], $size['gewicht_haendin_max_kg'],
                         ], fn($v) => $v !== null)) < 8): ?>
-                            <p class="mt-2 text-xs text-fellDk/80">Fehlende Werte sind nicht hinterlegt.</p>
+                            <p class="mt-2 text-xs text-fellDk/80"><?= e(t('rasse.fehlende_werte')) ?></p>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -324,13 +339,13 @@ require __DIR__ . '/views/partials/header.php';
         </section>
 
         <section aria-labelledby="merkmale-titel" class="lg:col-span-7 border-t-4 border-fellDk pt-4">
-            <h2 id="merkmale-titel" class="text-xl font-black text-fellDk">Merkmale</h2>
+            <h2 id="merkmale-titel" class="text-xl font-black text-fellDk"><?= e(t('rasse.merkmale')) ?></h2>
             <dl class="mt-3 divide-y divide-sand">
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk">Eigenschaften</dt>
+                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rassen.eigenschaften')) ?></dt>
                     <dd>
                         <?php if (empty($breed['tags'])): ?>
-                            <span class="text-sm text-fellDk/80">Noch keine zugeordnet</span>
+                            <span class="text-sm text-fellDk/80"><?= e(t('rasse.keine_zugeordnet')) ?></span>
                         <?php else: ?>
                             <ul class="flex flex-wrap gap-2">
                                 <?php foreach ($breed['tags'] as $tag): ?>
@@ -341,10 +356,10 @@ require __DIR__ . '/views/partials/header.php';
                     </dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk">Aktivitäten</dt>
+                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rassen.aktivitaeten')) ?></dt>
                     <dd>
                         <?php if (empty($breed['activities'])): ?>
-                            <span class="text-sm text-fellDk/80">Noch keine zugeordnet</span>
+                            <span class="text-sm text-fellDk/80"><?= e(t('rasse.keine_zugeordnet')) ?></span>
                         <?php else: ?>
                             <ul class="flex flex-wrap gap-2">
                                 <?php foreach ($breed['activities'] as $activity): ?>
@@ -355,37 +370,41 @@ require __DIR__ . '/views/partials/header.php';
                     </dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk">Farben</dt>
-                    <dd class="text-sm text-fellDk"><?= !empty($breed['farben']) ? e($breed['farben']) : '<span class="text-fellDk/80">keine Angabe</span>' ?></dd>
+                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rasse.farben')) ?></dt>
+                    <dd class="text-sm text-fellDk"><?= !empty($breed['farben']) ? e($breed['farben']) : '<span class="text-fellDk/80">' . e(t('rasse.keine_angabe')) . '</span>' ?></dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk">Ursprungsland</dt>
-                    <dd class="text-sm text-fellDk"><?= !empty($breed['ursprungsland']) ? e($breed['ursprungsland']) : '<span class="text-fellDk/80">keine Angabe</span>' ?></dd>
+                    <dt class="text-sm font-bold text-fellDk"><?= e(t('rasse.ursprungsland')) ?></dt>
+                    <dd class="text-sm text-fellDk"><?= !empty($breed['ursprungsland']) ? e($breed['ursprungsland']) : '<span class="text-fellDk/80">' . e(t('rasse.keine_angabe')) . '</span>' ?></dd>
                 </div>
                 <?php
-                // Nur gefüllte Zeilen. Fehlt das Deutsche, steht das Englische
-                // aus TheDogAPI da, als englisch gekennzeichnet.
+                // Nur gefüllte Zeilen. Gibt es den Wert nur in der anderen
+                // Sprache, steht er da und ist als solcher gekennzeichnet.
                 $lebenserwartung = trim((string) ($breed['lebenserwartung'] ?? ''));
                 if ($lebenserwartung !== '' && !preg_match('/jahr|year/i', $lebenserwartung)) {
-                    $lebenserwartung = preg_replace('/\s*-\s*/', '–', $lebenserwartung) . ' Jahre';
+                    $lebenserwartung = t('rasse.jahre', ['wert' => preg_replace('/\s*-\s*/', '–', $lebenserwartung)]);
                 }
                 $charakterZeilen = [
-                    'Temperament'     => [$breed['temperament'] ?? '', $breed['temperament_en'] ?? ''],
-                    'Zuchtzweck'      => [$breed['zuchtzweck'] ?? '', $breed['zuchtzweck_en'] ?? ''],
-                    'Lebenserwartung' => [$lebenserwartung, ''],
+                    'rasse.temperament'     => [$breed['temperament'] ?? '', $breed['temperament_en'] ?? ''],
+                    'rasse.zuchtzweck'      => [$breed['zuchtzweck'] ?? '', $breed['zuchtzweck_en'] ?? ''],
+                    'rasse.lebenserwartung' => [$lebenserwartung, $lebenserwartung],
                 ];
-                foreach ($charakterZeilen as $titel => [$deutsch, $englisch]):
-                    if (trim((string) $deutsch) === '' && trim((string) $englisch) === '') {
+                foreach ($charakterZeilen as $titel => [$deutsch, $engl]):
+                    $deutsch = trim((string) $deutsch);
+                    $engl = trim((string) $engl);
+                    if ($deutsch === '' && $engl === '') {
                         continue;
+                    }
+                    // [Wert, Sprache des Werts, Hinweis falls fremde Sprache]
+                    if ($englisch) {
+                        $zeile = $engl !== '' ? [$engl, 'en', null] : [$deutsch, 'de', t('rasse.nur_deutsch')];
+                    } else {
+                        $zeile = $deutsch !== '' ? [$deutsch, 'de', null] : [$engl, 'en', t('rasse.nur_englisch')];
                     }
                 ?>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-1 sm:gap-4">
-                    <dt class="text-sm font-bold text-fellDk"><?= e($titel) ?></dt>
-                    <?php if (trim((string) $deutsch) !== ''): ?>
-                        <dd class="text-sm text-fellDk"><?= e($deutsch) ?></dd>
-                    <?php else: ?>
-                        <dd class="text-sm text-fellDk"><span lang="en"><?= e($englisch) ?></span> <span class="text-fellDk/80">(englisch, noch nicht übersetzt)</span></dd>
-                    <?php endif; ?>
+                    <dt class="text-sm font-bold text-fellDk"><?= e(t($titel)) ?></dt>
+                    <dd class="text-sm text-fellDk"><span lang="<?= $zeile[1] ?>"><?= e($zeile[0]) ?></span><?php if ($zeile[2] !== null): ?> <span class="text-fellDk/80"><?= e($zeile[2]) ?></span><?php endif; ?></dd>
                 </div>
                 <?php endforeach; ?>
             </dl>
@@ -396,31 +415,38 @@ require __DIR__ . '/views/partials/header.php';
     <div class="mt-14">
         <?php if ($text['kurzportraet'] === null && empty($text['abschnitte'])): ?>
             <div class="border-t-4 border-fellDk pt-4">
-                <h2 class="text-xl font-black text-fellDk">Beschreibung</h2>
-                <p class="mt-2 text-fellDk">Für diese Rasse gibt es noch keine Beschreibung.</p>
+                <h2 class="text-xl font-black text-fellDk"><?= e(t('rasse.beschreibung')) ?></h2>
+                <p class="mt-2 text-fellDk"><?= e(t('rasse.keine_beschreibung')) ?></p>
                 <?php if ($darfPflegen): ?>
-                    <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>#beschreibung" class="mt-3 inline-flex items-center min-h-[44px] py-2 font-bold text-tanneDk underline underline-offset-4">Beschreibung schreiben</a>
+                    <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>#beschreibung" class="mt-3 inline-flex items-center min-h-[44px] py-2 font-bold text-tanneDk underline underline-offset-4"><?= e(t('rasse.beschreibung_schreiben')) ?></a>
                 <?php endif; ?>
             </div>
         <?php else: ?>
-            <?php if (($breed['gliederung'] ?? '') === 'automatisch' && !empty($text['abschnitte'])): ?>
-                <p class="text-sm text-fellDk mb-3">Die Abschnitte wurden automatisch zugeordnet und sind noch nicht geprüft.</p>
+            <?php if ($textFremd): ?>
+                <p class="text-sm font-semibold text-fellDk mb-3"><?= e(t('rasse.text_nur_deutsch')) ?></p>
+            <?php endif; ?>
+            <?php if ($textSprache === 'de' && ($breed['gliederung'] ?? '') === 'automatisch' && !empty($text['abschnitte'])): ?>
+                <p class="text-sm text-fellDk mb-3"><?= e(t('rasse.ungeprueft')) ?></p>
             <?php endif; ?>
             <?= render_rassentext_sprungleiste($text['abschnitte']) ?>
-            <?= render_rassentext_abschnitte($text) ?>
+            <div lang="<?= $textSprache ?>"><?= render_rassentext_abschnitte($text) ?></div>
         <?php endif; ?>
 
-        <?php if ($text['kurzportraet'] !== null && (($breed['gliederung'] ?? '') === 'automatisch' || !empty($breed['quelle_url']))): ?>
+        <?php if ($textSprache === 'en'): ?>
+            <footer class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
+                <p class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 text-sm text-fellDk"><?= e(t('rasse.text_thedogapi')) ?></p>
+            </footer>
+        <?php elseif ($text['kurzportraet'] !== null && (($breed['gliederung'] ?? '') === 'automatisch' || !empty($breed['quelle_url']))): ?>
             <footer class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
                 <div class="lg:col-start-5 lg:col-span-8 max-w-[60ch] border-t border-sand pt-4 space-y-1 text-sm text-fellDk">
                     <?php if (!empty($breed['quelle_url'])): ?>
                         <p>
-                            Text: VDH-Rasselexikon<?= !empty($breed['quelle_stand']) ? ', abgerufen am ' . e(date('d.m.Y', strtotime((string) $breed['quelle_stand']))) : '' ?>.
-                            <a href="<?= e($breed['quelle_url']) ?>" target="_blank" rel="noopener noreferrer" class="inline-block py-1 font-semibold text-tanneDk underline underline-offset-4">Original beim VDH</a>
+                            <?= e(t('rasse.quelle_vdh')) ?><?= !empty($breed['quelle_stand']) ? e(t('rasse.abgerufen', ['datum' => date('d.m.Y', strtotime((string) $breed['quelle_stand']))])) : '' ?>.
+                            <a href="<?= e($breed['quelle_url']) ?>" target="_blank" rel="noopener noreferrer" class="inline-block py-1 font-semibold text-tanneDk underline underline-offset-4"><?= e(t('rasse.original_vdh')) ?></a>
                         </p>
                     <?php endif; ?>
                     <?php if (($breed['gliederung'] ?? '') === 'automatisch'): ?>
-                        <p>Die Abschnitte wurden automatisch zugeordnet und sind noch nicht geprüft.</p>
+                        <p><?= e(t('rasse.ungeprueft')) ?></p>
                     <?php endif; ?>
                 </div>
             </footer>
@@ -429,9 +455,9 @@ require __DIR__ . '/views/partials/header.php';
 
     <?php if (!empty($similarBreeds)): ?>
         <section aria-labelledby="aehnlich-titel" class="mt-14 border-t-4 border-fellDk pt-4">
-            <h2 id="aehnlich-titel" class="text-xl font-black text-fellDk">Ähnliche Rassen</h2>
+            <h2 id="aehnlich-titel" class="text-xl font-black text-fellDk"><?= e(t('rasse.aehnlich')) ?></h2>
             <ul class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8">
-                <?php foreach ($similarBreeds as $item): $sb = $item['breed']; $sbNamen = Breed::namensteile((string) $sb['name']); ?>
+                <?php foreach ($similarBreeds as $item): $sb = $item['breed']; $sbNamen = Breed::namensteile(in_sprache($sb['name'], $sb['name_en'] ?? null)); ?>
                     <li class="border-b border-sand">
                         <a href="/breed_detail.php?id=<?= (int) $sb['id'] ?>" class="group flex items-center gap-3 py-3 min-h-[44px]">
                             <span class="shrink-0 w-11 h-11 flex items-center justify-center bg-fell text-creme font-mono font-medium text-sm rounded-sm" aria-hidden="true">
