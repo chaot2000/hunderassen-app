@@ -1,83 +1,60 @@
-# Multi-Tenancy Deployment Checkliste (FTP)
+# Mandanten-Umstellung deployen (FTP)
 
-## Vorbereitung
+Im Wartungsfenster durchführen. Reihenfolge: Backup, Migration, Dateien, Prüfen. Die Migration vor den Dateien, weil der neue Code `tenant_id` und `is_super_admin` voraussetzt.
 
-### 1. Backup erstellen
-- [ ] Datenbank-Backup über phpMyAdmin exportieren
-- [ ] Optional: Backup aller PHP-Dateien per FTP herunterladen
+## 1. Vorbereitung
 
-### 2. Dateien für Upload vorbereiten
-Alle folgenden Dateien müssen per FTP hochgeladen werden:
+- [ ] Datenbank in phpMyAdmin exportieren (komplett, mit Daten).
+- [ ] Alle PHP-Dateien per FTP herunterladen und gegen das Repo vergleichen. Abweichungen erst klären.
+- [ ] Prüfen, welches Konto Super-Admin werden soll. Die Migration nimmt automatisch das älteste Admin-Konto (kleinste `id` mit `role = 'admin'`), falls es noch keinen Super-Admin gibt.
 
-#### Neue Dateien
-- `admin_manage_tenants.php` (neu)
+## 2. Migration
 
-#### Geänderte Dateien
-- `sql/migrationen/migration_2026_07_10_multi_tenant.sql`
-- `sql/schema.sql`
-- `config/auth.php`
-- `models/User.php`
-- `models/Dog.php`
-- `models/Halter.php`
-- `models/Zuechter.php`
-- `models/Test.php`
-- `admin_add_user.php`
-- `admin_manage_users.php`
-- `admin_manage_tests.php`
-- `dogs.php`
-- `dog_detail.php`
-- `dog_form.php`
-- `halter.php`
-- `halter_detail.php`
-- `halter_form.php`
-- `halterbild.php`
-- `zuechter.php`
-- `zuechter_detail.php`
-- `zuechter_form.php`
-- `zuechterbild.php`
-- `hundebild.php`
-- `test_form.php`
-- `views/partials/header.php`
+1. phpMyAdmin öffnen, Datenbank wählen, Reiter "SQL".
+2. Inhalt von `sql/migrationen/migration_2026_07_10_multi_tenant.sql` einfügen und ausführen.
+3. Die letzte Abfrage zeigt den Super-Admin. Soll es ein anderes Konto sein:
+   ```sql
+   UPDATE users SET is_super_admin = 0;
+   UPDATE users SET is_super_admin = 1 WHERE id = <id> AND role = 'admin';
+   ```
 
-## Deployment-Schritte
+Die Migration ist idempotent. Bricht sie mittendrin ab, Ursache beheben und das Skript einfach noch einmal komplett ausführen.
 
-### Schritt 1: Dateien hochladen
-1. Per FTP mit all-inkl. verbinden
-2. Alle oben genannten Dateien in die entsprechenden Verzeichnisse hochladen
-3. Bestehende Dateien überschreiben (Backup ist vorhanden)
+## 3. Dateien hochladen
 
-### Schritt 2: Datenbank-Migration
-1. phpMyAdmin auf all-inkl. öffnen
-2. Reiter "SQL" wählen
-3. Inhalt von `sql/migrationen/migration_2026_07_10_multi_tenant.sql` kopieren und ausführen
-4. Erfolgsmeldung prüfen
+Alle Dateien, die sich seit Tag `prod-2026-10-15` geändert haben:
 
-### Schritt 3: Überprüfung
-1. Tabelle `tenants` prüfen (sollte 1 Eintrag haben)
-2. Tabellenstruktur prüfen:
-   - `users.tenant_id` vorhanden
-   - `dogs.tenant_id` vorhanden
-   - `halter.tenant_id` vorhanden
-   - `zuechter.tenant_id` vorhanden
-   - `tests.tenant_id` vorhanden
-3. Daten prüfen: Alle Einträge sollten `tenant_id = 1` haben
+```bash
+git diff --name-only prod-2026-10-15 feature/mandanten
+```
 
-### Schritt 4: Funktionstest
-1. Mit bestehendem Admin-Account einloggen
-2. Unter "Verwaltung" → "Mandanten verwalten" neuen Tenant anlegen
-3. Neuen Benutzer für neuen Tenant erstellen
-4. Mit neuem Benutzer einloggen und Daten anlegen
-5. Tenant-Isolation prüfen
+Neu sind unter anderem `models/Tenant.php` und `admin_manage_tenants.php`. Nicht hochladen: `sql/`, `bin/`, `.github/`, Markdown-Dateien.
 
-## Rollback bei Problemen
+Nach dem Upload sind alle alten Sessions ungültig (kein Mandant in der Session) und landen beim Login. Das ist gewollt.
 
-Wenn Probleme auftreten, Rollback-Skript ausführen:
-- Inhalt von `sql/migrationen/rollback_multi_tenant.sql` in phpMyAdmin ausführen
-- Dateien aus Backup wiederherstellen
+## 4. Prüfen
 
-## Wichtige Hinweise
+1. Mit dem Super-Admin einloggen. Solange es nur einen Mandanten gibt, sieht das Login-Formular aus wie vorher.
+2. Dashboard, Hunde, Halter, Züchter, Rassen, Tests öffnen.
+3. Verwaltung → Mandanten verwalten: Mandant "Default" ist da.
+4. Optional einen Test-Mandanten anlegen, darin einen Admin, mit Kürzel einloggen, prüfen, dass keine Daten aus "Default" sichtbar sind. Danach den Test-Mandanten deaktivieren.
 
-- MariaDB-Kompatibilität: Keine Änderungen nötig
-- Keine Datenverlust durch Migration
-- Alle bestehenden Daten werden Default-Tenant (ID 1) zugeordnet
-- Während Wartungsfenster durchführen
+## Login und Mandanten
+
+- Der Mandant kommt aus der Subdomain (`kunde1.deine-domain.de` → Kürzel `kunde1`).
+- Passt die Subdomain zu keinem Mandanten und gibt es mehr als einen aktiven Mandanten, zeigt das Login-Formular ein Feld "Mandant". Leer gelassen gilt der Mandant `default`.
+- Benutzernamen sind nur pro Mandant eindeutig.
+- Nur der Super-Admin verwaltet Mandanten und wählt beim Anlegen von Benutzern den Mandanten. Normale Admins verwalten nur Benutzer ihres Mandanten und können Super-Admin-Konten nicht ändern.
+- Deaktivieren eines Mandanten sperrt neue Logins. Laufende Sessions bleiben bis zum Logout bestehen.
+
+## Rollback
+
+1. Dateien aus dem Backup zurückspielen.
+2. `sql/migrationen/rollback_multi_tenant.sql` in phpMyAdmin ausführen.
+
+Das Rollback bricht ab, bevor es etwas ändert, wenn es schon Daten in einem anderen Mandanten als `default` gibt (Fehler `Table '...abbruch_...' doesn't exist`). Diese Daten erst sichern und löschen. Danach ist das Schema wieder auf dem Stand von `prod-2026-10-15`, inklusive `uq_username` und `uq_test_name`.
+
+## Getestet
+
+- Kopie der Prod-DB vom 15.10.2026 in Laragon (MySQL 8.4): Migration zweimal, Rollback zweimal, Schema und Daten danach identisch mit vorher.
+- CI-Job `migration` macht dasselbe bei jedem Push auf MariaDB 10.11 mit dem Schema von `a4b4f37`. Noch nicht gelaufen, solange der Branch nicht gepusht ist.
