@@ -9,12 +9,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/models/User.php';
 
 secure_session_start();
 require_admin();
 
 $currentAdminId = (int) current_user()['id'];
+$tenantId       = current_tenant_id();
 $errorMessage   = null;
 $successMessage = null;
 
@@ -30,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_POST['username'] ?? '',
                 $_POST['role'] ?? '',
                 $currentAdminId,
+                (int) ($_POST['tenant_id'] ?? $tenantId),
                 isset($_POST['can_manage_breeds']),
                 isset($_POST['can_manage_tests'])
             );

@@ -22,6 +22,16 @@ function current_user(): ?array
     return $_SESSION['user'] ?? null;
 }
 
+/**
+ * Liefert die Tenant-ID des aktuell eingeloggten Benutzers aus der Session.
+ * Fallback auf Default-Tenant (ID 1) für Kompatibilität mit Sessions
+ * ohne Tenant-Kontext (z.B. nach Migration ohne Logout).
+ */
+function current_tenant_id(): int
+{
+    return $_SESSION['tenant_id'] ?? 1;
+}
+
 function is_logged_in(): bool
 {
     return current_user() !== null;
@@ -118,11 +128,13 @@ function require_manage_tests(): void
 /**
  * Schreibt den Benutzer nach erfolgreichem Login in die Session und
  * regeneriert die Session-ID (Schutz vor Session-Fixation).
+ * Speichert auch die tenant_id für Multi-Tenant-Support.
  */
 function login_user(array $user): void
 {
     regenerate_session_after_login();
     $_SESSION['user'] = $user;
+    $_SESSION['tenant_id'] = $user['tenant_id'] ?? 1;
 }
 
 function logout_user(): void

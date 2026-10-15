@@ -11,9 +11,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/config/database.php';
 
 secure_session_start();
 require_admin();
+
+$pdo = Database::getConnection();
+$tenantId = current_tenant_id();
+
+// Alle aktiven Tenants für das Formular laden
+$tenantsStmt = $pdo->query('SELECT id, name, subdomain FROM tenants WHERE is_active = 1 ORDER BY name');
+$tenants = $tenantsStmt->fetchAll();
 
 $successMessage = null;
 $errorMessage   = null;
@@ -39,13 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password        = $_POST['password'] ?? '';
         $passwordConfirm = $_POST['password_confirm'] ?? '';
         $role            = $_POST['role'] ?? 'user';
+        $tenantIdSelect  = (int) ($_POST['tenant_id'] ?? $tenantId);
         $canManageBreeds = isset($_POST['can_manage_breeds']);
         $canManageTests  = isset($_POST['can_manage_tests']);
 
         if ($password !== $passwordConfirm) {
             $errorMessage = 'Die Passwörter stimmen nicht überein.';
         } else {
-            $result = User::createByAdmin($username, $password, $role, (int) current_user()['id'], $canManageBreeds, $canManageTests);
+            $result = User::createByAdmin($username, $password, $role, (int) current_user()['id'], $tenantIdSelect, $canManageBreeds, $canManageTests);
 
             if ($result['success']) {
                 $successMessage = $result['message'];
@@ -133,6 +142,21 @@ require __DIR__ . '/views/partials/header.php';
                 >
                     <option value="user">Benutzer (Portal, nur eigene Einträge)</option>
                     <option value="admin">Administrator (volle Rechte)</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="tenant_id" class="block text-sm font-semibold mb-1">Mandant</label>
+                <select
+                    id="tenant_id"
+                    name="tenant_id"
+                    class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne"
+                >
+                    <?php foreach ($tenants as $t): ?>
+                        <option value="<?= $t['id'] ?>" <?= $t['id'] == $tenantId ? 'selected' : '' ?>>
+                            <?= e($t['name']) ?> (<?= e($t['subdomain']) ?>)
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
 

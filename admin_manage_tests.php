@@ -21,6 +21,7 @@ require_once __DIR__ . '/models/Test.php';
 secure_session_start();
 require_manage_tests();
 
+$tenantId = current_tenant_id();
 $errorMessage = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_test_id'])) {
@@ -33,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_test_id'])) {
     $errorMessage = $result['message'];
 }
 
-$tests               = Test::findAll();
+$tests               = Test::findAll(null, $tenantId);
 $aufgabenCounts      = Test::getAufgabenCounts();
 $durchfuehrungCounts = Test::getDurchfuehrungCounts();
 $zielgruppenLabels   = ['welpe' => 'Welpe', 'erwachsen' => 'Erwachsen', 'beide' => 'Beide'];

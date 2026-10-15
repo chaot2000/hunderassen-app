@@ -209,6 +209,8 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Benutzer</p>
                                 <a href="/admin_manage_users.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer verwalten</a>
                                 <a href="/admin_add_user.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Benutzer anlegen</a>
+                                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1">Mandanten</p>
+                                <a href="/admin_manage_tenants.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors">Mandanten verwalten</a>
                             <?php endif; ?>
                         </div>
                     </div>

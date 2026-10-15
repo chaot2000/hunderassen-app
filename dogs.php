@@ -18,12 +18,13 @@ require_login();
 
 $currentUserId = (int) current_user()['id'];
 $isAdmin       = is_admin();
+$tenantId      = current_tenant_id();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_dog_id'])) {
     csrf_require_valid();
 
     $dogId = (int) $_POST['delete_dog_id'];
-    $dog   = Dog::findByIdForUser($dogId, $currentUserId, $isAdmin);
+    $dog   = Dog::findByIdForUser($dogId, $currentUserId, $isAdmin, $tenantId);
 
     if ($dog !== null) {
         Dog::delete($dogId);
@@ -34,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_dog_id'])) {
 }
 
 $searchTerm = clean_input($_GET['q'] ?? '');
-$dogs       = Dog::search($searchTerm, $currentUserId, $isAdmin);
+$dogs       = Dog::search($searchTerm, $currentUserId, $isAdmin, $tenantId);
 
 $pageTitle = $isAdmin ? 'Alle Hunde' : 'Meine Hunde';
 require __DIR__ . '/views/partials/header.php';
