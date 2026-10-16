@@ -211,6 +211,7 @@ require __DIR__ . '/views/partials/header.php';
                                 placeholder="<?= e(t('rassen.bis')) ?>" aria-label="<?= e($block['name'] . ' ' . t('rassen.bis')) ?>"
                                 class="w-24 rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne">
                         </div>
+                        <p class="mt-1 text-xs text-fellDk/70"><?= e(t('rassen.spanne_hinweis')) ?></p>
 
                     <?php else:
                         $viele = count($block['optionen']) > 8; ?>
