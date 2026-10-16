@@ -29,6 +29,7 @@ return [
     'nav.gruppe_rassen'        => 'Rassen (geteilter Katalog)',
     'nav.rasse_anlegen'        => 'Rasse anlegen',
     'nav.merkmale'             => 'Merkmale',
+    'nav.merkmale_befuellen'   => 'Merkmale befüllen',
     'nav.rassentexte'          => 'Rassendaten übernehmen',
     'nav.thedogapi'            => 'TheDogAPI-Abgleich',
     'nav.gruppe_tests'         => 'Tests (Katalog des Mandanten)',
