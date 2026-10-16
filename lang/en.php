@@ -129,6 +129,7 @@ return [
     'rassen.verknuepfung_oder'   => '(any of them)',
     'rassen.von'                 => 'from',
     'rassen.bis'                 => 'to',
+    'rassen.spanne_hinweis'      => 'Also shows breeds whose range only partly falls within it.',
     'rassen.wert_suchen'         => 'Search …',
     'rassen.wert_suchen_in'      => 'Search {name}',
     'rassen.keine_filter'        => 'No traits with data yet.',

@@ -130,6 +130,7 @@ return [
     'rassen.verknuepfung_oder'   => '(eines davon)',
     'rassen.von'                 => 'von',
     'rassen.bis'                 => 'bis',
+    'rassen.spanne_hinweis'      => 'Zeigt auch Rassen, deren Spanne nur teilweise im Bereich liegt.',
     'rassen.wert_suchen'         => 'Suchen …',
     'rassen.wert_suchen_in'      => '{name} durchsuchen',
     'rassen.keine_filter'        => 'Noch keine Merkmale mit Daten.',
