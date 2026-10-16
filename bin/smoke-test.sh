@@ -702,7 +702,7 @@ else
         check_status "A: Mandant B deaktivieren" "$BASE_URL/admin_manage_tenants.php" "200" \
             "-X POST --data-urlencode csrf_token=$TENANT_CSRF --data-urlencode action=set_active \
              --data-urlencode tenant_id=2 --data-urlencode active=0"
-        check_body_contains "A: Mandant B ist deaktiviert" "Mandant wurde deaktiviert."
+        check_body_contains "A: Mandant B ist deaktiviert" "Organisation wurde deaktiviert."
 
         COOKIE_JAR="$B2_JAR"
         check_status "B wird nach Deaktivieren des Mandanten sofort abgemeldet" "$BASE_URL/dashboard.php" "302"
@@ -713,7 +713,7 @@ else
         check_status "A: Mandant B wieder aktivieren" "$BASE_URL/admin_manage_tenants.php" "200" \
             "-X POST --data-urlencode csrf_token=$TENANT_CSRF --data-urlencode action=set_active \
              --data-urlencode tenant_id=2 --data-urlencode active=1"
-        check_body_contains "A: Mandant B ist wieder aktiv" "Mandant wurde aktiviert."
+        check_body_contains "A: Mandant B ist wieder aktiv" "Organisation wurde aktiviert."
 
         COOKIE_JAR="$B2_JAR"
         login_as "$B_TENANT" "$B_USER" "$B_PASS"
