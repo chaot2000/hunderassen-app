@@ -302,6 +302,42 @@ class RassenDatenSchreiben
         return $geschrieben;
     }
 
+    /**
+     * Schreibt geprüfte Inhalte aus dem Inhalte-Repo (InhalteImport) in
+     * der laufenden Transaktion. Quelle 'hand' (neu formuliert, keine
+     * Quellenangabe), jede Änderung als Version mit Anlass "import".
+     *
+     * @param array<string, ?array> $merkmale Schlüssel => neuer Wert (Formularformat) oder null = leeren
+     * @param array<string, array<string, ?string>> $texte sprache => abschnitt => neuer Text oder null = löschen
+     */
+    public static function importSchreiben(PDO $pdo, int $breedId, array $merkmale, array $texte, ?string $nameEn, ?int $userId): void
+    {
+        $defs = self::nachSchluessel();
+        $vorher = self::formularWerte($breedId);
+        foreach ($merkmale as $schluessel => $neu) {
+            $m = $defs[$schluessel] ?? null;
+            if ($m === null) {
+                continue;
+            }
+            self::merkmalSchreiben($pdo, $breedId, $m, $neu, 'hand');
+            ContentRevision::protokolliereFeld($pdo, 'breeds', $breedId, 'merkmal_' . $schluessel,
+                self::lesbar($m, $vorher[$schluessel] ?? null), self::lesbar($m, $neu), $userId, 'import');
+        }
+        $texteVorher = RassenDaten::alleTexte($breedId);
+        foreach ($texte as $sprache => $abschnitte) {
+            foreach ($abschnitte as $abschnitt => $neu) {
+                self::textSchreiben($pdo, $breedId, $sprache, $abschnitt, $texteVorher[$sprache][$abschnitt] ?? null, $neu, $userId, 'import', 'hand');
+            }
+        }
+        if ($nameEn !== null) {
+            $alt = $pdo->prepare('SELECT name_en FROM breeds WHERE id = :id');
+            $alt->execute([':id' => $breedId]);
+            $altWert = $alt->fetchColumn();
+            $pdo->prepare('UPDATE breeds SET name_en = :n WHERE id = :id')->execute([':n' => $nameEn !== '' ? $nameEn : null, ':id' => $breedId]);
+            ContentRevision::protokolliereFeld($pdo, 'breeds', $breedId, 'name_en', $altWert === false ? null : $altWert, $nameEn !== '' ? $nameEn : null, $userId, 'import');
+        }
+    }
+
     /** Ersetzt alle Werte eines Merkmals einer Rasse. */
     private static function merkmalSchreiben(PDO $pdo, int $breedId, array $m, ?array $neu, string $quelle): void
     {

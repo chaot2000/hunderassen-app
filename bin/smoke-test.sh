@@ -861,6 +861,41 @@ else
     check_status "Befüllen: Meldung nach zweiter Übernahme" "$BASE_URL/admin_merkmale_befuellen.php?merkmal=gewicht" "200"
     check_body_contains "Befüllen: nichts doppelt" "0 Werte übernommen."
 
+    echo ""
+    echo "--- Inhalte importieren (Importdatei aus dem Inhalte-Repo) ---"
+    php -r 'echo json_encode(["format" => 1, "werte" => [], "rassen" => [["id" => 1,
+        "name_en" => ["alt" => "", "neu" => "CI-Import-Name"],
+        "merkmale" => [], "texte" => ["de" => ["pflege" => ["alt" => null, "neu" => "CI-Import-Pflege"]]]]]], JSON_UNESCAPED_UNICODE);' > /tmp/ci_import.json
+    echo '{"format":2}' > /tmp/ci_import_kaputt.json
+    check_status "Importseite lädt (Super-Admin)" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Importseite: Überschrift" "Inhalte importieren"
+    IMP_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Kaputte Importdatei hochladen (Redirect)" "$BASE_URL/admin_inhalte_import.php" "302" \
+        "-F csrf_token=$IMP_CSRF -F aktion=hochladen -F datei=@/tmp/ci_import_kaputt.json"
+    check_status "Import: Meldung zur kaputten Datei" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Import: kaputte Datei abgelehnt" "Keine gültige Importdatei"
+    check_status "Importdatei hochladen (Redirect)" "$BASE_URL/admin_inhalte_import.php" "302" \
+        "-F csrf_token=$IMP_CSRF -F aktion=hochladen -F datei=@/tmp/ci_import.json"
+    check_status "Import: Vorschau" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Import: Vorschau zeigt Datei" "Vorschau: ci_import.json"
+    check_body_contains "Import: zwei Änderungen" "2 Änderungen übernehmen"
+    check_status "Import: übernehmen (Redirect)" "$BASE_URL/admin_inhalte_import.php" "302" \
+        "-X POST --data-urlencode csrf_token=$IMP_CSRF --data-urlencode aktion=anwenden"
+    check_status "Import: Ergebnis" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Import: Meldung" "Übernommen: 2 Änderungen bei 1 Rasse, 0 Werte neu oder umbenannt."
+    check_status "Rassenseite nach dem Import" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Import: Text auf der Rassenseite" "CI-Import-Pflege"
+    check_status "Versionen nach dem Import" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Import: englischer Name als Version" "CI-Import-Name"
+    check_status "Dieselbe Datei noch einmal (Redirect)" "$BASE_URL/admin_inhalte_import.php" "302" \
+        "-F csrf_token=$IMP_CSRF -F aktion=hochladen -F datei=@/tmp/ci_import.json"
+    check_status "Import: zweite Vorschau" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Import: nichts doppelt" "0 Änderungen übernehmen"
+    check_status "Import verwerfen (Redirect)" "$BASE_URL/admin_inhalte_import.php" "302" \
+        "-X POST --data-urlencode csrf_token=$IMP_CSRF --data-urlencode aktion=verwerfen"
+    check_status "Importseite nach dem Verwerfen" "$BASE_URL/admin_inhalte_import.php" "200"
+    check_body_contains "Import: wieder Upload-Formular" "Hochladen und prüfen"
+
     check_status "Versionen eines Tests (Mandant 1) laden" "$BASE_URL/content_versionen.php?typ=test&id=1" "200"
     check_body_contains "Leerer Zustand ohne Versionen" "Noch keine Änderungen gespeichert."
     check_status "Versionen ohne gültigen Typ: 404" "$BASE_URL/content_versionen.php?typ=foo&id=1" "404"
