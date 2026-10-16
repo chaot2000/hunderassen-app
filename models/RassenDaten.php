@@ -24,6 +24,19 @@ require_once __DIR__ . '/ContentRevision.php';
 class RassenDaten
 {
     /** Textabschnitte in Anzeigereihenfolge → Titel für Farbe und Übersetzung (rassentext.php). */
+    /** Gruppen der Merkmale im Steckbrief und in der Verwaltung, in dieser Reihenfolge. */
+    public const GRUPPEN = [
+        'koerper'     => 'Körper',
+        'herkunft'    => 'Herkunft',
+        'fell'        => 'Fell',
+        'haltung'     => 'Haltung',
+        'eignung'     => 'Eignung',
+        'arbeit'      => 'Arbeit und Beschäftigung',
+        'wesen'       => 'Wesen',
+        'verbreitung' => 'Verbreitung',
+        'weitere'     => 'Weitere Eigenschaften',
+    ];
+
     public const ABSCHNITTE = [
         'kurzportraet' => null,
         'allgemein'    => null,
@@ -465,6 +478,9 @@ class RassenDaten
             }
             if ($r['typ'] === 'land' && $r['text_wert']) {
                 $nachSchluessel[$s]['land'] = self::landName((string) $r['text_wert'], $sprache);
+            }
+            if ($r['typ'] === 'ja_nein' && in_array($r['text_wert'], ['ja', 'nein'], true)) {
+                $nachSchluessel[$s]['werte'][] = t('merkmal.' . $r['text_wert'], [], $sprache);
             }
         }
         $gruppen = [];

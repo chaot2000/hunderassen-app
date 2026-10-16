@@ -97,6 +97,7 @@ jobs:
           php tests/SprachdateienTest.php
           php tests/TheDogApiAbgleichTest.php
           php tests/RassenDatenTest.php
+          php tests/RassenFilterTest.php
 
       - name: Rauchtest ausführen
         run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!
@@ -202,10 +203,18 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_19_merkmale.sql
           $R txt_live < sql/migrationen/migration_2026_10_19_merkmale.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM merkmale" | grep -qx 16
+          dump txt_live > /tmp/txt_merkmale.sql
+          $R txt_live < sql/migrationen/migration_2026_10_20_merkmal_filter.sql
+          $R txt_live < sql/migrationen/migration_2026_10_20_merkmal_filter.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM merkmale WHERE filter_verknuepfung = 'oder'" | grep -qx 9
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_merkmal_filter.sql
+          $R txt_live < sql/migrationen/rollback_merkmal_filter.sql
+          dump txt_live > /tmp/txt_zurueck_filter.sql
+          diff /tmp/txt_merkmale.sql /tmp/txt_zurueck_filter.sql
           $R txt_live < sql/migrationen/rollback_merkmale.sql
           $R txt_live < sql/migrationen/rollback_merkmale.sql
           dump txt_live > /tmp/txt_zurueck_merkmale.sql

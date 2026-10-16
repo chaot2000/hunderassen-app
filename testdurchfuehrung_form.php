@@ -119,8 +119,7 @@ $alleTests = Test::findAll($tenantId);
 // Für jeden Test die volle Aufgaben-/Ergebnis-Struktur laden, damit die
 // passenden Aufgaben-Blöcke serverseitig vorgerendert werden können
 // (siehe Docblock oben). Bei der überschaubaren Anzahl an Tests in
-// diesem Katalog ist das unproblematisch (analog zum N+1-Muster in
-// Breed::getFilterCounts()).
+// diesem Katalog ist das unproblematisch.
 $testDetails = [];
 foreach ($alleTests as $test) {
     $testDetails[(int) $test['id']] = Test::findById((int) $test['id'], $tenantId);

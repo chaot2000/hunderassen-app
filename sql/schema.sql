@@ -532,6 +532,7 @@ CREATE TABLE IF NOT EXISTS `merkmale` (
     `einheit`       VARCHAR(20)  NULL,
     `je_geschlecht` TINYINT(1)   NOT NULL DEFAULT 0,
     `filterbar`     TINYINT(1)   NOT NULL DEFAULT 1,
+    `filter_verknuepfung` ENUM('und', 'oder') NOT NULL DEFAULT 'und',
     `reihenfolge`   SMALLINT     NOT NULL DEFAULT 0,
     `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -602,6 +603,9 @@ INSERT IGNORE INTO `merkmale` (`schluessel`, `typ`, `gruppe`, `name_de`, `name_e
     ('wesen', 'mehrfach', 'wesen', 'Wesen', 'Character', NULL, 0, 140),
     ('verbreitung', 'auswahl', 'verbreitung', 'Verbreitung', 'Prevalence', NULL, 0, 150),
     ('weitere', 'mehrfach', 'weitere', 'Weitere Eigenschaften', 'Other traits', NULL, 0, 160);
+
+UPDATE `merkmale` SET `filter_verknuepfung` = 'oder'
+WHERE `schluessel` IN ('groessenklasse', 'farben', 'fellart', 'verbreitung', 'arbeitspruefung', 'pflegeaufwand', 'bewegungsbedarf', 'beschaeftigungsbedarf', 'ursprungsland');
 
 INSERT IGNORE INTO `merkmal_werte` (`merkmal_id`, `schluessel`, `name_de`, `name_en`, `reihenfolge`)
 SELECT m.id, v.s, v.de, v.en, v.r FROM `merkmale` m JOIN (

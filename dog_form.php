@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing = array_merge($existing ?? [], $dogData);
 }
 
-$allBreeds   = Breed::search('', [], [], []); // Rassen sind geteilte Katalogdaten, kein Scoping
+$allBreeds   = Breed::search(''); // Rassen sind geteilte Katalogdaten, kein Scoping
 $allHalter   = Halter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 $allZuechter = Zuechter::findAllForUser($currentUserId, $isAdmin, $tenantId);
 

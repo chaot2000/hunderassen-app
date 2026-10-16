@@ -12,17 +12,9 @@
 
 declare(strict_types=1);
 
-const MERKMAL_GRUPPEN = [
-    'koerper'     => 'Körper',
-    'herkunft'    => 'Herkunft',
-    'fell'        => 'Fell',
-    'haltung'     => 'Haltung',
-    'eignung'     => 'Eignung',
-    'arbeit'      => 'Arbeit und Beschäftigung',
-    'wesen'       => 'Wesen',
-    'verbreitung' => 'Verbreitung',
-    'weitere'     => 'Weitere Eigenschaften',
-];
+require_once __DIR__ . '/../../models/RassenDaten.php';
+
+const MERKMAL_GRUPPEN = RassenDaten::GRUPPEN;
 
 const TEXT_ABSCHNITT_NAMEN = [
     'kurzportraet' => 'Kurzporträt',
