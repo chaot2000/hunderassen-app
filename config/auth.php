@@ -212,7 +212,7 @@ function login_user(array $user): void
 {
     $tenantId = (int) ($user['tenant_id'] ?? 0);
     if ($tenantId <= 0) {
-        throw new RuntimeException('login_user(): Benutzer ohne Mandant.');
+        throw new RuntimeException('login_user(): Benutzer ohne Organisation.');
     }
 
     regenerate_session_after_login();

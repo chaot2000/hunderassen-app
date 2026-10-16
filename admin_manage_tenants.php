@@ -55,11 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $tenants = Tenant::findAll();
 
-$pageTitle = 'Mandanten verwalten';
+$pageTitle = 'Organisationen verwalten';
 require __DIR__ . '/views/partials/header.php';
 ?>
 
-<h1 class="text-2xl font-extrabold text-fellDk mb-6">Mandanten verwalten</h1>
+<h1 class="text-2xl font-extrabold text-fellDk mb-6">Organisationen verwalten</h1>
 
 <?php if ($successMessage !== null): ?>
     <div class="bg-tanne/10 border border-tanne/30 text-tanneDk text-sm rounded-lg px-4 py-3 mb-6" role="status"><?= e($successMessage) ?></div>
@@ -71,7 +71,7 @@ require __DIR__ . '/views/partials/header.php';
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
     <div class="bg-white/80 rounded-2xl shadow border border-sand p-6 lg:col-span-1">
-        <h2 class="text-lg font-bold text-fellDk mb-4">Neuen Mandanten anlegen</h2>
+        <h2 class="text-lg font-bold text-fellDk mb-4">Neue Organisation anlegen</h2>
 
         <form method="post" action="/admin_manage_tenants.php" class="space-y-4">
             <?= csrf_field() ?>
@@ -91,13 +91,13 @@ require __DIR__ . '/views/partials/header.php';
                     class="w-full rounded-lg border border-sand px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-tanne">
                 <p id="subdomain-hinweis" class="text-xs text-fellDk/60 mt-1">
                     Kleinbuchstaben, Zahlen, Bindestrich. Wird als Subdomain genutzt (verein-nord.deine-domain.de)
-                    und ist das Kürzel im Login-Feld „Mandant“.
+                    und ist das Kürzel im Login-Feld „Organisation“.
                 </p>
             </div>
 
             <button type="submit"
                 class="w-full bg-tanne hover:bg-tanneDk text-creme font-bold py-2.5 rounded-full transition-colors">
-                Mandanten anlegen
+                Organisation anlegen
             </button>
         </form>
     </div>
@@ -124,7 +124,7 @@ require __DIR__ . '/views/partials/header.php';
                         <tr class="hover:bg-creme/60 transition-colors <?= $isActive ? '' : 'opacity-60' ?>">
                             <td class="px-4 py-3 font-semibold">
                                 <?= e($tenant['name']) ?>
-                                <?php if ($isOwn): ?><span class="text-xs text-fellDk/50 font-normal">(dein Mandant)</span><?php endif; ?>
+                                <?php if ($isOwn): ?><span class="text-xs text-fellDk/50 font-normal">(deine Organisation)</span><?php endif; ?>
                             </td>
                             <td class="px-4 py-3 font-mono text-fellDk/80"><?= e($tenant['subdomain']) ?></td>
                             <td class="px-4 py-3"><?= (int) $tenant['user_count'] ?></td>
@@ -141,7 +141,7 @@ require __DIR__ . '/views/partials/header.php';
                                     <span class="text-xs text-fellDk/50">—</span>
                                 <?php else: ?>
                                     <form method="post" action="/admin_manage_tenants.php" class="inline"
-                                        <?php if ($isActive): ?>onsubmit="return confirm(<?= e(json_encode('Mandant „' . $tenant['name'] . '“ deaktivieren? Seine Benutzer werden sofort abgemeldet und können sich nicht mehr anmelden.', JSON_UNESCAPED_UNICODE)) ?>);"<?php endif; ?>>
+                                        <?php if ($isActive): ?>onsubmit="return confirm(<?= e(json_encode('Organisation „' . $tenant['name'] . '“ deaktivieren? Ihre Benutzer werden sofort abgemeldet und können sich nicht mehr anmelden.', JSON_UNESCAPED_UNICODE)) ?>);"<?php endif; ?>>
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="set_active">
                                         <input type="hidden" name="tenant_id" value="<?= $tid ?>">
