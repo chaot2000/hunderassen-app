@@ -29,6 +29,7 @@ return [
     'nav.rasse_anlegen'        => 'Add breed',
     'nav.merkmale'             => 'Traits',
     'nav.merkmale_befuellen'   => 'Fill in traits',
+    'nav.inhalte_import'       => 'Import content',
     'nav.rassentexte'          => 'Import breed data',
     'nav.thedogapi'            => 'TheDogAPI sync',
     'nav.gruppe_tests'         => 'Tests (organisation catalogue)',
