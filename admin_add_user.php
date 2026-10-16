@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($password !== $passwordConfirm) {
             $errorMessage = 'Die Passwörter stimmen nicht überein.';
         } elseif (is_super_admin() && !in_array($tenantIdSelect, array_map('intval', array_column($tenants, 'id')), true)) {
-            $errorMessage = 'Der gewählte Mandant existiert nicht oder ist deaktiviert.';
+            $errorMessage = 'Die gewählte Organisation existiert nicht oder ist deaktiviert.';
         } else {
             $result = User::createByAdmin($username, $password, $role, (int) current_user()['id'], $tenantIdSelect, $canManageBreeds, $canManageTests);
 
@@ -156,7 +156,7 @@ require __DIR__ . '/views/partials/header.php';
 
             <?php if (is_super_admin()): ?>
             <div>
-                <label for="tenant_id" class="block text-sm font-semibold mb-1">Mandant</label>
+                <label for="tenant_id" class="block text-sm font-semibold mb-1">Organisation</label>
                 <select
                     id="tenant_id"
                     name="tenant_id"

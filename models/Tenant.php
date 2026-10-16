@@ -146,7 +146,7 @@ class Tenant
         $stmt = $pdo->prepare('INSERT INTO tenants (name, subdomain, is_active, created_at) VALUES (:name, :subdomain, 1, NOW())');
         $stmt->execute([':name' => $name, ':subdomain' => $subdomain]);
 
-        return ['success' => true, 'message' => 'Mandant "' . $name . '" wurde angelegt.'];
+        return ['success' => true, 'message' => 'Organisation "' . $name . '" wurde angelegt.'];
     }
 
     /**
@@ -155,7 +155,7 @@ class Tenant
     public static function setActive(int $tenantId, bool $active, int $ownTenantId): array
     {
         if (!$active && $tenantId === $ownTenantId) {
-            return ['success' => false, 'message' => 'Den eigenen Mandanten kannst du nicht deaktivieren.'];
+            return ['success' => false, 'message' => 'Die eigene Organisation kannst du nicht deaktivieren.'];
         }
 
         $pdo = Database::getConnection();
@@ -166,10 +166,10 @@ class Tenant
             $exists = $pdo->prepare('SELECT 1 FROM tenants WHERE id = :id');
             $exists->execute([':id' => $tenantId]);
             if (!$exists->fetch()) {
-                return ['success' => false, 'message' => 'Mandant nicht gefunden.'];
+                return ['success' => false, 'message' => 'Organisation nicht gefunden.'];
             }
         }
 
-        return ['success' => true, 'message' => $active ? 'Mandant wurde aktiviert.' : 'Mandant wurde deaktiviert.'];
+        return ['success' => true, 'message' => $active ? 'Organisation wurde aktiviert.' : 'Organisation wurde deaktiviert.'];
     }
 }
