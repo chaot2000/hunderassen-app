@@ -121,6 +121,10 @@ class TestDurchfuehrung
         if (!$validated['success']) {
             return $validated;
         }
+        // Ausgeblendete allgemeine Tests nur noch für bestehende Durchführungen
+        if (Test::istAusgeblendet($testId, $tenantId)) {
+            return ['success' => false, 'message' => t('td.m_test_ausgeblendet')];
+        }
 
         $pdo = Database::getConnection();
 

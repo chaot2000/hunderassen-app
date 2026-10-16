@@ -67,7 +67,7 @@ INSERT INTO `dog_halter` (`dog_id`, `halter_id`) VALUES (1, 1), (2, 2);
 -- Test mit 2 Aufgaben, je 2 Ergebnissen, damit smoke-test.sh
 -- admin_manage_tests.php/test_form.php mit echtem Inhalt prüfen kann.
 -- ---------------------------------------------------------------------
--- Mandant B hat einen gleichnamigen Test (uq_tenant_test_name erlaubt
+-- Mandant B hat einen gleichnamigen Test (uq_scope_test_name erlaubt
 -- das) mit eigener Aufgabe.
 INSERT INTO `tests` (`id`, `tenant_id`, `name`, `beschreibung`, `zielgruppe`, `created_by`)
 VALUES
@@ -102,3 +102,26 @@ INSERT INTO `test_durchfuehrung_ergebnisse` (`durchfuehrung_id`, `aufgabe_id`, `
 VALUES
     (1, 1, 1, 'CI-Testnotiz zur Aufgabe 1.'),
     (1, 2, 4, NULL);
+-- ---------------------------------------------------------------------
+-- Allgemeiner Test (tenant_id NULL, #25): sichtbar in allen
+-- Organisationen. Mandant 1 hat eine Durchführung damit. Der Rauchtest
+-- prüft, dass Mandant B den Test sieht und nutzen, aber nicht ändern
+-- kann, und dass Mandant B die Durchführung von Mandant 1 weder sieht
+-- noch mitzählt.
+-- ---------------------------------------------------------------------
+INSERT INTO `tests` (`id`, `tenant_id`, `name`, `beschreibung`, `zielgruppe`, `created_by`)
+VALUES (3, NULL, 'CI-Allgemeiner Test', 'Allgemeiner Test für alle Organisationen.', 'beide', 1);
+
+INSERT INTO `test_aufgaben` (`id`, `test_id`, `titel`, `beschreibung`)
+VALUES (4, 3, 'CI-Allgemein-Aufgabe', NULL);
+
+INSERT INTO `test_ergebnisse` (`id`, `aufgabe_id`, `bezeichnung`, `kategorie`)
+VALUES
+    (7, 4, 'Allgemein bestanden', 'bestanden'),
+    (8, 4, 'Allgemein nicht bestanden', 'nicht_bestanden');
+
+INSERT INTO `test_durchfuehrungen` (`id`, `dog_id`, `test_id`, `durchfuehrungsdatum`, `status`, `notizen`, `created_by`)
+VALUES (2, 1, 3, '2026-07-02', 'bestanden', 'CI-A-Notiz allgemeiner Test.', 1);
+
+INSERT INTO `test_durchfuehrung_ergebnisse` (`durchfuehrung_id`, `aufgabe_id`, `ergebnis_id`, `notizen`)
+VALUES (2, 4, 7, NULL);

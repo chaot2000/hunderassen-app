@@ -235,25 +235,49 @@ CREATE TABLE `breed_activities` (
 -- ---------------------------------------------------------------------
 -- Tabelle: tests
 -- Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test") —
--- Multi-Tenant: Tests sind tenant-spezifisch.
+-- Multi-Tenant: Tests gehören zu einer Organisation, tenant_id NULL =
+-- allgemeiner Test für alle Organisationen (nur Super-Admin, siehe
+-- migration_2026_10_21_allgemeine_tests.sql). scope_id macht den Namen
+-- je Organisation und unter den allgemeinen Tests eindeutig.
 -- `zielgruppe` steuert den Filter bei der Testauswahl in testdurchfuehrung_form.php.
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS `tests`;
 CREATE TABLE `tests` (
     `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `tenant_id`    INT UNSIGNED NOT NULL,           -- Mandanten-Zuordnung
+    `tenant_id`    INT UNSIGNED NULL,               -- Organisation, NULL = allgemein
     `name`         VARCHAR(150) NOT NULL,
     `beschreibung` TEXT NULL,
     `zielgruppe`   ENUM('welpe', 'erwachsen', 'beide') NOT NULL DEFAULT 'beide',
     `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created_by`   INT UNSIGNED NULL,
+    `scope_id`     INT UNSIGNED AS (IFNULL(`tenant_id`, 0)) STORED,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_tenant_test_name` (`tenant_id`, `name`),
+    UNIQUE KEY `uq_scope_test_name` (`scope_id`, `name`),
     KEY `idx_test_created_by` (`created_by`),
     KEY `idx_tenant_id` (`tenant_id`),
     CONSTRAINT `fk_tests_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
     CONSTRAINT `fk_tests_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Tabelle: test_ausblendungen
+-- Eine Organisation blendet einen allgemeinen Test für sich aus. Er
+-- fehlt dann in der Auswahl für neue Durchführungen, bestehende
+-- Durchführungen bleiben lesbar. Siehe models/Test.php.
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `test_ausblendungen`;
+CREATE TABLE `test_ausblendungen` (
+    `tenant_id`  INT UNSIGNED NOT NULL,
+    `test_id`    INT UNSIGNED NOT NULL,
+    `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` INT UNSIGNED NULL,
+    PRIMARY KEY (`tenant_id`, `test_id`),
+    KEY `idx_ausbl_test` (`test_id`),
+    KEY `idx_ausbl_created_by` (`created_by`),
+    CONSTRAINT `fk_ausbl_tenant` FOREIGN KEY (`tenant_id`)  REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_ausbl_test`   FOREIGN KEY (`test_id`)    REFERENCES `tests` (`id`)   ON DELETE CASCADE,
+    CONSTRAINT `fk_ausbl_user`   FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)   ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------

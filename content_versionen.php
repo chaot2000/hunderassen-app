@@ -37,6 +37,13 @@ if ($typ === 'rasse') {
     $tabelle   = 'tests';
     $tenantId  = current_tenant_id();
     $datensatz = $id > 0 ? Test::findById($id, $tenantId) : null;
+    // Versionen allgemeiner Tests stehen ohne Organisation (tenant_id NULL).
+    // Lesen dürfen alle mit "Tests verwalten", wiederherstellen nur der
+    // Super-Admin. Gelöschte allgemeine Tests: Versionen ebenfalls ohne
+    // Organisation, siehe Fallback weiter unten.
+    if ($datensatz !== null && $datensatz['allgemein']) {
+        $tenantId = null;
+    }
     $zurueck   = $datensatz ? '/test_form.php?id=' . $id : '/admin_manage_tests.php';
 } else {
     http_response_code(404);
@@ -49,6 +56,11 @@ $fehler  = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid();
     $userId = (int) current_user()['id'];
+
+    if ($tabelle === 'tests' && $tenantId === null && !Test::darfAllgemeineVerwalten()) {
+        http_response_code(403);
+        die(e(t('tests.m_nur_super_admin')));
+    }
 
     if (isset($_POST['revision_id'])) {
         $result = ContentRevision::wiederherstellen((int) $_POST['revision_id'], $tabelle, $id, $tenantId, $userId);
@@ -75,6 +87,11 @@ if (isset($_SESSION['versionen_meldung'])) {
 }
 
 $versionen = ContentRevision::fuerDatensatz($tabelle, $id, $tenantId);
+if ($tabelle === 'tests' && $datensatz === null && empty($versionen)) {
+    // Gelöschter allgemeiner Test
+    $tenantId  = null;
+    $versionen = ContentRevision::fuerDatensatz($tabelle, $id, null);
+}
 
 if ($datensatz === null && empty($versionen)) {
     http_response_code(404);
@@ -106,6 +123,9 @@ if ($tabelle === 'breeds' && $datensatz !== null) {
         $original = $row;
     }
 }
+
+// Allgemeine Tests: Wiederherstellen nur für den Super-Admin
+$darfWiederherstellen = !($tabelle === 'tests' && $tenantId === null) || Test::darfAllgemeineVerwalten();
 
 // Versionen zu Änderungsvorgängen bündeln (gleicher Zeitpunkt, Anlass, Person).
 $vorgaenge = [];
@@ -294,7 +314,7 @@ require __DIR__ . '/views/partials/header.php';
                         <div class="border-t border-sand pt-3">
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                                 <h2 class="text-sm font-bold text-fellDk"><?= e(ContentRevision::feldLabel($tabelle, $v['feld'])) ?></h2>
-                                <?php if ($datensatz !== null && $v['anlass'] !== 'loeschung' && ContentRevision::istWiederherstellbar($tabelle, $v['feld'])): ?>
+                                <?php if ($darfWiederherstellen && $datensatz !== null && $v['anlass'] !== 'loeschung' && ContentRevision::istWiederherstellbar($tabelle, $v['feld'])): ?>
                                     <form method="post" onsubmit="return confirm('Feld „<?= e(ContentRevision::feldLabel($tabelle, $v['feld'])) ?>“ auf den Stand vor dieser Änderung zurücksetzen?');">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="revision_id" value="<?= (int) $v['id'] ?>">

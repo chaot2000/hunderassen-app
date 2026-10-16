@@ -114,7 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing['ergebnisse']           = $ergebnisse;
 }
 
-$alleTests = Test::findAll($tenantId);
+// Neue Durchführung: ausgeblendete allgemeine Tests nicht anbieten. Beim
+// Bearbeiten ist der Test fix und muss auch ausgeblendet sichtbar bleiben.
+$alleTests = Test::findAll($tenantId, null, !$isEditMode);
 
 // Für jeden Test die volle Aufgaben-/Ergebnis-Struktur laden, damit die
 // passenden Aufgaben-Blöcke serverseitig vorgerendert werden können
@@ -241,7 +243,7 @@ require __DIR__ . '/views/partials/header.php';
                         class="w-full rounded-lg border border-sand px-3 py-2 focus:outline-none focus:ring-2 focus:ring-tanne">
                     <option value="0">— <?= e(t('td.test_waehlen')) ?> —</option>
                     <?php foreach ($alleTests as $test): ?>
-                        <option value="<?= (int) $test['id'] ?>" data-zielgruppe="<?= e($test['zielgruppe']) ?>" <?= $selectedTestId === (int) $test['id'] ? 'selected' : '' ?>><?= e($test['name']) ?></option>
+                        <option value="<?= (int) $test['id'] ?>" data-zielgruppe="<?= e($test['zielgruppe']) ?>" <?= $selectedTestId === (int) $test['id'] ? 'selected' : '' ?>><?= e($test['name']) ?><?= $test['allgemein'] ? ' (' . e(t('tests.allgemein')) . ')' : '' ?></option>
                     <?php endforeach; ?>
                 </select>
             <?php endif; ?>
