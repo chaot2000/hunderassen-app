@@ -98,6 +98,7 @@ jobs:
           php tests/TheDogApiAbgleichTest.php
           php tests/RassenDatenTest.php
           php tests/RassenFilterTest.php
+          php tests/MerkmalVorschlaegeTest.php
 
       - name: Rauchtest ausführen
         run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!

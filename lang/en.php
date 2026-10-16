@@ -28,6 +28,7 @@ return [
     'nav.gruppe_rassen'        => 'Breeds (shared catalogue)',
     'nav.rasse_anlegen'        => 'Add breed',
     'nav.merkmale'             => 'Traits',
+    'nav.merkmale_befuellen'   => 'Fill in traits',
     'nav.rassentexte'          => 'Import breed data',
     'nav.thedogapi'            => 'TheDogAPI sync',
     'nav.gruppe_tests'         => 'Tests (organisation catalogue)',

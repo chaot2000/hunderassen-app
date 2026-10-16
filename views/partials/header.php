@@ -57,6 +57,7 @@ function render_dog_icon(int $sizePx, string $earColor, string $muzzleColor): st
 $verwaltungsPfade = [
     '/admin_add_breed.php',
     '/admin_merkmale.php',
+    '/admin_merkmale_befuellen.php',
     '/admin_manage_users.php',
     '/admin_add_user.php',
     '/admin_manage_tenants.php',
@@ -200,6 +201,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                                 <a href="/admin_merkmale.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.merkmale')) ?></a>
                                 <?php if (is_super_admin()): ?>
                                     <a href="/admin_rassentexte.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassentexte')) ?></a>
+                                    <a href="/admin_merkmale_befuellen.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.merkmale_befuellen')) ?></a>
                                     <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.thedogapi')) ?></a>
                                 <?php endif; ?>
                             <?php endif; ?>

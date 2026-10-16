@@ -14,10 +14,7 @@
  * übernehmbarem Feld/Bild plus editierbaren Textfeldern. Submit geht
  * an Stufe 2.
  *
- * WICHTIG: API-Key unten eintragen (config/thedogapi.php empfohlen,
- * hier der Einfachheit halber als Konstante — bei produktivem Einsatz
- * bitte in eine eigene, nicht versionierte Config-Datei auslagern,
- * analog zu config/database.php).
+ * Der API-Schlüssel steht in config/thedogapi.local.php (nicht im Repo).
  */
 
 declare(strict_types=1);
@@ -34,57 +31,16 @@ secure_session_start();
 // für den Super-Admin.
 require_super_admin();
 
-// API-Schlüssel liegt NICHT im Repo, sondern in der nicht versionierten
-// config/thedogapi.local.php (Vorlage: config/thedogapi.local.example.php).
-$thedogapiConfigDatei = __DIR__ . '/config/thedogapi.local.php';
-$thedogapiConfig = is_file($thedogapiConfigDatei) ? require $thedogapiConfigDatei : [];
-define('THEDOGAPI_KEY', trim((string) ($thedogapiConfig['api_key'] ?? '')));
-const THEDOGAPI_URL  = 'https://api.thedogapi.com/v1/breeds';
-const CACHE_DATEI    = __DIR__ . '/cache_thedogapi_breeds.json';
-const CACHE_MAX_ALTER_SEK = 86400; // 1 Tag – TheDogAPI ändert sich selten
-
-// ===================================================================
-// 1) TheDogAPI-Daten holen (mit Datei-Cache, um nicht bei jedem
-//    Testlauf erneut 300+ Requests abzusetzen)
-// ===================================================================
+// TheDogAPI-Daten mit Datei-Cache (models/TheDogApiFelder.php). Der
+// API-Schlüssel liegt nicht im Repo, sondern in config/thedogapi.local.php.
 function ladeTheDogApiBreeds(): array
 {
-    if (is_file(CACHE_DATEI) && (time() - filemtime(CACHE_DATEI)) < CACHE_MAX_ALTER_SEK) {
-        $inhalt = file_get_contents(CACHE_DATEI);
-        $daten = json_decode($inhalt, true);
-        if (is_array($daten)) {
-            return $daten;
-        }
-    }
-
-    if (THEDOGAPI_KEY === '') {
+    $ergebnis = TheDogApiFelder::breeds();
+    if ($ergebnis['fehler'] !== null) {
         http_response_code(503);
-        die('Kein TheDogAPI-Schlüssel hinterlegt. Lege config/thedogapi.local.php nach der Vorlage config/thedogapi.local.example.php an.');
+        die(e($ergebnis['fehler']));
     }
-
-    $ch = curl_init(THEDOGAPI_URL);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['x-api-key: ' . THEDOGAPI_KEY],
-        CURLOPT_TIMEOUT => 20,
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $fehler = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false || $httpCode !== 200) {
-        die('Fehler beim Abruf von TheDogAPI (HTTP ' . $httpCode . '): ' . e($fehler));
-    }
-
-    $daten = json_decode($response, true);
-    if (!is_array($daten)) {
-        die('TheDogAPI-Antwort konnte nicht als JSON gelesen werden.');
-    }
-
-    file_put_contents(CACHE_DATEI, $response);
-
-    return $daten;
+    return $ergebnis['breeds'];
 }
 
 // ===================================================================

@@ -158,7 +158,8 @@ class RassenDatenSchreiben
                     }
                     break;
                 case 'zahl_spanne':
-                    $geschlechter = $m['je_geschlecht'] ? ['ruede', 'huendin'] : ['alle'];
+                    // "alle" auch bei je_geschlecht: Angaben ohne Unterschied (z. B. TheDogAPI)
+                    $geschlechter = $m['je_geschlecht'] ? ['ruede', 'huendin', 'alle'] : ['alle'];
                     foreach ($geschlechter as $g) {
                         $von = self::zahlAusEingabe($roh['spanne'][$g]['von'] ?? '');
                         $bis = self::zahlAusEingabe($roh['spanne'][$g]['bis'] ?? '');
@@ -260,6 +261,47 @@ class RassenDatenSchreiben
         return $norm($a) === $norm($b);
     }
 
+    /**
+     * Übernimmt geprüfte Vorschläge (admin_merkmale_befuellen.php), nur
+     * wo das Merkmal noch leer ist. Je Wert eine Version, Anlass "import".
+     *
+     * @param list<array{breed_id: int, merkmal: string, wert: array, quelle: string}> $liste quelle: thedogapi | vdh_text
+     * @return int Anzahl geschriebener Werte
+     */
+    public static function vorschlaegeUebernehmen(array $liste, ?int $userId): int
+    {
+        $defs = self::nachSchluessel();
+        $pdo = Database::getConnection();
+        $geschrieben = 0;
+        $pdo->beginTransaction();
+        try {
+            foreach ($liste as $v) {
+                $m = $defs[$v['merkmal']] ?? null;
+                if ($m === null || !in_array($v['quelle'], ['thedogapi', 'vdh_text'], true)) {
+                    continue;
+                }
+                $vorher = self::formularWerte($v['breed_id'])[$m['schluessel']] ?? null;
+                if (!self::gleich($vorher, null)) {
+                    continue;   // inzwischen gefüllt
+                }
+                $neu = ['werte' => array_values(array_filter($v['wert']['werte'] ?? [], fn($w) => isset($m['werte'][$w]))),
+                    'spannen' => $v['wert']['spannen'] ?? [], 'text' => $v['wert']['text'] ?? null];
+                if (self::gleich($neu, null)) {
+                    continue;
+                }
+                self::merkmalSchreiben($pdo, $v['breed_id'], $m, $neu, $v['quelle']);
+                ContentRevision::protokolliereFeld($pdo, 'breeds', $v['breed_id'], 'merkmal_' . $m['schluessel'],
+                    null, self::lesbar($m, $neu), $userId, 'import');
+                $geschrieben++;
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        return $geschrieben;
+    }
+
     /** Ersetzt alle Werte eines Merkmals einer Rasse. */
     private static function merkmalSchreiben(PDO $pdo, int $breedId, array $m, ?array $neu, string $quelle): void
     {
@@ -295,8 +337,16 @@ class RassenDatenSchreiben
             $teile[] = $m['werte'][$w]['name_de'] ?? $w;
         }
         $geschlechtName = ['ruede' => 'Rüde', 'huendin' => 'Hündin', 'alle' => ''];
-        foreach ($wert['spannen'] as $g => [$von, $bis]) {
-            $spanne = ($von ?? '?') . ($bis !== null && $bis !== $von ? '–' . $bis : '') . ($m['einheit'] ? ' ' . $m['einheit'] : '');
+        // Feste Reihenfolge Rüde, Hündin, beide (gespeichert ist alphabetisch)
+        $spannen = array_replace(array_intersect_key(['ruede' => 0, 'huendin' => 0, 'alle' => 0], $wert['spannen']), $wert['spannen']);
+        foreach ($spannen as $g => [$von, $bis]) {
+            // Versionen und Prüfseite sind deutsch: Dezimalkomma
+            [$von, $bis] = array_map(fn($z) => $z === null ? null : str_replace('.', ',', (string) $z), [$von, $bis]);
+            $spanne = match (true) {
+                $von === null => 'bis ' . $bis,
+                $bis === null => 'ab ' . $von,
+                default => $von . ($bis !== $von ? '–' . $bis : ''),
+            } . ($m['einheit'] ? ' ' . $m['einheit'] : '');
             $teile[] = trim(($geschlechtName[$g] ?? $g) . ' ' . $spanne);
         }
         if ($wert['text'] !== null) {

@@ -162,6 +162,7 @@ else
     check_status "admin_merkmale.php (Rassen verwalten)" "$BASE_URL/admin_merkmale.php" "200"
     check_body_contains "Merkmal-Verwaltung zeigt Überschrift" "Merkmale verwalten"
     check_body_contains "Merkmal-Verwaltung listet Eignung" 'id="merkmal-eignung"'
+    check_status "admin_merkmale_befuellen.php (Super-Admin)" "$BASE_URL/admin_merkmale_befuellen.php" "200"
     check_status "admin_manage_users.php (admin-only)" "$BASE_URL/admin_manage_users.php" "200"
 
     echo ""
@@ -825,6 +826,40 @@ else
         "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=merkmal_loeschen --data-urlencode merkmal_id=$NEU_ID"
     check_status "Verwaltung nach dem Löschen des Merkmals" "$BASE_URL/admin_merkmale.php" "200"
     check_body_not_contains "Neues Merkmal ist weg" 'id="merkmal-ci_ohrform"'
+
+    echo ""
+    echo "--- Merkmale befüllen (Vorschläge aus dem VDH-Text) ---"
+    # Abschnitt "Aussehen" mit Gewicht ergänzen, übrige Werte wie oben. Texte vorab
+    # kodiert, weil extra_curl_args an Leerzeichen getrennt wird.
+    KURZ_ENC=$(php -r 'echo rawurlencode("Nur für automatisierte Tests angelegt.");')
+    AUSSEHEN_ENC=$(php -r 'echo rawurlencode("Rüden wiegen 20 bis 25 Kilogramm, Hündinnen 18 bis 22 Kilogramm.");')
+    check_status "Rasse bearbeiten für Befüllen laden" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    BEF_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Aussehen-Text mit Gewicht speichern (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$BEF_CSRF --data-urlencode name=CI-Testrasse --data-urlencode fci_klasse=1 \
+         --data text%5Bde%5D%5Bkurzportraet%5D=$KURZ_ENC --data text%5Bde%5D%5Baussehen%5D=$AUSSEHEN_ENC \
+         --data-urlencode merkmal[farben][werte][]=braun --data-urlencode merkmal[groessenklasse][werte][]=mittel \
+         --data-urlencode merkmal[schulterhoehe][spanne][ruede][von]=40 --data-urlencode merkmal[schulterhoehe][spanne][ruede][bis]=50 \
+         --data-urlencode merkmal[ursprungsland][land]=DE --data-urlencode merkmal[eignung][werte][]=ci_wert"
+    check_status "Befüllen: Reiter Gewicht" "$BASE_URL/admin_merkmale_befuellen.php?merkmal=gewicht" "200"
+    check_body_contains "Befüllen: Seite lädt" "Merkmale befüllen"
+    check_body_contains "Befüllen: Vorschlag für die Testrasse" "CI-Testrasse"
+    check_body_contains "Befüllen: Wert aus dem Text" "Rüde 20–25 kg, Hündin 18–22 kg"
+    check_body_contains "Befüllen: Beleg aus dem Text" "Rüden wiegen 20 bis 25 kg"
+    BEF2_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Befüllen: Vorschlag übernehmen (Redirect)" "$BASE_URL/admin_merkmale_befuellen.php" "302" \
+        "-X POST --data-urlencode csrf_token=$BEF2_CSRF --data-urlencode merkmal=gewicht --data-urlencode w[1]=vdh"
+    check_status "Befüllen: nach der Übernahme" "$BASE_URL/admin_merkmale_befuellen.php?merkmal=gewicht" "200"
+    check_body_contains "Befüllen: Meldung" "1 Wert übernommen."
+    check_body_not_contains "Befüllen: gefülltes Merkmal verschwindet" "Rüden wiegen 20 bis 25 kg"
+    check_status "Rassenseite mit übernommenem Gewicht" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Gewicht auf der Rassenseite" "20–25 kg"
+    check_status "Versionen nach dem Befüllen" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Befüllen als Version" "Merkmal „Gewicht“"
+    check_status "Befüllen: zweite Übernahme ändert nichts" "$BASE_URL/admin_merkmale_befuellen.php" "302" \
+        "-X POST --data-urlencode csrf_token=$BEF2_CSRF --data-urlencode merkmal=gewicht --data-urlencode w[1]=vdh"
+    check_status "Befüllen: Meldung nach zweiter Übernahme" "$BASE_URL/admin_merkmale_befuellen.php?merkmal=gewicht" "200"
+    check_body_contains "Befüllen: nichts doppelt" "0 Werte übernommen."
 
     check_status "Versionen eines Tests (Mandant 1) laden" "$BASE_URL/content_versionen.php?typ=test&id=1" "200"
     check_body_contains "Leerer Zustand ohne Versionen" "Noch keine Änderungen gespeichert."

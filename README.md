@@ -27,6 +27,7 @@ erfahrungsgemäß fragil ist).
 ├── admin_add_breed.php          Rasse anlegen/bearbeiten inkl. Crop-Editor
 ├── admin_add_user.php           (Legacy, ersetzt durch admin_manage_users.php)
 ├── admin_merkmale.php           Merkmale und Werte verwalten (DE/EN)
+├── admin_merkmale_befuellen.php Leere Merkmale aus TheDogAPI und VDH-Text befüllen
 ├── admin_manage_users.php       Benutzerverwaltung
 ├── admin_thedogapi_review.php   TheDogAPI-Abgleich, Stufe 1 (Review, liest nur)
 ├── admin_thedogapi_apply.php    TheDogAPI-Abgleich, Stufe 2 (schreibt bestätigte Werte)

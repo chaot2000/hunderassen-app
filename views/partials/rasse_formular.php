@@ -76,7 +76,7 @@ function render_merkmal_feld(array $m, ?array $wert, array $laender): void
     <div class="<?= $breit ? 'md:col-span-2' : '' ?>">
         <?php if ($m['typ'] === 'zahl_spanne'): ?>
             <p class="block text-sm font-semibold mb-1" id="<?= e($id) ?>-label"><?= e($m['name_de']) ?><?= $einheit ? ' in ' . e($einheit) : '' ?></p>
-            <?php foreach ($m['je_geschlecht'] ? ['ruede' => 'Rüde', 'huendin' => 'Hündin'] : ['alle' => ''] as $g => $gName):
+            <?php foreach ($m['je_geschlecht'] ? ['ruede' => 'Rüde', 'huendin' => 'Hündin', 'alle' => 'beide'] : ['alle' => ''] as $g => $gName):
                 [$von, $bis] = $wert['spannen'][$g] ?? [null, null]; ?>
                 <div class="flex items-center gap-2 mb-2" role="group" aria-labelledby="<?= e($id) ?>-label">
                     <?php if ($gName !== ''): ?><span class="w-16 text-sm"><?= e($gName) ?></span><?php endif; ?>
