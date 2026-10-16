@@ -174,28 +174,26 @@ class Dog
     }
 
     /**
-     * Liefert die ersten $limit Eigenschaften/Tags einer Rasse
-     * (aktuell ohne explizite Wichtigkeits-Reihenfolge in der DB).
+     * Die ersten $limit Wesens- und Eignungsbegriffe einer Rasse, in der
+     * gewählten Sprache (Merkmale "wesen" und "eignung", PLAN.md 10).
      * Rassen sind geteilte Katalogdaten, kein Scoping nötig.
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<array{name: string}>
      */
     public static function getTopBreedTags(int $breedId, int $limit = self::TOP_TAG_COUNT): array
     {
-        $pdo = Database::getConnection();
-        $stmt = $pdo->prepare(
-            'SELECT t.id, t.name, t.category
-             FROM tags t
-             INNER JOIN breed_tags bt ON bt.tag_id = t.id
-             WHERE bt.breed_id = :breed_id
-             ORDER BY t.category, t.name
-             LIMIT :limit'
-        );
-        $stmt->bindValue(':breed_id', $breedId, PDO::PARAM_INT);
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-
-        return $stmt->fetchAll();
+        require_once __DIR__ . '/RassenDaten.php';
+        RassenDaten::uebernehmenWennNoetig($breedId);
+        $begriffe = [];
+        foreach (RassenDaten::merkmale($breedId, aktuelle_sprache()) as $gruppe) {
+            foreach ($gruppe as $m) {
+                if (in_array($m['schluessel'], ['wesen', 'eignung'], true)) {
+                    $begriffe[$m['schluessel']] = $m['werte'];
+                }
+            }
+        }
+        $namen = array_merge($begriffe['wesen'] ?? [], $begriffe['eignung'] ?? []);
+        return array_map(fn($n) => ['name' => $n], array_slice($namen, 0, $limit));
     }
 
     /**

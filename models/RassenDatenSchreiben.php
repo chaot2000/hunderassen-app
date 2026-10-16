@@ -31,7 +31,8 @@ class RassenDatenSchreiben
      * Alle Merkmale mit ihren Werten, in Anzeigereihenfolge.
      *
      * @return list<array{id: int, schluessel: string, typ: string, gruppe: string, name_de: string, name_en: ?string,
-     *     einheit: ?string, je_geschlecht: bool, werte: array<string, array{id: int, name_de: string, name_en: ?string}>}>
+     *     einheit: ?string, je_geschlecht: bool, filterbar: bool, verknuepfung: string, reihenfolge: int,
+     *     werte: array<string, array{id: int, name_de: string, name_en: ?string, reihenfolge: int}>}>
      */
     public static function definitionen(bool $neuLaden = false): array
     {
@@ -45,19 +46,20 @@ class RassenDatenSchreiben
             $merkmale[(int) $m['id']] = [
                 'id' => (int) $m['id'], 'schluessel' => $m['schluessel'], 'typ' => $m['typ'], 'gruppe' => $m['gruppe'],
                 'name_de' => $m['name_de'], 'name_en' => $m['name_en'], 'einheit' => $m['einheit'],
-                'je_geschlecht' => (bool) $m['je_geschlecht'], 'werte' => [],
+                'je_geschlecht' => (bool) $m['je_geschlecht'], 'filterbar' => (bool) $m['filterbar'],
+                'verknuepfung' => $m['filter_verknuepfung'] ?? 'und', 'reihenfolge' => (int) $m['reihenfolge'], 'werte' => [],
             ];
         }
         foreach ($pdo->query('SELECT * FROM merkmal_werte ORDER BY reihenfolge, name_de')->fetchAll() as $w) {
             if (isset($merkmale[(int) $w['merkmal_id']])) {
-                $merkmale[(int) $w['merkmal_id']]['werte'][$w['schluessel']] = ['id' => (int) $w['id'], 'name_de' => $w['name_de'], 'name_en' => $w['name_en']];
+                $merkmale[(int) $w['merkmal_id']]['werte'][$w['schluessel']] = ['id' => (int) $w['id'], 'name_de' => $w['name_de'], 'name_en' => $w['name_en'], 'reihenfolge' => (int) $w['reihenfolge']];
             }
         }
         return $cache = array_values($merkmale);
     }
 
     /** @return array<string, array> Definition je Schlüssel */
-    private static function nachSchluessel(bool $neuLaden = false): array
+    public static function nachSchluessel(bool $neuLaden = false): array
     {
         return array_column(self::definitionen($neuLaden), null, 'schluessel');
     }

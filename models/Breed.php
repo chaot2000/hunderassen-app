@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/ContentRevision.php';
+require_once __DIR__ . '/RassenFilter.php';
+require_once __DIR__ . '/RassenDatenSchreiben.php';
 
 class Breed
 {
@@ -108,9 +110,12 @@ class Breed
     // -------------------------------------------------------------
     private const SIMILARITY_WEIGHT_FCI_GRUPPE    = 40; // einmalig, falls gleiche FCI-Klasse
     private const SIMILARITY_WEIGHT_GROESSE       = 10; // pro gemeinsamer Größenklasse
-    private const SIMILARITY_WEIGHT_TAG           = 8;  // pro gemeinsamem Tag/Eigenschaft
+    private const SIMILARITY_WEIGHT_TAG           = 8;  // pro gemeinsamem übrigen Merkmalswert (Wesen, Eignung …)
     private const SIMILARITY_WEIGHT_ACTIVITY       = 6;  // pro gemeinsamer Aktivität
     private const SIMILARITY_WEIGHT_URSPRUNGSLAND = 5;  // einmalig, falls gleiches Ursprungsland
+
+    // Merkmale, die über Ähnlichkeit wenig sagen (fast alle Rassen "ohne Arbeitsprüfung")
+    private const AEHNLICH_OHNE = ['farben', 'arbeitspruefung', 'verbreitung'];
 
     /**
      * Legt eine neue Rasse inklusive Größenklassen, Tags und Aktivitäten
@@ -441,195 +446,60 @@ class Breed
     }
 
     /**
-     * Sucht/filtert Rassen für das Dashboard.
-     *
-     * @param string     $searchTerm   Freitextsuche auf Name UND alternative Bezeichnungen (optional)
-     * @param int[]      $tagIds       Nur Rassen, die ALLE angegebenen Tags besitzen (UND-Verknüpfung)
-     * @param int[]      $activityIds  Nur Rassen, die ALLE angegebenen Aktivitäten besitzen
-     * @param string[]   $groessen     Nur Rassen mit mindestens einer dieser Größenklassen
+     * Textsuche im Katalog: Name, alternative Bezeichnungen und englischer
+     * Name. Leerer Suchbegriff = alle Rassen. Die Filter nach Merkmalen
+     * kommen danach (models/RassenFilter.php, rassen.php).
      */
-    public static function search(
-        string $searchTerm = '',
-        array $tagIds = [],
-        array $activityIds = [],
-        array $groessen = []
-    ): array {
+    public static function search(string $searchTerm = ''): array
+    {
         $pdo = Database::getConnection();
-
-        $where  = [];
+        $sql = 'SELECT b.id, b.name, b.name_en, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, (b.bild_blob IS NOT NULL) AS hat_bild
+                FROM breeds b';
         $params = [];
-
         $searchTerm = clean_input($searchTerm);
         if ($searchTerm !== '') {
-            // Sucht sowohl im Hauptnamen als auch in den alternativen
-            // Bezeichnungen (z.B. "Alsatian" findet auch "Deutscher
-            // Schäferhund", falls dort als alternative_namen hinterlegt)
-            // und im englischen Namen aus TheDogAPI.
-            $where[]             = '(b.name LIKE :search OR b.alternative_namen LIKE :search_alt OR b.name_en LIKE :search_en)';
-            $params[':search']   = '%' . $searchTerm . '%';
-            $params[':search_en'] = '%' . $searchTerm . '%';
-            $params[':search_alt'] = '%' . $searchTerm . '%';
+            // "Alsatian" findet auch "Deutscher Schäferhund", wenn es dort als alternativer Name steht
+            $sql .= ' WHERE (b.name LIKE :search OR b.alternative_namen LIKE :search_alt OR b.name_en LIKE :search_en)';
+            $params = [':search' => '%' . $searchTerm . '%', ':search_alt' => '%' . $searchTerm . '%', ':search_en' => '%' . $searchTerm . '%'];
         }
-
-        $sql = 'SELECT DISTINCT b.id, b.name, b.name_en, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, (b.bild_blob IS NOT NULL) AS hat_bild
-                FROM breeds b';
-
-        if (!empty($groessen)) {
-            $validGroessen = array_values(array_intersect($groessen, self::VALID_GROESSEN));
-            if (!empty($validGroessen)) {
-                $placeholders = [];
-                foreach ($validGroessen as $i => $g) {
-                    $key = ":groesse{$i}";
-                    $placeholders[] = $key;
-                    $params[$key] = $g;
-                }
-                $sql .= ' INNER JOIN breed_sizes bs ON bs.breed_id = b.id AND bs.groesse IN (' . implode(',', $placeholders) . ')';
-            }
-        }
-
-        if (!empty($where)) {
-            $sql .= ' WHERE ' . implode(' AND ', $where);
-        }
-
-        $sql .= ' ORDER BY b.name ASC';
-
-        $stmt = $pdo->prepare($sql);
+        $stmt = $pdo->prepare($sql . ' ORDER BY b.name ASC');
         $stmt->execute($params);
-        $breeds = $stmt->fetchAll();
-
-        // UND-Verknüpfung für Tags/Aktivitäten wird in PHP nachgefiltert,
-        // da "Rasse muss ALLE angegebenen Tags haben" in reinem SQL mit
-        // dynamischer Anzahl an Bedingungen unübersichtlich (HAVING COUNT)
-        // und bei kleinen Datenmengen (Hunderassen-Lexikon) performant
-        // genug ist.
-        if (!empty($tagIds)) {
-            $breeds = array_values(array_filter($breeds, function ($breed) use ($pdo, $tagIds) {
-                return self::breedHasAllTags($pdo, (int) $breed['id'], $tagIds);
-            }));
-        }
-
-        if (!empty($activityIds)) {
-            $breeds = array_values(array_filter($breeds, function ($breed) use ($pdo, $activityIds) {
-                return self::breedHasAllActivities($pdo, (int) $breed['id'], $activityIds);
-            }));
-        }
-
-        return $breeds;
+        return $stmt->fetchAll();
     }
 
     /**
-     * Liefert für jede Filter-Option die Anzahl passender Rassen —
-     * unter Berücksichtigung der AKTUELL aktiven Filter (d.h. wie viele
-     * Treffer bei Hinzufügen dieser Option zu den bestehenden Filtern
-     * entstehen würden). Außerdem welche Größen/Tags/Aktivitäten
-     * überhaupt bei mindestens einer Rasse vorhanden sind.
-     *
-     * Rückgabe:
-     * [
-     *   'groessen'   => ['klein' => 12, 'mittel' => 34, ...],
-     *   'tags'       => [1 => 5, 2 => 8, ...],    // [tag_id => count]
-     *   'activities' => [1 => 3, 2 => 7, ...],
-     * ]
-     */
-    public static function getFilterCounts(
-        string $searchTerm = '',
-        array $activeTagIds = [],
-        array $activeActivityIds = [],
-        array $activeGroessen = []
-    ): array {
-        $groessenCounts = [];
-        $tagCounts      = [];
-        $activityCounts = [];
-
-        foreach (self::VALID_GROESSEN as $g) {
-            $groessenCounts[$g] = count(self::search($searchTerm, $activeTagIds, $activeActivityIds, [$g]));
-        }
-
-        $pdo = Database::getConnection();
-        $allTagIds = $pdo->query('SELECT id FROM tags ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($allTagIds as $tagId) {
-            $tagId = (int) $tagId;
-            $mergedTags = array_unique(array_merge($activeTagIds, [$tagId]));
-            $tagCounts[$tagId] = count(self::search($searchTerm, $mergedTags, $activeActivityIds, $activeGroessen));
-        }
-
-        $allActIds = $pdo->query('SELECT id FROM activities ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($allActIds as $actId) {
-            $actId = (int) $actId;
-            $mergedActs = array_unique(array_merge($activeActivityIds, [$actId]));
-            $activityCounts[$actId] = count(self::search($searchTerm, $activeTagIds, $mergedActs, $activeGroessen));
-        }
-
-        return [
-            'groessen'   => $groessenCounts,
-            'tags'       => $tagCounts,
-            'activities' => $activityCounts,
-        ];
-    }
-
-    /**
-     * Liefert bis zu $limit ähnliche Rassen zu $breedId, score-basiert.
-     * Die Berechnung erfolgt bewusst in PHP (analog zu search() /
-     * getFilterCounts()), statt als eine große SQL-Formel — dadurch
-     * bleibt die Gewichtung nachvollziehbar und leicht anpassbar
-     * (siehe SIMILARITY_WEIGHT_*-Konstanten).
-     *
-     * Score setzt sich zusammen aus:
+     * Liefert bis zu $limit ähnliche Rassen zu $breedId, nach Punkten.
+     * Grundlage sind die Merkmale (RassenFilter::daten()):
      *  - gleiche FCI-Gruppe (einmalig)
-     *  - gemeinsame Größenklassen (pro Treffer)
-     *  - gemeinsame Tags/Eigenschaften (pro Treffer)
-     *  - gemeinsame Aktivitäten (pro Treffer)
+     *  - gemeinsame Größenklassen, Aktivitäten (je Treffer)
+     *  - übrige gemeinsame Werte wie Wesen oder Eignung (je Treffer)
      *  - gleiches Ursprungsland (einmalig)
+     * Farben, Arbeitsprüfung und Verbreitung zählen nicht (AEHNLICH_OHNE).
      *
      * @return array<int, array{breed: array<string, mixed>, score: int, gruende: array<int, string>}>
      */
     public static function getSimilar(int $breedId, int $limit = 6): array
     {
-        $current = self::findById($breedId);
-        if ($current === null) {
-            return [];
-        }
-
         $pdo = Database::getConnection();
-
-        $othersStmt = $pdo->prepare(
-            'SELECT id, name, name_en, ursprungsland, fci_klasse, bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild
-             FROM breeds WHERE id != :id'
-        );
-        $othersStmt->execute([':id' => $breedId]);
-        $others = $othersStmt->fetchAll();
-
-        if (empty($others)) {
+        $alle = $pdo->query(
+            'SELECT id, name, name_en, fci_klasse, bild_updated_at, (bild_blob IS NOT NULL) AS hat_bild FROM breeds'
+        )->fetchAll();
+        $alle = array_column($alle, null, 'id');
+        if (!isset($alle[$breedId])) {
             return [];
         }
-
-        // Größen/Tags/Aktivitäten aller anderen Rassen in Bulk laden
-        // und je Rasse gruppieren, statt pro Kandidat einzeln
-        // nachzufragen (N+1 vermeiden).
-        $sizesByBreed = [];
-        foreach ($pdo->query('SELECT breed_id, groesse FROM breed_sizes') as $row) {
-            $sizesByBreed[(int) $row['breed_id']][] = $row['groesse'];
-        }
-
-        $tagsByBreed = [];
-        foreach ($pdo->query('SELECT breed_id, tag_id FROM breed_tags') as $row) {
-            $tagsByBreed[(int) $row['breed_id']][] = (int) $row['tag_id'];
-        }
-
-        $activitiesByBreed = [];
-        foreach ($pdo->query('SELECT breed_id, activity_id FROM breed_activities') as $row) {
-            $activitiesByBreed[(int) $row['breed_id']][] = (int) $row['activity_id'];
-        }
-
-        $currentGroessen   = array_column($current['sizes'], 'groesse');
-        $currentTagIds     = array_column($current['tags'], 'id');
-        $currentActivityIds = array_column($current['activities'], 'id');
+        $current = $alle[$breedId];
+        $daten = RassenFilter::daten();
+        $definitionen = RassenDatenSchreiben::nachSchluessel();
+        $eigene = $daten[$breedId] ?? [];
 
         $results = [];
-
-        foreach ($others as $other) {
-            $otherId = (int) $other['id'];
-            $score   = 0;
+        foreach ($alle as $otherId => $other) {
+            if ((int) $otherId === $breedId) {
+                continue;
+            }
+            $andere = $daten[(int) $otherId] ?? [];
+            $score = 0;
             $gruende = [];
 
             if ($current['fci_klasse'] !== null && $other['fci_klasse'] !== null
@@ -638,37 +508,37 @@ class Breed
                 $gruende[] = t('aehnlich.fci');
             }
 
-            $sharedGroessen = count(array_intersect($currentGroessen, $sizesByBreed[$otherId] ?? []));
-            if ($sharedGroessen > 0) {
-                $score += $sharedGroessen * self::SIMILARITY_WEIGHT_GROESSE;
-                $gruende[] = t($sharedGroessen > 1 ? 'aehnlich.groessen_n' : 'aehnlich.groessen_1', ['anzahl' => $sharedGroessen]);
+            $geteilt = ['groessenklasse' => 0, 'aktivitaeten' => 0, 'sonst' => 0];
+            foreach ($eigene as $schluessel => $werte) {
+                $typ = $definitionen[$schluessel]['typ'] ?? null;
+                if (!in_array($typ, ['mehrfach', 'auswahl', 'stufe'], true) || in_array($schluessel, self::AEHNLICH_OHNE, true) || !isset($andere[$schluessel])) {
+                    continue;
+                }
+                $n = count(array_intersect_key($werte['werte'], $andere[$schluessel]['werte']));
+                $geteilt[isset($geteilt[$schluessel]) ? $schluessel : 'sonst'] += $n;
+            }
+            if ($geteilt['groessenklasse'] > 0) {
+                $score += $geteilt['groessenklasse'] * self::SIMILARITY_WEIGHT_GROESSE;
+                $gruende[] = t($geteilt['groessenklasse'] > 1 ? 'aehnlich.groessen_n' : 'aehnlich.groessen_1', ['anzahl' => $geteilt['groessenklasse']]);
+            }
+            if ($geteilt['sonst'] > 0) {
+                $score += $geteilt['sonst'] * self::SIMILARITY_WEIGHT_TAG;
+                $gruende[] = t($geteilt['sonst'] > 1 ? 'aehnlich.merkmale_n' : 'aehnlich.merkmale_1', ['anzahl' => $geteilt['sonst']]);
+            }
+            if ($geteilt['aktivitaeten'] > 0) {
+                $score += $geteilt['aktivitaeten'] * self::SIMILARITY_WEIGHT_ACTIVITY;
+                $gruende[] = t($geteilt['aktivitaeten'] > 1 ? 'aehnlich.aktivitaeten_n' : 'aehnlich.aktivitaeten_1', ['anzahl' => $geteilt['aktivitaeten']]);
             }
 
-            $sharedTags = count(array_intersect($currentTagIds, $tagsByBreed[$otherId] ?? []));
-            if ($sharedTags > 0) {
-                $score += $sharedTags * self::SIMILARITY_WEIGHT_TAG;
-                $gruende[] = t($sharedTags > 1 ? 'aehnlich.merkmale_n' : 'aehnlich.merkmale_1', ['anzahl' => $sharedTags]);
-            }
-
-            $sharedActivities = count(array_intersect($currentActivityIds, $activitiesByBreed[$otherId] ?? []));
-            if ($sharedActivities > 0) {
-                $score += $sharedActivities * self::SIMILARITY_WEIGHT_ACTIVITY;
-                $gruende[] = t($sharedActivities > 1 ? 'aehnlich.aktivitaeten_n' : 'aehnlich.aktivitaeten_1', ['anzahl' => $sharedActivities]);
-            }
-
-            if ($current['ursprungsland'] !== null && $other['ursprungsland'] !== null
-                && $other['ursprungsland'] === $current['ursprungsland']) {
+            $land = array_key_first($eigene['ursprungsland']['werte'] ?? []);
+            if ($land !== null && isset($andere['ursprungsland']['werte'][$land])) {
                 $score += self::SIMILARITY_WEIGHT_URSPRUNGSLAND;
                 $gruende[] = t('aehnlich.land');
             }
 
             if ($score > 0) {
                 $other['hat_bild'] = (bool) $other['hat_bild'];
-                $results[] = [
-                    'breed'   => $other,
-                    'score'   => $score,
-                    'gruende' => $gruende,
-                ];
+                $results[] = ['breed' => $other, 'score' => $score, 'gruende' => $gruende];
             }
         }
 
@@ -685,26 +555,6 @@ class Breed
     // -------------------------------------------------------------
     // Private Hilfsmethoden
     // -------------------------------------------------------------
-
-    private static function breedHasAllTags(PDO $pdo, int $breedId, array $tagIds): bool
-    {
-        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
-        $stmt = $pdo->prepare(
-            "SELECT COUNT(DISTINCT tag_id) FROM breed_tags WHERE breed_id = ? AND tag_id IN ({$placeholders})"
-        );
-        $stmt->execute(array_merge([$breedId], array_map('intval', $tagIds)));
-        return (int) $stmt->fetchColumn() === count(array_unique($tagIds));
-    }
-
-    private static function breedHasAllActivities(PDO $pdo, int $breedId, array $activityIds): bool
-    {
-        $placeholders = implode(',', array_fill(0, count($activityIds), '?'));
-        $stmt = $pdo->prepare(
-            "SELECT COUNT(DISTINCT activity_id) FROM breed_activities WHERE breed_id = ? AND activity_id IN ({$placeholders})"
-        );
-        $stmt->execute(array_merge([$breedId], array_map('intval', $activityIds)));
-        return (int) $stmt->fetchColumn() === count(array_unique($activityIds));
-    }
 
     /**
      * Validiert eine Liste von Größenklassen-Einträgen.

@@ -73,7 +73,7 @@ class ContentRevision
         'import'            => 'Import',
         'loeschung'         => 'Gelöscht',
         'wiederherstellung' => 'Wiederhergestellt',
-        'umstrukturierung'  => 'Automatisch gegliedert',
+        'umstrukturierung'  => 'Umstrukturiert',
     ];
 
     /**

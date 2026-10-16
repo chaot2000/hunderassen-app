@@ -158,7 +158,10 @@ else
     check_body_contains "Test-Zucht wird angezeigt" "CI-Test-Zucht"
     check_body_contains "Webseiten-Link vorhanden" "example.test"
 
-    check_status "admin_manage_tags.php (admin-only)" "$BASE_URL/admin_manage_tags.php" "200"
+    check_status "admin_manage_tags.php leitet auf die Merkmale um" "$BASE_URL/admin_manage_tags.php" "301"
+    check_status "admin_merkmale.php (Rassen verwalten)" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Merkmal-Verwaltung zeigt Überschrift" "Merkmale verwalten"
+    check_body_contains "Merkmal-Verwaltung listet Eignung" 'id="merkmal-eignung"'
     check_status "admin_manage_users.php (admin-only)" "$BASE_URL/admin_manage_users.php" "200"
 
     echo ""
@@ -754,6 +757,75 @@ else
     check_status "Rassendetail nach der Wiederherstellung" "$BASE_URL/breed_detail.php?id=1" "200"
     check_body_contains "Originaltext ist wieder aktiv" "Nur für automatisierte Tests angelegt."
     check_body_not_contains "Geänderter Text ist weg" "CI-Versionstext-geaendert"
+    echo ""
+    echo "--- Katalog-Filter und Merkmal-Verwaltung ---"
+    # Eckige Klammern in URLs kodiert, sonst wertet curl sie als Muster
+    check_status "Filter Eignung = Assistenzhund" "$BASE_URL/rassen.php?m%5Beignung%5D%5B%5D=assistenzhund" "200"
+    check_body_contains "Filter trifft die Testrasse" "CI-Testrasse"
+    check_body_contains "Aktiver Filter wird angezeigt" "Aktive Filter:"
+    check_body_contains "Filter zeigt Zahl je Option" "Assistenzhund"
+    check_status "Filter Schulterhöhe ab 60 cm" "$BASE_URL/rassen.php?m%5Bschulterhoehe%5D%5Bvon%5D=60" "200"
+    check_body_not_contains "Testrasse (40–50 cm) fällt raus" "CI-Testrasse"
+    check_status "Filter Schulterhöhe 45 bis 55 cm" "$BASE_URL/rassen.php?m%5Bschulterhoehe%5D%5Bvon%5D=45&m%5Bschulterhoehe%5D%5Bbis%5D=55" "200"
+    check_body_contains "Überlappende Spanne trifft" "CI-Testrasse"
+    check_status "Filter Land Deutschland" "$BASE_URL/rassen.php?m%5Bursprungsland%5D%5B%5D=DE" "200"
+    check_body_contains "Land-Filter trifft" "CI-Testrasse"
+    check_status "Alter Größen-Link (groesse[]=mittel)" "$BASE_URL/rassen.php?groesse%5B%5D=mittel" "200"
+    check_body_contains "Alter Link filtert weiter" "CI-Testrasse"
+
+    check_status "Merkmal-Verwaltung laden" "$BASE_URL/admin_merkmale.php" "200"
+    MM_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    EIGNUNG_ID=$(grep -zoP 'id="merkmal-eignung"[\s\S]*?name="merkmal_id" value="\K[0-9]+' /tmp/smoke_last_response.html | tr -d '\0' | head -1 || true)
+    check_status "Wert anlegen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=wert_anlegen --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode name_de=CI-Wert --data-urlencode name_en=CI-Value"
+    check_status "Verwaltung nach dem Anlegen" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Meldung: Wert angelegt" "Wert „CI-Wert“ angelegt."
+    check_status "Doppelten Wert ablehnen" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=wert_anlegen --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode name_de=ci-wert"
+    check_status "Verwaltung nach doppeltem Wert" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Meldung: gibt es schon" "gibt es bei"
+    QUELL_ID=$(grep -oP 'name="w\[\K[0-9]+(?=\]\[de\]" value="Assistenzhund")' /tmp/smoke_last_response.html | head -1 || true)
+    ZIEL_ID=$(grep -oP 'name="w\[\K[0-9]+(?=\]\[de\]" value="CI-Wert")' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Assistenzhund in CI-Wert zusammenführen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=werte --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode aktion_wert=zusammen:$QUELL_ID --data-urlencode ziel[$QUELL_ID]=$ZIEL_ID"
+    check_status "Verwaltung nach dem Zusammenführen" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Meldung: zusammengeführt" "ist in „CI-Wert“ aufgegangen (1 Rasse)."
+    check_body_not_contains "Quellwert ist weg" 'value="Assistenzhund"'
+    check_status "Rassenseite nach dem Zusammenführen" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Rasse hat jetzt CI-Wert" "CI-Wert"
+    check_status "Filter auf den neuen Wert" "$BASE_URL/rassen.php?m%5Beignung%5D%5B%5D=ci_wert" "200"
+    check_body_contains "Neuer Wert filtert" "CI-Testrasse"
+    check_status "Versionen nach dem Zusammenführen" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Zusammenführen als Version" "Umstrukturiert"
+    check_status "Wert zum Löschen anlegen" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=wert_anlegen --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode name_de=CI-Loeschwert"
+    check_status "Verwaltung mit Löschwert" "$BASE_URL/admin_merkmale.php" "200"
+    LOESCH_ID=$(grep -oP 'name="w\[\K[0-9]+(?=\]\[de\]" value="CI-Loeschwert")' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Ungenutzten Wert löschen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=werte --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode aktion_wert=loeschen:$LOESCH_ID"
+    check_status "Verwaltung nach dem Löschen" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Meldung: gelöscht" "Wert „CI-Loeschwert“ gelöscht."
+    check_status "Genutzten Wert nicht löschen" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=werte --data-urlencode merkmal_id=$EIGNUNG_ID \
+         --data-urlencode aktion_wert=loeschen:$ZIEL_ID"
+    check_status "Verwaltung nach Löschversuch" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Meldung: genutzt" "ist bei 1 Rasse eingetragen"
+    check_status "Neues Merkmal anlegen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=merkmal_anlegen --data-urlencode name_de=CI-Ohrform \
+         --data-urlencode name_en=CI-Ear-shape --data-urlencode typ=mehrfach --data-urlencode gruppe=weitere --data-urlencode filterbar=1"
+    check_status "Verwaltung mit neuem Merkmal" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Neues Merkmal sichtbar" 'id="merkmal-ci_ohrform"'
+    NEU_ID=$(grep -zoP 'id="merkmal-ci_ohrform"[\s\S]*?name="merkmal_id" value="\K[0-9]+' /tmp/smoke_last_response.html | tr -d '\0' | head -1 || true)
+    check_status "Neues Merkmal löschen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$MM_CSRF --data-urlencode aktion=merkmal_loeschen --data-urlencode merkmal_id=$NEU_ID"
+    check_status "Verwaltung nach dem Löschen des Merkmals" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_not_contains "Neues Merkmal ist weg" 'id="merkmal-ci_ohrform"'
+
     check_status "Versionen eines Tests (Mandant 1) laden" "$BASE_URL/content_versionen.php?typ=test&id=1" "200"
     check_body_contains "Leerer Zustand ohne Versionen" "Noch keine Änderungen gespeichert."
     check_status "Versionen ohne gültigen Typ: 404" "$BASE_URL/content_versionen.php?typ=foo&id=1" "404"
@@ -882,6 +954,9 @@ else
     check_body_contains "Kontoseite englisch" "Change password"
     check_status "Rassenkatalog auf Englisch" "$BASE_URL/rassen.php" "200"
     check_body_contains "Katalog: Suche englisch" "Search breeds"
+    check_body_contains "Katalog: Filtername englisch" "Suitable as / for"
+    check_body_contains "Katalog: Wert englisch" "CI-Value"
+    check_body_contains "Katalog: Land englisch" "Germany"
     check_status "Rassenseite auf Englisch" "$BASE_URL/breed_detail.php?id=1" "200"
     check_body_contains "FCI-Gruppe englisch" "Sheepdogs and Cattledogs"
     check_body_contains "Maße-Überschrift englisch" "Size and weight"
