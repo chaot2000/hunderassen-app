@@ -139,6 +139,7 @@ require __DIR__ . '/views/partials/header.php';
                             <td class="px-4 py-3"><?= $aufgabenCount ?></td>
                             <td class="px-4 py-3"><?= $durchfuehrungCount ?></td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <a href="/test_ansicht.php?id=<?= $testId ?>" class="text-tanne hover:text-tanneDk font-semibold mr-3">Ansehen</a>
                                 <?php if ($allgemein): ?>
                                     <form method="post" action="/admin_manage_tests.php" class="inline mr-3">
                                         <?= csrf_field() ?>
