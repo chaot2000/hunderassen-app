@@ -531,6 +531,7 @@ else
         check_status "B: Züchter aus Mandant 1 -> 404" "$BASE_URL/zuechter_detail.php?id=1" "404"
         check_status "B: Züchter aus Mandant 1 bearbeiten -> 404" "$BASE_URL/zuechter_form.php?id=1" "404"
         check_status "B: Test aus Mandant 1 bearbeiten -> 404" "$BASE_URL/test_form.php?id=1" "404"
+        check_status "B: Test aus Mandant 1 ansehen -> 404" "$BASE_URL/test_ansicht.php?id=1" "404"
         check_status "B: Testdurchführung aus Mandant 1 -> 404" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "404"
         check_status "B: Testdurchführung aus Mandant 1 bearbeiten -> 404" "$BASE_URL/testdurchfuehrung_form.php?id=1" "404"
         check_status "B: Testdurchführung für Hund aus Mandant 1 anlegen -> 404" "$BASE_URL/testdurchfuehrung_form.php?dog_id=1" "404"
@@ -552,9 +553,13 @@ else
         check_body_contains "B: Testauswahl enthält den allgemeinen Test" "CI-Allgemeiner Test"
         check_body_contains "B: Aufgabe des allgemeinen Tests wird vorgerendert" "CI-Allgemein-Aufgabe"
         check_status "B: allgemeinen Test bearbeiten -> 403" "$BASE_URL/test_form.php?id=3" "403"
+        check_status "B: allgemeinen Test ansehen" "$BASE_URL/test_ansicht.php?id=3" "200"
+        check_body_contains "B: Leseansicht zeigt Aufgabe" "CI-Allgemein-Aufgabe"
+        check_body_not_contains "B: kein Bearbeiten in der Leseansicht" "test_form.php?id=3"
         check_status "B: Durchführung von Mandant 1 mit allgemeinem Test -> 404" "$BASE_URL/testdurchfuehrung_detail.php?id=2" "404"
         check_status "B: Testverwaltung zeigt allgemeinen Test" "$BASE_URL/admin_manage_tests.php" "200"
         check_body_contains "B: allgemeiner Test steht in der Liste" "CI-Allgemeiner Test"
+        check_body_contains "B: Link zur Leseansicht in der Liste" "test_ansicht.php?id=3"
         check_body_not_contains "B: kein Löschen für allgemeinen Test" 'name="delete_test_id" value="3"'
         check_body_not_contains "B: kein Freigeben für normale Admins" 'name="freigeben_test_id"'
         check_body_not_contains "B: kein Zurückholen für normale Admins" 'name="zurueckholen_test_id"'
@@ -753,6 +758,10 @@ else
             check_body_contains "A: Import-Version vorhanden" "Import"
             check_status "A: Durchführung mit Abschnitten" "$BASE_URL/testdurchfuehrung_form.php?dog_id=1" "200"
             check_body_contains "A: Abschnitt als Überschrift" ">CI-Abschnitt Sozialisierung</h3>"
+            check_status "A: Leseansicht des importierten Tests" "$BASE_URL/test_ansicht.php?id=$TI_ADULT" "200"
+            check_body_contains "A: Leseansicht zeigt Abschnitt" ">CI-Abschnitt Wesen</h2>"
+            check_body_contains "A: Leseansicht mit Sprungmarken" 'href="#abschnitt-2"'
+            check_body_contains "A: Leseansicht mit Link zum Bearbeiten" "test_form.php?id=$TI_ADULT"
 
             check_status "A: Testimport erneut" "$BASE_URL/admin_tests_import.php" "200"
             TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
