@@ -631,6 +631,19 @@ else
                 "-X POST --data-urlencode csrf_token=$B_GT_DEL_CSRF --data-urlencode delete_durchfuehrung_id=$B_GT_TDF_ID"
         fi
 
+        echo ""
+        echo "--- Datenprüfung (#26) aus Sicht von Mandant B ---"
+        check_status "B: Datenprüfung lädt (eigene Organisation)" "$BASE_URL/admin_datenpruefung.php" "200"
+        check_body_contains "B: Reiter Organisation" "Hunde ohne Bild"
+        check_body_not_contains "B: kein Rassenkatalog" "Rassen ohne Bild"
+        check_status "B: Rassenkatalog prüfen -> 403" "$BASE_URL/admin_datenpruefung.php?bereich=katalog" "403"
+        check_status "B: Hunde ohne Bild" "$BASE_URL/admin_datenpruefung.php?bereich=organisation&pruefung=hund_ohne_bild" "200"
+        check_body_contains "B: eigener Hund in der Liste" "CI-B-Hund"
+        check_body_not_contains "B: kein Hund aus Mandant 1" "CI-Testhund"
+        check_status "B: CSV der eigenen Hunde" "$BASE_URL/admin_datenpruefung.php?bereich=organisation&pruefung=hund_ohne_bild&csv=1" "200"
+        check_body_contains "B: CSV enthält eigenen Hund" "CI-B-Hund"
+        check_body_not_contains "B: CSV ohne Hund aus Mandant 1" "CI-Testhund"
+
         check_status "B: Mandantenverwaltung ist nur für Super-Admins (403)" "$BASE_URL/admin_manage_tenants.php" "403"
         check_status "B: TheDogAPI-Abgleich ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_review.php" "403"
         check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
@@ -712,6 +725,26 @@ else
         check_status "A: Halter 1 existiert noch" "$BASE_URL/halter_detail.php?id=1" "200"
         check_status "A: Testdurchführung 1 existiert noch" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "200"
         check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
+        check_status "A: Datenprüfung lädt (Rassenkatalog)" "$BASE_URL/admin_datenpruefung.php" "200"
+        check_body_contains "A: Kachel Rassen ohne Bild" "Rassen ohne Bild"
+        check_body_contains "A: Vollständigkeit je Merkmal" "Vollständigkeit je Merkmal"
+        check_status "A: Rassen ohne Bild" "$BASE_URL/admin_datenpruefung.php?bereich=katalog&pruefung=ohne_bild" "200"
+        check_body_contains "A: Seed-Rasse ohne Bild gefunden" "CI-Testrasse"
+        check_body_contains "A: Link zum Bearbeiten" "/admin_add_breed.php?id=1"
+        check_status "A: Fehlendes Merkmal Gewicht" "$BASE_URL/admin_datenpruefung.php?bereich=katalog&pruefung=merkmal&merkmal=gewicht" "200"
+        check_body_contains "A: Rasse ohne Gewicht gefunden" "CI-Testrasse"
+        check_status "A: CSV Rassen ohne Bild" "$BASE_URL/admin_datenpruefung.php?bereich=katalog&pruefung=ohne_bild&csv=1" "200"
+        check_body_contains "A: CSV hat Kopfzeile" "Id;Name;Problem;Link"
+        check_body_contains "A: CSV enthält Seed-Rasse" "CI-Testrasse"
+        for p in pflichtmerkmale texte ohne_name_en ohne_fci_nr namen doppel unplausibel; do
+            check_status "A: Katalogprüfung $p lädt" "$BASE_URL/admin_datenpruefung.php?bereich=katalog&pruefung=$p" "200"
+        done
+        check_status "A: Organisation, Hunde ohne Bild" "$BASE_URL/admin_datenpruefung.php?bereich=organisation&pruefung=hund_ohne_bild" "200"
+        check_body_contains "A: eigener Hund in der Liste" "CI-Testhund"
+        check_body_not_contains "A: kein Hund aus Mandant B" "CI-B-Hund"
+        for p in hund_ohne_rasse hund_ohne_geburt hund_ohne_halter halter_ohne_kontakt zuechter_ohne_kontakt; do
+            check_status "A: Organisationsprüfung $p lädt" "$BASE_URL/admin_datenpruefung.php?bereich=organisation&pruefung=$p" "200"
+        done
         check_status "A: allgemeiner Test lädt für den Super-Admin" "$BASE_URL/test_form.php?id=3" "200"
 
         # Eigener Wegwerf-Test für Freigeben/Zurückholen, damit die
