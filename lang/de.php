@@ -550,4 +550,10 @@ return [
     'dp.bearbeiten'                   => 'Bearbeiten',
     'dp.vollstaendigkeit'             => 'Vollständigkeit je Merkmal',
     'dp.pflicht'                      => 'Pflicht',
+
+    // Testimport und Abschnitte
+    'nav.tests_import'                => 'Tests importieren',
+    'tests.abschnitt_optional'        => 'Abschnitt (optional)',
+    'tests.abschnitt_platzhalter'     => 'z. B. Wesen und Bindung',
+    'tests.m_abschnitt_lang'          => 'Ein Abschnitt darf maximal 150 Zeichen lang sein.',
 ];

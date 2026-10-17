@@ -549,4 +549,10 @@ return [
     'dp.bearbeiten'                   => 'Edit',
     'dp.vollstaendigkeit'             => 'Completeness per trait',
     'dp.pflicht'                      => 'required',
+
+    // Testimport und Abschnitte
+    'nav.tests_import'                => 'Import tests',
+    'tests.abschnitt_optional'        => 'Section (optional)',
+    'tests.abschnitt_platzhalter'     => 'e.g. Character and bond',
+    'tests.m_abschnitt_lang'          => 'A section may be at most 150 characters long.',
 ];

@@ -95,7 +95,7 @@ class TestDurchfuehrung
         }
 
         $ergebnisStmt = $pdo->prepare(
-            'SELECT ta.id AS aufgabe_id, ta.titel AS aufgabe_titel,
+            'SELECT ta.id AS aufgabe_id, ta.abschnitt AS aufgabe_abschnitt, ta.titel AS aufgabe_titel,
                     te.id AS ergebnis_id, te.bezeichnung AS ergebnis_bezeichnung, te.kategorie,
                     tde.notizen
              FROM test_durchfuehrung_ergebnisse tde

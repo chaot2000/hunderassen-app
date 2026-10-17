@@ -725,6 +725,53 @@ else
         check_status "A: Halter 1 existiert noch" "$BASE_URL/halter_detail.php?id=1" "200"
         check_status "A: Testdurchführung 1 existiert noch" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "200"
         check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
+        echo ""
+        echo "--- Testimport und Abschnitte ---"
+        check_status "A: Testimport lädt" "$BASE_URL/admin_tests_import.php" "200"
+        TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "A: Testdatei hochladen" "$BASE_URL/admin_tests_import.php" "302" \
+            "-X POST -F csrf_token=$TI_CSRF -F aktion=hochladen -F datei=@tests/fixtures/tests_import_beispiel.json"
+        check_status "A: Vorschau des Imports" "$BASE_URL/admin_tests_import.php" "200"
+        check_body_contains "A: Vorschau zeigt Test" "CI-Importtest Adult"
+        check_body_contains "A: Vorschau Status neu" "wird angelegt"
+        check_body_contains "A: Hinweise des Umwandlers" "erfundene Warnung"
+        TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "A: Import übernehmen" "$BASE_URL/admin_tests_import.php" "302" \
+            "-X POST --data-urlencode csrf_token=$TI_CSRF --data-urlencode aktion=anwenden"
+        check_status "A: Meldung nach dem Import" "$BASE_URL/admin_tests_import.php" "200"
+        check_body_contains "A: zwei Tests angelegt" "2 Tests angelegt, 0 übersprungen."
+        check_status "A: Testliste nach dem Import" "$BASE_URL/admin_manage_tests.php" "200"
+        TI_ADULT=$(grep -A3 -F "„CI-Importtest Adult“" /tmp/smoke_last_response.html | grep -oP 'name="delete_test_id" value="\K[0-9]+' | head -1 || true)
+        TI_WELPE=$(grep -A3 -F "„CI-Importtest Welpe“" /tmp/smoke_last_response.html | grep -oP 'name="delete_test_id" value="\K[0-9]+' | head -1 || true)
+        if [ -z "$TI_ADULT" ] || [ -z "$TI_WELPE" ]; then
+            echo "FAIL A: importierte Tests nicht in der Liste, bitte manuell aufräumen."
+            FAILED=1
+        else
+            check_status "A: importierter Test im Formular" "$BASE_URL/test_form.php?id=$TI_ADULT" "200"
+            check_body_contains "A: Abschnitt im Formular" "CI-Abschnitt Wesen"
+            check_status "A: Versionen des importierten Tests" "$BASE_URL/content_versionen.php?typ=test&id=$TI_ADULT" "200"
+            check_body_contains "A: Import-Version vorhanden" "Import"
+            check_status "A: Durchführung mit Abschnitten" "$BASE_URL/testdurchfuehrung_form.php?dog_id=1" "200"
+            check_body_contains "A: Abschnitt als Überschrift" ">CI-Abschnitt Sozialisierung</h3>"
+
+            check_status "A: Testimport erneut" "$BASE_URL/admin_tests_import.php" "200"
+            TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "A: dieselbe Datei erneut hochladen" "$BASE_URL/admin_tests_import.php" "302" \
+                "-X POST -F csrf_token=$TI_CSRF -F aktion=hochladen -F datei=@tests/fixtures/tests_import_beispiel.json"
+            check_status "A: Vorschau beim zweiten Mal" "$BASE_URL/admin_tests_import.php" "200"
+            check_body_contains "A: vorhandene Tests werden übersprungen" "übersprungen"
+            check_body_not_contains "A: kein Knopf zum Anlegen" 'value="anwenden"'
+            TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "A: Import verwerfen" "$BASE_URL/admin_tests_import.php" "302" \
+                "-X POST --data-urlencode csrf_token=$TI_CSRF --data-urlencode aktion=verwerfen"
+
+            check_status "A: Testliste zum Aufräumen" "$BASE_URL/admin_manage_tests.php" "200"
+            TI_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "A: importierten Adult-Test löschen" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$TI_CSRF --data-urlencode delete_test_id=$TI_ADULT"
+            check_status "A: importierten Welpen-Test löschen" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$TI_CSRF --data-urlencode delete_test_id=$TI_WELPE"
+        fi
         check_status "A: Datenprüfung lädt (Rassenkatalog)" "$BASE_URL/admin_datenpruefung.php" "200"
         check_body_contains "A: Kachel Rassen ohne Bild" "Rassen ohne Bild"
         check_body_contains "A: Vollständigkeit je Merkmal" "Vollständigkeit je Merkmal"

@@ -110,7 +110,14 @@ require __DIR__ . '/views/partials/header.php';
             <p class="text-sm text-fellDk/50"><?= e(t('td.keine_ergebnisse')) ?></p>
         <?php else: ?>
             <div class="space-y-3">
-                <?php foreach ($durchfuehrung['ergebnisse'] as $ergebnis): ?>
+                <?php $letzterAbschnitt = null; ?>
+                <?php foreach ($durchfuehrung['ergebnisse'] as $ergebnis):
+                    $abschnitt = (string) ($ergebnis['aufgabe_abschnitt'] ?? '');
+                ?>
+                    <?php if ($abschnitt !== '' && $abschnitt !== $letzterAbschnitt): ?>
+                        <h3 class="text-base font-bold text-fellDk pt-2 border-b border-sand pb-1"><?= e($abschnitt) ?></h3>
+                    <?php endif; ?>
+                    <?php $letzterAbschnitt = $abschnitt; ?>
                     <div class="border border-sand rounded-lg p-4">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <p class="font-semibold text-sm"><?= e($ergebnis['aufgabe_titel']) ?></p>

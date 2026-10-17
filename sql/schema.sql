@@ -290,6 +290,7 @@ DROP TABLE IF EXISTS `test_aufgaben`;
 CREATE TABLE `test_aufgaben` (
     `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `test_id`      INT UNSIGNED NOT NULL,
+    `abschnitt`    VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Zwischenüberschrift, z. B. "Sozialisierung"
     `titel`        VARCHAR(200) NOT NULL,
     `beschreibung` TEXT NULL,
     PRIMARY KEY (`id`),
