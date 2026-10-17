@@ -546,6 +546,91 @@ else
              --data-urlencode ergebnisse[1][ergebnis_id]=1 --data-urlencode ergebnisse[2][ergebnis_id]=4"
         check_body_contains "B: Fehlermeldung 'Test nicht gefunden'" "nicht gefunden"
 
+        echo ""
+        echo "--- Allgemeine Tests (#25) aus Sicht von Mandant B ---"
+        check_status "B: Testauswahl beim eigenen Hund (allgemein)" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200"
+        check_body_contains "B: Testauswahl enthält den allgemeinen Test" "CI-Allgemeiner Test"
+        check_body_contains "B: Aufgabe des allgemeinen Tests wird vorgerendert" "CI-Allgemein-Aufgabe"
+        check_status "B: allgemeinen Test bearbeiten -> 403" "$BASE_URL/test_form.php?id=3" "403"
+        check_status "B: Durchführung von Mandant 1 mit allgemeinem Test -> 404" "$BASE_URL/testdurchfuehrung_detail.php?id=2" "404"
+        check_status "B: Testverwaltung zeigt allgemeinen Test" "$BASE_URL/admin_manage_tests.php" "200"
+        check_body_contains "B: allgemeiner Test steht in der Liste" "CI-Allgemeiner Test"
+        check_body_not_contains "B: kein Löschen für allgemeinen Test" 'name="delete_test_id" value="3"'
+        check_body_not_contains "B: kein Freigeben für normale Admins" 'name="freigeben_test_id"'
+        check_body_not_contains "B: kein Zurückholen für normale Admins" 'name="zurueckholen_test_id"'
+        # Zähler von B: die Durchführung von Mandant 1 zählt nicht mit.
+        if grep -m1 -A12 -F 'CI-Allgemeiner Test' /tmp/smoke_last_response.html | grep -qF '<td class="px-4 py-3">0</td>'; then
+            echo "OK   B: Durchführungen von Mandant 1 werden nicht mitgezählt"
+        else
+            echo "FAIL B: Zähler beim allgemeinen Test enthält fremde Durchführungen"
+            FAILED=1
+        fi
+        B_GT_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: allgemeinen Test löschen wird abgelehnt" "$BASE_URL/admin_manage_tests.php" "200" \
+            "-X POST --data-urlencode csrf_token=$B_GT_CSRF --data-urlencode delete_test_id=3"
+        check_body_contains "B: Hinweis nur Super-Admin" "nur der Super-Admin"
+        check_status "B: eigenen Test freigeben wird abgelehnt" "$BASE_URL/admin_manage_tests.php" "200" \
+            "-X POST --data-urlencode csrf_token=$B_GT_CSRF --data-urlencode freigeben_test_id=2"
+        check_body_contains "B: Freigeben nur Super-Admin" "nur der Super-Admin"
+        check_status "B: allgemeinen Test bearbeiten per POST -> 403" "$BASE_URL/test_form.php?id=3" "403" \
+            "-X POST --data-urlencode csrf_token=$B_GT_CSRF --data-urlencode name=Gekapert --data-urlencode zielgruppe=beide"
+
+        check_status "B: allgemeinen Test ausblenden" "$BASE_URL/admin_manage_tests.php" "302" \
+            "-X POST --data-urlencode csrf_token=$B_GT_CSRF --data-urlencode ausblenden_test_id=3"
+        check_status "B: Testauswahl nach dem Ausblenden" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200"
+        check_body_not_contains "B: ausgeblendeter Test fehlt in der Auswahl" "CI-Allgemeiner Test"
+        B_TDF2_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: Durchführung mit ausgeblendetem Test wird abgelehnt" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200" \
+            "-X POST --data-urlencode csrf_token=$B_TDF2_CSRF --data-urlencode test_id=3 \
+             --data-urlencode durchfuehrungsdatum=2026-07-01 --data-urlencode status=offen \
+             --data-urlencode ergebnisse[4][ergebnis_id]=7"
+        check_body_contains "B: Meldung zum ausgeblendeten Test" "ausgeblendet"
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Testauswahl zeigt den allgemeinen Test trotz Ausblenden bei B" "$BASE_URL/testdurchfuehrung_form.php?dog_id=1" "200"
+        check_body_contains "A: allgemeiner Test in der Auswahl von A" "CI-Allgemeiner Test"
+        check_status "A: Testverwaltung (Super-Admin)" "$BASE_URL/admin_manage_tests.php" "200"
+        check_body_contains "A: Zahl der Ausblendungen sichtbar" "In 1 Organisation(en) ausgeblendet"
+        COOKIE_JAR="$B_COOKIE_JAR"
+
+        check_status "B: Testverwaltung für Einblenden" "$BASE_URL/admin_manage_tests.php" "200"
+        B_GT_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: allgemeinen Test wieder einblenden" "$BASE_URL/admin_manage_tests.php" "302" \
+            "-X POST --data-urlencode csrf_token=$B_GT_CSRF --data-urlencode einblenden_test_id=3"
+        check_status "B: Testauswahl nach dem Einblenden" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "200"
+        check_body_contains "B: allgemeiner Test wieder in der Auswahl" "CI-Allgemeiner Test"
+        B_TDF2_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "B: Durchführung mit allgemeinem Test anlegen" "$BASE_URL/testdurchfuehrung_form.php?dog_id=2" "302" \
+            "-X POST --data-urlencode csrf_token=$B_TDF2_CSRF --data-urlencode test_id=3 \
+             --data-urlencode durchfuehrungsdatum=2026-07-01 --data-urlencode status=bestanden \
+             --data-urlencode ergebnisse[4][ergebnis_id]=8"
+        check_status "B: eigener Hund mit neuer Durchführung" "$BASE_URL/dog_detail.php?id=2" "200"
+        B_GT_TDF_ID=$(grep -oP 'testdurchfuehrung_detail\.php\?id=\K[0-9]+' /tmp/smoke_last_response.html | sort -n | tail -1 || true)
+
+        COOKIE_JAR="$A_COOKIE_JAR"
+        check_status "A: Testverwaltung zählt nur eigene Durchführungen" "$BASE_URL/admin_manage_tests.php" "200"
+        if grep -m1 -A12 -F 'CI-Allgemeiner Test' /tmp/smoke_last_response.html | grep -qF '<td class="px-4 py-3">2</td>'; then
+            echo "FAIL A: Zähler beim allgemeinen Test enthält die Durchführung von B"
+            FAILED=1
+        else
+            echo "OK   A: Durchführung von B wird nicht mitgezählt"
+        fi
+        A_GT_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        check_status "A: allgemeinen Test mit fremder Durchführung zurückholen wird abgelehnt" "$BASE_URL/admin_manage_tests.php" "200" \
+            "-X POST --data-urlencode csrf_token=$A_GT_CSRF --data-urlencode zurueckholen_test_id=3"
+        check_body_contains "A: Hinweis auf Nutzung durch andere" "von anderen Organisationen genutzt"
+        COOKIE_JAR="$B_COOKIE_JAR"
+
+        if [ -z "$B_GT_TDF_ID" ] || [ "$B_GT_TDF_ID" -le 2 ]; then
+            echo "FAIL B: Durchführung mit allgemeinem Test nicht gefunden, bitte manuell aufräumen."
+            FAILED=1
+        else
+            check_status "B: eigene Durchführung mit allgemeinem Test lädt" "$BASE_URL/testdurchfuehrung_detail.php?id=$B_GT_TDF_ID" "200"
+            B_GT_DEL_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "B: Durchführung mit allgemeinem Test wieder löschen" "$BASE_URL/testdurchfuehrung_detail.php?id=$B_GT_TDF_ID" "302" \
+                "-X POST --data-urlencode csrf_token=$B_GT_DEL_CSRF --data-urlencode delete_durchfuehrung_id=$B_GT_TDF_ID"
+        fi
+
         check_status "B: Mandantenverwaltung ist nur für Super-Admins (403)" "$BASE_URL/admin_manage_tenants.php" "403"
         check_status "B: TheDogAPI-Abgleich ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_review.php" "403"
         check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
@@ -627,6 +712,62 @@ else
         check_status "A: Halter 1 existiert noch" "$BASE_URL/halter_detail.php?id=1" "200"
         check_status "A: Testdurchführung 1 existiert noch" "$BASE_URL/testdurchfuehrung_detail.php?id=1" "200"
         check_status "A: Test 1 existiert noch" "$BASE_URL/test_form.php?id=1" "200"
+        check_status "A: allgemeiner Test lädt für den Super-Admin" "$BASE_URL/test_form.php?id=3" "200"
+
+        # Eigener Wegwerf-Test für Freigeben/Zurückholen, damit die
+        # Fixture-Tests keine zusätzlichen Versionen bekommen.
+        check_status "A: Testformular für Freigabe-Test" "$BASE_URL/test_form.php" "200"
+        check_body_contains "A: Super-Admin sieht die Wahl des Geltungsbereichs" 'name="geltung"'
+        A_FG_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+        FG_NAME="CI-Freigabe-$(date +%s)"
+        GL_NAME="CI-Global-$(date +%s)"
+        check_status "A: Freigabe-Test anlegen" "$BASE_URL/test_form.php" "302" \
+            "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode name=$FG_NAME \
+             --data-urlencode zielgruppe=beide --data-urlencode geltung=organisation \
+             --data-urlencode aufgaben[0][titel]=FG-Aufgabe \
+             --data-urlencode aufgaben[0][ergebnisse][0][bezeichnung]=FG-Ergebnis \
+             --data-urlencode aufgaben[0][ergebnisse][0][kategorie]=bestanden"
+        check_status "A: allgemeinen Test direkt anlegen" "$BASE_URL/test_form.php" "302" \
+            "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode name=$GL_NAME \
+             --data-urlencode zielgruppe=beide --data-urlencode geltung=allgemein \
+             --data-urlencode aufgaben[0][titel]=GL-Aufgabe \
+             --data-urlencode aufgaben[0][ergebnisse][0][bezeichnung]=GL-Ergebnis \
+             --data-urlencode aufgaben[0][ergebnisse][0][kategorie]=bestanden"
+        check_status "A: Testverwaltung nach dem Anlegen" "$BASE_URL/admin_manage_tests.php" "200"
+        # Die ID steht im Hidden-Feld direkt unter der Rückfrage, die den Testnamen enthält.
+        FG_ID=$(grep -A3 -F "$FG_NAME" /tmp/smoke_last_response.html | grep -oP 'name="freigeben_test_id" value="\K[0-9]+' | head -1 || true)
+        GL_ID=$(grep -A3 -F "$GL_NAME" /tmp/smoke_last_response.html | grep -oP 'name="zurueckholen_test_id" value="\K[0-9]+' | head -1 || true)
+        A_FG_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+
+        if [ -z "$GL_ID" ]; then
+            echo "FAIL A: direkt angelegter allgemeiner Test nicht als allgemein gelistet, bitte manuell aufräumen."
+            FAILED=1
+        else
+            echo "OK   A: direkt angelegter Test ist allgemein"
+            check_status "A: allgemeinen Test ohne Durchführungen löschen" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode delete_test_id=$GL_ID"
+        fi
+
+        if [ -z "$FG_ID" ]; then
+            echo "FAIL A: Freigabe-Test nicht gefunden, bitte manuell aufräumen."
+            FAILED=1
+        else
+            check_status "A: Freigabe-Test für alle Organisationen freigeben" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode freigeben_test_id=$FG_ID"
+            check_status "A: Meldung nach dem Freigeben" "$BASE_URL/admin_manage_tests.php" "200"
+            check_body_contains "A: Freigabe-Test ist allgemein" "steht jetzt allen Organisationen zur Verfügung"
+            A_FG_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "A: Freigabe-Test zurückholen" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode zurueckholen_test_id=$FG_ID"
+            check_status "A: Meldung nach dem Zurückholen" "$BASE_URL/admin_manage_tests.php" "200"
+            check_body_contains "A: Freigabe-Test gehört wieder Mandant 1" "gehört jetzt wieder nur deiner Organisation"
+            check_status "A: Versionen des Freigabe-Tests zeigen den Geltungsbereich" "$BASE_URL/content_versionen.php?typ=test&id=$FG_ID" "200"
+            check_body_contains "A: Version Geltungsbereich vorhanden" "Geltungsbereich"
+            check_status "A: Testverwaltung für das Aufräumen" "$BASE_URL/admin_manage_tests.php" "200"
+            A_FG_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+            check_status "A: Freigabe-Test wieder löschen" "$BASE_URL/admin_manage_tests.php" "302" \
+                "-X POST --data-urlencode csrf_token=$A_FG_CSRF --data-urlencode delete_test_id=$FG_ID"
+        fi
         check_status "A: Mandantenverwaltung für Super-Admin" "$BASE_URL/admin_manage_tenants.php" "200"
         check_body_contains "A: Mandant B wird gelistet" "CI-Mandant B"
         RES_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)

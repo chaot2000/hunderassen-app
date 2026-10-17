@@ -60,12 +60,15 @@ class ContentRevision
             // Nachlesen, nicht per Knopf wiederherstellbar (die Struktur
             // hängt an IDs, auf die Testdurchführungen verweisen).
             'aufgaben'     => 'Aufgaben (Struktur)',
+            // Organisation oder Allgemein, gesetzt von Test::freigeben()
+            // und Test::zurueckholen(). Nur über diese Knöpfe änderbar.
+            'geltungsbereich' => 'Geltungsbereich',
         ],
     ];
 
     /** Felder, die nicht per Knopf wiederhergestellt werden können. */
     private const NUR_LESBAR = [
-        'tests' => ['aufgaben'],
+        'tests' => ['aufgaben', 'geltungsbereich'],
     ];
 
     public const ANLAESSE = [
@@ -401,8 +404,9 @@ class ContentRevision
             return 'Ungültiger Wert für die Gliederung.';
         }
         if ($tabelle === 'tests' && $feld === 'name') {
-            $chk = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id AND id != :id LIMIT 1');
-            $chk->execute([':name' => $wert, ':tenant_id' => $tenantId, ':id' => $datensatzId]);
+            // Eindeutig je Organisation bzw. unter den allgemeinen Tests (scope_id 0)
+            $chk = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND scope_id = :scope AND id != :id LIMIT 1');
+            $chk->execute([':name' => $wert, ':scope' => $tenantId ?? 0, ':id' => $datensatzId]);
             if ($chk->fetch()) {
                 return 'Ein anderer Test heißt inzwischen "' . $wert . '". Bitte erst umbenennen.';
             }

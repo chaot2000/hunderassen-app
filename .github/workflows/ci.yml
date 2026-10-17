@@ -168,7 +168,7 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen bis Merkmale: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+      - name: "Textversionen bis allgemeine Tests: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
         # Ausgangspunkt ist das Schema vor den Textversionen (Tag
         # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
         # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
@@ -209,10 +209,25 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_20_merkmal_filter.sql
           $R txt_live < sql/migrationen/migration_2026_10_20_merkmal_filter.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM merkmale WHERE filter_verknuepfung = 'oder'" | grep -qx 9
+          dump txt_live > /tmp/txt_filter.sql
+          $R txt_live -e "INSERT INTO tests (tenant_id, name) VALUES (1, 'Org-Test');"
+          $R txt_live < sql/migrationen/migration_2026_10_21_allgemeine_tests.sql
+          $R txt_live < sql/migrationen/migration_2026_10_21_allgemeine_tests.sql
+          $R txt_live -N -e "SELECT scope_id FROM tests WHERE name = 'Org-Test'" | grep -qx 1
+          $R txt_live -e "INSERT INTO tests (tenant_id, name) VALUES (NULL, 'Org-Test');"
+          $R txt_live -N -e "SELECT COUNT(*) FROM tests WHERE scope_id = 0" | grep -qx 1
+          if $R txt_live -e "INSERT INTO tests (tenant_id, name) VALUES (NULL, 'Org-Test');" 2>/dev/null; then echo "Doppelter allgemeiner Name wurde nicht verhindert"; exit 1; fi
+          if $R txt_live < sql/migrationen/rollback_allgemeine_tests.sql 2>/dev/null; then echo "Rollback trotz allgemeiner Tests"; exit 1; fi
+          $R txt_live -e "DELETE FROM tests WHERE tenant_id IS NULL;"
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_allgemeine_tests.sql
+          $R txt_live < sql/migrationen/rollback_allgemeine_tests.sql
+          $R txt_live -e "DELETE FROM tests WHERE name = 'Org-Test';"
+          dump txt_live > /tmp/txt_zurueck_allgemein.sql
+          diff /tmp/txt_filter.sql /tmp/txt_zurueck_allgemein.sql
           $R txt_live < sql/migrationen/rollback_merkmal_filter.sql
           $R txt_live < sql/migrationen/rollback_merkmal_filter.sql
           dump txt_live > /tmp/txt_zurueck_filter.sql

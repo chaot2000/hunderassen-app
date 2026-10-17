@@ -18,6 +18,10 @@
  * wird dann nur noch lesbar (disabled) angezeigt, editierbar bleiben
  * nur Name/Beschreibung. Test::update() setzt dieselbe Sperre
  * zusätzlich serverseitig durch.
+ *
+ * Allgemeine Tests (für alle Organisationen) legt nur der Super-Admin an
+ * und nur er darf sie bearbeiten. Andere bekommen 403, die Rechte prüft
+ * zusätzlich models/Test.php.
  */
 
 declare(strict_types=1);
@@ -39,6 +43,13 @@ if ($editingId !== null && $existing === null) {
     http_response_code(404);
     die(e(t('tests.angefordert')));
 }
+
+$istSuperAdmin = Test::darfAllgemeineVerwalten();
+if ($isEditMode && $existing['allgemein'] && !$istSuperAdmin) {
+    http_response_code(403);
+    die(e(t('tests.m_nur_super_admin')));
+}
+$istAllgemein = $isEditMode ? $existing['allgemein'] : ($istSuperAdmin && ($_POST['geltung'] ?? '') === 'allgemein');
 
 $errorMessage = null;
 
@@ -81,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isEditMode) {
         $result = Test::update($editingId, $tenantId, $testData, $aufgaben, (int) current_user()['id']);
     } else {
-        $result = Test::create($testData, $aufgaben, (int) current_user()['id'], $tenantId);
+        $result = Test::create($testData, $aufgaben, (int) current_user()['id'], $tenantId, $istAllgemein);
     }
 
     if ($result['success']) {
@@ -94,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Bei Validierungsfehler die eingegebenen Werte für erneute
     // Anzeige im Formular vorhalten (statt sie zu verlieren) — analog
     // admin_add_breed.php.
-    $existing = $existing ?? [];
+    $existing = $existing ?? ['allgemein' => $istAllgemein];
     $existing = array_merge($existing, $testData);
     $existing['aufgaben'] = array_map(fn($a) => [
         'titel'        => $a['titel'],
@@ -140,11 +151,14 @@ require __DIR__ . '/views/partials/header.php';
 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
     <h1 class="text-2xl font-extrabold text-fellDk">
         <?= $isEditMode ? '✏️ ' . e(t('tests.bearbeiten')) : '➕ ' . e(t('tests.neu')) ?>
+        <?php if ($isEditMode && $istAllgemein): ?>
+            <span class="ml-1 inline-block text-xs font-bold bg-pfote/15 text-fell rounded-full px-2 py-0.5 align-middle"><?= e(t('tests.allgemein')) ?></span>
+        <?php endif; ?>
     </h1>
     <?php if ($isEditMode): ?>
         <a href="/content_versionen.php?typ=test&amp;id=<?= (int) $editingId ?>"
            class="text-sm font-semibold text-tanne hover:text-tanneDk border border-tanne/40 hover:border-tanne rounded-lg px-3 py-1.5 transition-colors">
-            <?= e(t('rasse.versionen', ['anzahl' => ContentRevision::zaehle('tests', (int) $editingId, $tenantId)])) ?>
+            <?= e(t('rasse.versionen', ['anzahl' => ContentRevision::zaehle('tests', (int) $editingId, $istAllgemein ? null : $tenantId)])) ?>
         </a>
     <?php endif; ?>
 </div>
@@ -191,6 +205,23 @@ require __DIR__ . '/views/partials/header.php';
                 </select>
                 <p class="text-xs text-fellDk/50 mt-1"><?= e(t('tests.zielgruppe_hinweis')) ?></p>
             </div>
+
+            <?php if ($istSuperAdmin && !$isEditMode): ?>
+                <fieldset>
+                    <legend class="block text-sm font-semibold mb-1"><?= e(t('tests.geltung')) ?></legend>
+                    <label class="flex items-center gap-2 text-sm py-1">
+                        <input type="radio" name="geltung" value="organisation" <?= $istAllgemein ? '' : 'checked' ?>>
+                        <?= e(t('tests.geltung_organisation')) ?>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm py-1">
+                        <input type="radio" name="geltung" value="allgemein" <?= $istAllgemein ? 'checked' : '' ?>>
+                        <?= e(t('tests.geltung_allgemein')) ?>
+                    </label>
+                    <p class="text-xs text-fellDk/50 mt-1"><?= e(t('tests.geltung_hinweis')) ?></p>
+                </fieldset>
+            <?php elseif ($isEditMode && $istAllgemein): ?>
+                <p class="text-xs text-fellDk/60 bg-pfote/10 border border-pfote/30 rounded-lg px-3 py-2"><?= e(t('tests.allgemein_bearbeiten_hinweis')) ?></p>
+            <?php endif; ?>
         </div>
     </div>
 

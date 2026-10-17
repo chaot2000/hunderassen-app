@@ -2,19 +2,25 @@
 /**
  * models/Test.php
  *
- * Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test") —
- * je Mandant eigener Katalog (tests.tenant_id). Jede öffentliche
- * Methode, die einen Test liest oder ändert, verlangt den Mandanten. Ein Test
- * bündelt mehrere Aufgaben, jede Aufgabe mehrere mögliche Ergebnisse
+ * Test-Katalog (z.B. "Aggressionstest", "PTBS-Assistenzhund-Test"). Ein
+ * Test bündelt mehrere Aufgaben, jede Aufgabe mehrere mögliche Ergebnisse
  * (Kategorie: bestanden/neutral/nicht_bestanden).
  *
- * Phase 1: reines Katalog-CRUD, komplett unabhängig von Hunden. Die
- * eigentliche Durchführung (Testdurchführung pro Hund) kommt erst in
- * Phase 2 hinzu (models/TestDurchfuehrung.php) und wird dann auch
- * hasDurchfuehrungen()/getDurchfuehrungCounts() zu dieser Klasse
- * ergänzen, um Löschen/Bearbeiten der Struktur bei bereits
- * durchgeführten Tests einzuschränken. In Phase 1 ist die
- * Aufgaben-/Ergebnis-Struktur daher immer uneingeschränkt editierbar.
+ * Geltungsbereich (tests.tenant_id):
+ * - Zahl: Test einer Organisation, nur dort sichtbar.
+ * - NULL: allgemeiner Test, in allen Organisationen sichtbar. Anlegen,
+ *   Ändern, Löschen, Freigeben und Zurückholen nur durch den Super-Admin
+ *   (geprüft hier im Model, nicht nur auf der Seite). Jede Organisation
+ *   kann einen allgemeinen Test für sich ausblenden (test_ausblendungen).
+ *
+ * Jede öffentliche Methode verlangt die Organisation des Aufrufers. Lesen
+ * liefert eigene und allgemeine Tests. Durchführungen und Ergebnisse
+ * gehören immer zum Hund und damit zu genau einer Organisation: Zähler
+ * zählen nur Durchführungen von Hunden der eigenen Organisation, und
+ * Meldungen zu allgemeinen Tests nennen keine fremden Zahlen.
+ *
+ * Hat ein Test Durchführungen (egal in welcher Organisation), ist seine
+ * Aufgaben-/Ergebnisstruktur gesperrt und er lässt sich nicht löschen.
  */
 
 declare(strict_types=1);
@@ -27,47 +33,69 @@ class Test
     private const VALID_KATEGORIEN  = ['bestanden', 'neutral', 'nicht_bestanden'];
     private const VALID_ZIELGRUPPEN = ['welpe', 'erwachsen', 'beide'];
 
+    /** Werte des versionierten Feldes "geltungsbereich". */
+    private const GELTUNG_ORGANISATION = 'Organisation';
+    private const GELTUNG_ALLGEMEIN    = 'Allgemein';
+
     /**
+     * Eigene und allgemeine Tests, allgemeine zuerst. Jede Zeile hat
+     * zusätzlich `allgemein` und `ausgeblendet` (für diese Organisation).
+     *
      * @param string|null $zielgruppe Optionaler Filter: 'welpe'/'erwachsen' liefert
      *        zusätzlich immer auch Tests mit Zielgruppe 'beide' (passt auf beide
      *        Altersgruppen), null liefert alle Tests ungefiltert.
+     * @param bool $ohneAusgeblendete true für die Auswahl neuer Durchführungen
      * @return array<int, array<string, mixed>>
      */
-    public static function findAll(int $tenantId, ?string $zielgruppe = null): array
+    public static function findAll(int $tenantId, ?string $zielgruppe = null, bool $ohneAusgeblendete = false): array
     {
-        $pdo = Database::getConnection();
+        $sql = 'SELECT t.id, t.name, t.beschreibung, t.zielgruppe, t.created_at,
+                       (t.tenant_id IS NULL) AS allgemein,
+                       (a.test_id IS NOT NULL) AS ausgeblendet
+                FROM tests t
+                LEFT JOIN test_ausblendungen a ON a.test_id = t.id AND a.tenant_id = :tenant_a
+                WHERE (t.tenant_id = :tenant_id OR t.tenant_id IS NULL)';
+        $params = [':tenant_a' => $tenantId, ':tenant_id' => $tenantId];
 
         if ($zielgruppe !== null && in_array($zielgruppe, ['welpe', 'erwachsen'], true)) {
-            $stmt = $pdo->prepare(
-                "SELECT id, name, beschreibung, zielgruppe, created_at FROM tests
-                 WHERE (zielgruppe = :zielgruppe OR zielgruppe = 'beide') AND tenant_id = :tenant_id
-                 ORDER BY name"
-            );
-            $stmt->execute([':zielgruppe' => $zielgruppe, ':tenant_id' => $tenantId]);
-            return $stmt->fetchAll();
+            $sql .= " AND (t.zielgruppe = :zielgruppe OR t.zielgruppe = 'beide')";
+            $params[':zielgruppe'] = $zielgruppe;
         }
+        if ($ohneAusgeblendete) {
+            $sql .= ' AND a.test_id IS NULL';
+        }
+        $sql .= ' ORDER BY allgemein DESC, t.name';
 
-        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at FROM tests WHERE tenant_id = :tenant_id ORDER BY name');
-        $stmt->execute([':tenant_id' => $tenantId]);
-        return $stmt->fetchAll();
+        $stmt = Database::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return array_map([self::class, 'flagsAlsBool'], $stmt->fetchAll());
     }
 
     /**
-     * Lädt einen Test inkl. seiner Aufgaben, je mit ihren möglichen
-     * Ergebnissen — ein Level tiefer verschachtelt als
-     * Breed::findById() (dessen Kind-Arrays sind flach).
+     * Lädt einen für die Organisation sichtbaren Test (eigen oder
+     * allgemein, auch ausgeblendet) inkl. seiner Aufgaben, je mit ihren
+     * möglichen Ergebnissen.
      */
     public static function findById(int $testId, int $tenantId): ?array
     {
         $pdo = Database::getConnection();
 
-        $stmt = $pdo->prepare('SELECT id, name, beschreibung, zielgruppe, created_at, updated_at, created_by FROM tests WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
-        $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+        $stmt = $pdo->prepare(
+            'SELECT t.id, t.name, t.beschreibung, t.zielgruppe, t.created_at, t.updated_at, t.created_by,
+                    (t.tenant_id IS NULL) AS allgemein,
+                    (a.test_id IS NOT NULL) AS ausgeblendet
+             FROM tests t
+             LEFT JOIN test_ausblendungen a ON a.test_id = t.id AND a.tenant_id = :tenant_a
+             WHERE t.id = :id AND (t.tenant_id = :tenant_id OR t.tenant_id IS NULL)
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $testId, ':tenant_a' => $tenantId, ':tenant_id' => $tenantId]);
         $test = $stmt->fetch();
 
         if (!$test) {
             return null;
         }
+        $test = self::flagsAlsBool($test);
 
         $aufgabenStmt = $pdo->prepare(
             'SELECT id, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id'
@@ -99,13 +127,27 @@ class Test
     }
 
     /**
+     * Darf der angemeldete Benutzer allgemeine Tests anlegen, ändern,
+     * löschen, freigeben oder zurückholen? Nur der Super-Admin.
+     */
+    public static function darfAllgemeineVerwalten(): bool
+    {
+        return function_exists('is_super_admin') && is_super_admin();
+    }
+
+    /**
      * @param array<string, mixed> $testData Erwartet Schlüssel: name, beschreibung, zielgruppe
      * @param array $aufgaben Liste von ['titel', 'beschreibung', 'ergebnisse' => [['bezeichnung', 'kategorie'], ...]]
-     * @param int $tenantId Tenant-ID für Scoping
+     * @param int $tenantId Organisation des Aufrufers
+     * @param bool $allgemein true = allgemeiner Test für alle Organisationen (nur Super-Admin)
      * @return array{success: bool, message: string, test_id?: int}
      */
-    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId): array
+    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId, bool $allgemein = false): array
     {
+        if ($allgemein && !self::darfAllgemeineVerwalten()) {
+            return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
+        }
+
         $name = clean_input((string) ($testData['name'] ?? ''));
         if ($name === '') {
             return ['success' => false, 'message' => t('tests.m_name_leer')];
@@ -123,10 +165,9 @@ class Test
 
         $pdo = Database::getConnection();
 
-        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id LIMIT 1');
-        $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId]);
-        if ($checkStmt->fetch()) {
-            return ['success' => false, 'message' => t('tests.m_existiert', ['name' => $name])];
+        $konflikt = self::namensKonflikt($pdo, $name, $allgemein ? null : $tenantId, null);
+        if ($konflikt !== null) {
+            return ['success' => false, 'message' => $konflikt];
         }
 
         try {
@@ -137,7 +178,7 @@ class Test
                 'INSERT INTO tests (tenant_id, name, beschreibung, zielgruppe, created_by) VALUES (:tenant_id, :name, :beschreibung, :zielgruppe, :created_by)'
             );
             $stmt->execute([
-                ':tenant_id'   => $tenantId,
+                ':tenant_id'    => $allgemein ? null : $tenantId,
                 ':name'         => $name,
                 ':beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 ':zielgruppe'   => $zielgruppe,
@@ -170,14 +211,22 @@ class Test
      * nur Name/Beschreibung aktualisiert (test_form.php rendert die
      * Struktur in diesem Fall ohnehin nur noch lesbar an).
      *
+     * Allgemeine Tests darf nur der Super-Admin ändern.
+     *
      * @param array<string, mixed> $testData
      * @param array $aufgaben
      * @return array{success: bool, message: string}
      */
     public static function update(int $testId, int $tenantId, array $testData, array $aufgaben, ?int $geaendertVon = null): array
     {
-        if (!self::existsInTenant($testId, $tenantId)) {
+        $pdo = Database::getConnection();
+
+        $geltung = self::geltung($pdo, $testId, $tenantId);
+        if ($geltung === false) {
             return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+        }
+        if ($geltung === null && !self::darfAllgemeineVerwalten()) {
+            return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
         }
 
         $name = clean_input((string) ($testData['name'] ?? ''));
@@ -199,19 +248,18 @@ class Test
             }
         }
 
-        $pdo = Database::getConnection();
-
-        $checkStmt = $pdo->prepare('SELECT id FROM tests WHERE name = :name AND tenant_id = :tenant_id AND id != :id LIMIT 1');
-        $checkStmt->execute([':name' => $name, ':tenant_id' => $tenantId, ':id' => $testId]);
-        if ($checkStmt->fetch()) {
-            return ['success' => false, 'message' => t('tests.m_existiert', ['name' => $name])];
+        $konflikt = self::namensKonflikt($pdo, $name, $geltung, $testId);
+        if ($konflikt !== null) {
+            return ['success' => false, 'message' => $konflikt];
         }
+
+        $scope = $geltung ?? 0;
 
         try {
             $pdo->beginTransaction();
 
-            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE');
-            $altStmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND scope_id = :scope FOR UPDATE');
+            $altStmt->execute([':id' => $testId, ':scope' => $scope]);
             $alt = $altStmt->fetch() ?: [];
             $alt['aufgaben'] = self::aufgabenSnapshot($pdo, $testId);
 
@@ -227,14 +275,14 @@ class Test
 
             $stmt = $pdo->prepare(
                 'UPDATE tests SET name = :name, beschreibung = :beschreibung, zielgruppe = :zielgruppe, updated_at = NOW()
-                 WHERE id = :id AND tenant_id = :tenant_id'
+                 WHERE id = :id AND scope_id = :scope'
             );
             $stmt->execute([
                 ':name'         => $name,
                 ':beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 ':zielgruppe'   => $zielgruppe,
                 ':id'           => $testId,
-                ':tenant_id'    => $tenantId,
+                ':scope'        => $scope,
             ]);
 
             if (!$strukturSperren) {
@@ -244,7 +292,7 @@ class Test
                 self::insertAufgabenMitErgebnissen($pdo, $testId, $validatedAufgaben['aufgaben']);
             }
 
-            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, $neu, $geaendertVon, 'bearbeitung', $tenantId);
+            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, $neu, $geaendertVon, 'bearbeitung', $geltung);
 
             $pdo->commit();
 
@@ -261,38 +309,47 @@ class Test
      * sofern noch keine Testdurchführung darauf verweist (siehe
      * hasDurchfuehrungen()). Ein roher FK-Fehler (RESTRICT) würde sonst
      * bis zur Seite durchschlagen; hier wird stattdessen eine
-     * verständliche Meldung zurückgegeben.
+     * verständliche Meldung zurückgegeben. Bei allgemeinen Tests nennt
+     * die Meldung keine Anzahl, weil die Durchführungen anderen
+     * Organisationen gehören.
      *
      * @return array{success: bool, message: string}
      */
     public static function delete(int $testId, int $tenantId, ?int $geaendertVon = null): array
     {
-        if (!self::existsInTenant($testId, $tenantId)) {
+        $pdo = Database::getConnection();
+
+        $geltung = self::geltung($pdo, $testId, $tenantId);
+        if ($geltung === false) {
             return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+        }
+        if ($geltung === null && !self::darfAllgemeineVerwalten()) {
+            return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
         }
 
         $anzahl = self::countDurchfuehrungen($testId);
         if ($anzahl > 0) {
             return [
                 'success' => false,
-                'message' => t('tests.m_durchgefuehrt', ['anzahl' => $anzahl]),
+                'message' => $geltung === null ? t('tests.m_genutzt') : t('tests.m_durchgefuehrt', ['anzahl' => $anzahl]),
             ];
         }
 
-        $pdo = Database::getConnection();
+        $scope = $geltung ?? 0;
 
         try {
             $pdo->beginTransaction();
 
             // Texte und Aufgaben-Struktur vorher als Version sichern.
-            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE');
-            $altStmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            $altStmt = $pdo->prepare('SELECT name, beschreibung, zielgruppe FROM tests WHERE id = :id AND scope_id = :scope FOR UPDATE');
+            $altStmt->execute([':id' => $testId, ':scope' => $scope]);
             $alt = $altStmt->fetch() ?: [];
             $alt['aufgaben'] = self::aufgabenSnapshot($pdo, $testId);
-            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, [], $geaendertVon, 'loeschung', $tenantId);
+            ContentRevision::protokolliere($pdo, 'tests', $testId, $alt, [], $geaendertVon, 'loeschung', $geltung);
 
-            $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id AND tenant_id = :tenant_id');
-            $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            // Ausblendungen gehen per ON DELETE CASCADE mit.
+            $stmt = $pdo->prepare('DELETE FROM tests WHERE id = :id AND scope_id = :scope');
+            $stmt->execute([':id' => $testId, ':scope' => $scope]);
 
             $pdo->commit();
         } catch (Throwable $e) {
@@ -302,6 +359,189 @@ class Test
         }
 
         return ['success' => true, 'message' => t('tests.m_geloescht')];
+    }
+
+    /**
+     * Blendet einen allgemeinen Test für die Organisation aus oder wieder
+     * ein. Eigene Tests lassen sich nicht ausblenden.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public static function setzeAusgeblendet(int $testId, int $tenantId, bool $ausblenden, int $userId): array
+    {
+        $pdo = Database::getConnection();
+
+        $geltung = self::geltung($pdo, $testId, $tenantId);
+        if ($geltung === false) {
+            return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+        }
+        if ($geltung !== null) {
+            return ['success' => false, 'message' => t('tests.m_nur_allgemein_ausblenden')];
+        }
+
+        if ($ausblenden) {
+            $stmt = $pdo->prepare(
+                'INSERT IGNORE INTO test_ausblendungen (tenant_id, test_id, created_by) VALUES (:tenant_id, :test_id, :created_by)'
+            );
+            $stmt->execute([':tenant_id' => $tenantId, ':test_id' => $testId, ':created_by' => $userId]);
+            return ['success' => true, 'message' => t('tests.m_ausgeblendet')];
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM test_ausblendungen WHERE tenant_id = :tenant_id AND test_id = :test_id');
+        $stmt->execute([':tenant_id' => $tenantId, ':test_id' => $testId]);
+        return ['success' => true, 'message' => t('tests.m_eingeblendet')];
+    }
+
+    /**
+     * Ist ein (allgemeiner) Test für die Organisation ausgeblendet?
+     */
+    public static function istAusgeblendet(int $testId, int $tenantId): bool
+    {
+        $stmt = Database::getConnection()->prepare(
+            'SELECT 1 FROM test_ausblendungen WHERE tenant_id = :tenant_id AND test_id = :test_id LIMIT 1'
+        );
+        $stmt->execute([':tenant_id' => $tenantId, ':test_id' => $testId]);
+        return (bool) $stmt->fetchColumn();
+    }
+
+    /**
+     * Macht einen Test der eigenen Organisation zu einem allgemeinen
+     * (nur Super-Admin). Aufgaben, Ergebnisse und Durchführungen bleiben
+     * unverändert, die Versionen wandern mit.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public static function freigeben(int $testId, int $tenantId, int $userId): array
+    {
+        if (!self::darfAllgemeineVerwalten()) {
+            return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
+        }
+
+        $pdo = Database::getConnection();
+
+        if (self::geltung($pdo, $testId, $tenantId) !== $tenantId) {
+            return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $sel = $pdo->prepare('SELECT name FROM tests WHERE id = :id AND tenant_id = :tenant_id FOR UPDATE');
+            $sel->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            $name = $sel->fetchColumn();
+            if ($name === false) {
+                $pdo->rollBack();
+                return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+            }
+
+            $chk = $pdo->prepare('SELECT 1 FROM tests WHERE name = :name AND tenant_id IS NULL LIMIT 1');
+            $chk->execute([':name' => $name]);
+            if ($chk->fetchColumn()) {
+                $pdo->rollBack();
+                return ['success' => false, 'message' => t('tests.m_existiert_allgemein', ['name' => $name])];
+            }
+
+            $andere = $pdo->prepare(
+                'SELECT COUNT(DISTINCT tenant_id) FROM tests WHERE name = :name AND tenant_id IS NOT NULL AND tenant_id <> :tenant_id'
+            );
+            $andere->execute([':name' => $name, ':tenant_id' => $tenantId]);
+            $anzahlAndere = (int) $andere->fetchColumn();
+
+            $pdo->prepare('UPDATE tests SET tenant_id = NULL, updated_at = NOW() WHERE id = :id')->execute([':id' => $testId]);
+            $pdo->prepare("UPDATE content_revisions SET tenant_id = NULL WHERE tabelle = 'tests' AND datensatz_id = :id AND tenant_id = :tenant_id")
+                ->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            ContentRevision::protokolliere(
+                $pdo, 'tests', $testId,
+                ['geltungsbereich' => self::GELTUNG_ORGANISATION],
+                ['geltungsbereich' => self::GELTUNG_ALLGEMEIN],
+                $userId, 'bearbeitung', null
+            );
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Fehler beim Freigeben eines Tests: ' . $e->getMessage());
+            return ['success' => false, 'message' => t('allg.speicherfehler_aenderungen')];
+        }
+
+        $meldung = t('tests.m_freigegeben', ['name' => (string) $name]);
+        if ($anzahlAndere > 0) {
+            $meldung .= ' ' . t('tests.m_freigegeben_namensgleich', ['anzahl' => $anzahlAndere]);
+        }
+        return ['success' => true, 'message' => $meldung];
+    }
+
+    /**
+     * Holt einen allgemeinen Test in die eigene Organisation zurück (nur
+     * Super-Admin). Geht nur, solange keine andere Organisation
+     * Durchführungen damit hat. Ausblendungen entfallen.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public static function zurueckholen(int $testId, int $tenantId, int $userId): array
+    {
+        if (!self::darfAllgemeineVerwalten()) {
+            return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
+        }
+
+        $pdo = Database::getConnection();
+
+        if (self::geltung($pdo, $testId, $tenantId) !== null) {
+            return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $sel = $pdo->prepare('SELECT name FROM tests WHERE id = :id AND tenant_id IS NULL FOR UPDATE');
+            $sel->execute([':id' => $testId]);
+            $name = $sel->fetchColumn();
+            if ($name === false) {
+                $pdo->rollBack();
+                return ['success' => false, 'message' => t('tests.m_nicht_gefunden')];
+            }
+
+            $fremd = $pdo->prepare(
+                'SELECT 1 FROM test_durchfuehrungen td JOIN dogs d ON d.id = td.dog_id
+                 WHERE td.test_id = :id AND d.tenant_id <> :tenant_id LIMIT 1'
+            );
+            $fremd->execute([':id' => $testId, ':tenant_id' => $tenantId]);
+            if ($fremd->fetchColumn()) {
+                $pdo->rollBack();
+                return ['success' => false, 'message' => t('tests.m_zurueck_fremd')];
+            }
+
+            $chk = $pdo->prepare('SELECT 1 FROM tests WHERE name = :name AND tenant_id = :tenant_id LIMIT 1');
+            $chk->execute([':name' => $name, ':tenant_id' => $tenantId]);
+            if ($chk->fetchColumn()) {
+                $pdo->rollBack();
+                return ['success' => false, 'message' => t('tests.m_existiert', ['name' => $name])];
+            }
+
+            $pdo->prepare('UPDATE tests SET tenant_id = :tenant_id, updated_at = NOW() WHERE id = :id')
+                ->execute([':tenant_id' => $tenantId, ':id' => $testId]);
+            $pdo->prepare('DELETE FROM test_ausblendungen WHERE test_id = :id')->execute([':id' => $testId]);
+            $pdo->prepare("UPDATE content_revisions SET tenant_id = :tenant_id WHERE tabelle = 'tests' AND datensatz_id = :id AND tenant_id IS NULL")
+                ->execute([':tenant_id' => $tenantId, ':id' => $testId]);
+            ContentRevision::protokolliere(
+                $pdo, 'tests', $testId,
+                ['geltungsbereich' => self::GELTUNG_ALLGEMEIN],
+                ['geltungsbereich' => self::GELTUNG_ORGANISATION],
+                $userId, 'bearbeitung', $tenantId
+            );
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Fehler beim Zurückholen eines Tests: ' . $e->getMessage());
+            return ['success' => false, 'message' => t('allg.speicherfehler_aenderungen')];
+        }
+
+        return ['success' => true, 'message' => t('tests.m_zurueckgeholt', ['name' => (string) $name])];
     }
 
     /**
@@ -339,9 +579,10 @@ class Test
 
     /**
      * Prüft, ob für diesen Test bereits mindestens eine Testdurchführung
-     * existiert — steuert sowohl die Löschsperre (delete()) als auch,
-     * ob die Aufgaben-/Ergebnis-Struktur in update()/test_form.php noch
-     * frei bearbeitbar ist.
+     * existiert, in welcher Organisation auch immer — steuert sowohl die
+     * Löschsperre (delete()) als auch, ob die Aufgaben-/Ergebnis-Struktur
+     * in update()/test_form.php noch frei bearbeitbar ist. Liefert bewusst
+     * nur ja/nein.
      */
     public static function hasDurchfuehrungen(int $testId): bool
     {
@@ -357,8 +598,8 @@ class Test
     }
 
     /**
-     * Liefert die Anzahl Durchführungen pro Test — für Admin-Liste
-     * (Nutzungshinweis vor dem Löschen), analog Tag::getBreedCounts().
+     * Anzahl Durchführungen pro sichtbarem Test, gezählt nur für Hunde
+     * der eigenen Organisation (Nutzungshinweis in der Admin-Liste).
      *
      * @return array<int, int> [test_id => durchfuehrung_count]
      */
@@ -366,13 +607,14 @@ class Test
     {
         $pdo = Database::getConnection();
         $stmt = $pdo->prepare(
-            'SELECT t.id, COUNT(td.id) AS durchfuehrung_count
+            'SELECT t.id, COUNT(d.id) AS durchfuehrung_count
              FROM tests t
              LEFT JOIN test_durchfuehrungen td ON td.test_id = t.id
-             WHERE t.tenant_id = :tenant_id
+             LEFT JOIN dogs d ON d.id = td.dog_id AND d.tenant_id = :tenant_d
+             WHERE (t.tenant_id = :tenant_id OR t.tenant_id IS NULL)
              GROUP BY t.id'
         );
-        $stmt->execute([':tenant_id' => $tenantId]);
+        $stmt->execute([':tenant_d' => $tenantId, ':tenant_id' => $tenantId]);
         $counts = [];
         foreach ($stmt->fetchAll() as $row) {
             $counts[(int) $row['id']] = (int) $row['durchfuehrung_count'];
@@ -381,7 +623,7 @@ class Test
     }
 
     /**
-     * Liefert die Anzahl Aufgaben pro Test — für die Admin-Liste
+     * Anzahl Aufgaben pro sichtbarem Test — für die Admin-Liste
      * (admin_manage_tests.php), analog Tag::getBreedCounts().
      *
      * @return array<int, int> [test_id => aufgaben_count]
@@ -393,7 +635,7 @@ class Test
             'SELECT t.id, COUNT(ta.id) AS aufgaben_count
              FROM tests t
              LEFT JOIN test_aufgaben ta ON ta.test_id = t.id
-             WHERE t.tenant_id = :tenant_id
+             WHERE (t.tenant_id = :tenant_id OR t.tenant_id IS NULL)
              GROUP BY t.id'
         );
         $stmt->execute([':tenant_id' => $tenantId]);
@@ -404,16 +646,84 @@ class Test
         return $counts;
     }
 
+    /**
+     * Wie viele Organisationen haben einen allgemeinen Test ausgeblendet?
+     * Nur die Zahl, nicht welche. Für die Liste des Super-Admins.
+     *
+     * @return array<int, int> [test_id => anzahl]
+     */
+    public static function getAusblendungCounts(): array
+    {
+        if (!self::darfAllgemeineVerwalten()) {
+            return [];
+        }
+        $rows = Database::getConnection()->query(
+            'SELECT test_id, COUNT(*) AS anzahl FROM test_ausblendungen GROUP BY test_id'
+        )->fetchAll();
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(int) $row['test_id']] = (int) $row['anzahl'];
+        }
+        return $counts;
+    }
+
     // -------------------------------------------------------------
     // Private Hilfsmethoden
     // -------------------------------------------------------------
 
-    private static function existsInTenant(int $testId, int $tenantId): bool
+    /**
+     * Geltungsbereich eines für die Organisation sichtbaren Tests:
+     * tenant_id (eigener Test), null (allgemein) oder false (nicht
+     * vorhanden oder fremd).
+     *
+     * @return int|null|false
+     */
+    private static function geltung(PDO $pdo, int $testId, int $tenantId)
     {
-        $pdo = Database::getConnection();
-        $stmt = $pdo->prepare('SELECT 1 FROM tests WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt = $pdo->prepare(
+            'SELECT tenant_id FROM tests WHERE id = :id AND (tenant_id = :tenant_id OR tenant_id IS NULL) LIMIT 1'
+        );
         $stmt->execute([':id' => $testId, ':tenant_id' => $tenantId]);
-        return (bool) $stmt->fetchColumn();
+        $row = $stmt->fetch();
+        if (!$row) {
+            return false;
+        }
+        return $row['tenant_id'] === null ? null : (int) $row['tenant_id'];
+    }
+
+    /**
+     * Prüft, ob der Name im Geltungsbereich schon vergeben ist. Ein
+     * eigener Test darf außerdem nicht so heißen wie ein allgemeiner,
+     * sonst stünden zwei gleichnamige Tests in derselben Auswahl.
+     *
+     * @param int|null $tenantId Organisation oder null für allgemein
+     * @return string|null Fehlermeldung oder null
+     */
+    private static function namensKonflikt(PDO $pdo, string $name, ?int $tenantId, ?int $ausserId): ?string
+    {
+        $sql = 'SELECT scope_id FROM tests WHERE name = :name AND scope_id IN (:scope, 0)';
+        $params = [':name' => $name, ':scope' => $tenantId ?? 0];
+        if ($ausserId !== null) {
+            $sql .= ' AND id <> :id';
+            $params[':id'] = $ausserId;
+        }
+        $stmt = $pdo->prepare($sql . ' ORDER BY scope_id DESC LIMIT 1');
+        $stmt->execute($params);
+        $treffer = $stmt->fetchColumn();
+        if ($treffer === false) {
+            return null;
+        }
+        return ($tenantId !== null && (int) $treffer === 0)
+            ? t('tests.m_existiert_allgemein', ['name' => $name])
+            : t('tests.m_existiert', ['name' => $name]);
+    }
+
+    /** MySQL liefert die berechneten Spalten als 0/1, die Seiten erwarten bool. */
+    private static function flagsAlsBool(array $row): array
+    {
+        $row['allgemein']    = (bool) $row['allgemein'];
+        $row['ausgeblendet'] = (bool) $row['ausgeblendet'];
+        return $row;
     }
 
     /**
