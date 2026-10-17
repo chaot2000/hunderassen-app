@@ -211,6 +211,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                             <?php if (can_manage_tests()): ?>
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50 border-t border-sand mt-1"><?= e(t('nav.gruppe_tests')) ?></p>
                                 <a href="/admin_manage_tests.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.tests')) ?></a>
+                                <a href="/admin_tests_import.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.tests_import')) ?></a>
                             <?php endif; ?>
 
                             <?php if (is_admin()): ?>

@@ -72,9 +72,14 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-extrabold text-fellDk">🧪 Tests verwalten</h1>
-    <a href="/test_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap">
-        + Neuen Test anlegen
-    </a>
+    <div class="flex flex-wrap gap-2">
+        <a href="/admin_tests_import.php" class="border border-tanne/40 hover:border-tanne text-tanne hover:text-tanneDk font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap">
+            Tests importieren
+        </a>
+        <a href="/test_form.php" class="bg-tanne hover:bg-tanneDk text-creme font-bold text-sm px-5 py-2.5 rounded-full transition-colors whitespace-nowrap">
+            + Neuen Test anlegen
+        </a>
+    </div>
 </div>
 
 <?php if ($meldung !== null): ?>

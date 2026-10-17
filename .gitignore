@@ -25,3 +25,6 @@ Thumbs.db
 # Composer (falls später eingeführt)
 /vendor/
 composer.lock
+
+# Python-Zwischendateien (tools/excel_tests_umwandeln.py)
+__pycache__/

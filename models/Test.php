@@ -98,7 +98,7 @@ class Test
         $test = self::flagsAlsBool($test);
 
         $aufgabenStmt = $pdo->prepare(
-            'SELECT id, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id'
+            'SELECT id, abschnitt, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id'
         );
         $aufgabenStmt->execute([':test_id' => $testId]);
         $aufgaben = $aufgabenStmt->fetchAll();
@@ -140,9 +140,10 @@ class Test
      * @param array $aufgaben Liste von ['titel', 'beschreibung', 'ergebnisse' => [['bezeichnung', 'kategorie'], ...]]
      * @param int $tenantId Organisation des Aufrufers
      * @param bool $allgemein true = allgemeiner Test für alle Organisationen (nur Super-Admin)
+     * @param string|null $anlass 'import': der neue Test wird zusätzlich als Version gespeichert
      * @return array{success: bool, message: string, test_id?: int}
      */
-    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId, bool $allgemein = false): array
+    public static function create(array $testData, array $aufgaben, int $createdByUserId, int $tenantId, bool $allgemein = false, ?string $anlass = null): array
     {
         if ($allgemein && !self::darfAllgemeineVerwalten()) {
             return ['success' => false, 'message' => t('tests.m_nur_super_admin')];
@@ -187,6 +188,15 @@ class Test
 
             $testId = (int) $pdo->lastInsertId();
             self::insertAufgabenMitErgebnissen($pdo, $testId, $validatedAufgaben['aufgaben']);
+
+            if ($anlass !== null) {
+                ContentRevision::protokolliere($pdo, 'tests', $testId, [], [
+                    'name'         => $name,
+                    'beschreibung' => $beschreibung !== '' ? $beschreibung : null,
+                    'zielgruppe'   => $zielgruppe,
+                    'aufgaben'     => $validatedAufgaben['aufgaben'],
+                ], $createdByUserId, $anlass, $allgemein ? null : $tenantId);
+            }
 
             $pdo->commit();
 
@@ -550,11 +560,11 @@ class Test
      * Versionierung (ContentRevision, Feld "aufgaben"). Leere Struktur
      * ergibt null, damit kein leeres JSON als Version entsteht.
      *
-     * @return array<int, array{titel: string, beschreibung: ?string, ergebnisse: array<int, array{bezeichnung: string, kategorie: string}>}>|null
+     * @return array<int, array{abschnitt?: string, titel: string, beschreibung: ?string, ergebnisse: array<int, array{bezeichnung: string, kategorie: string}>}>|null
      */
     private static function aufgabenSnapshot(PDO $pdo, int $testId): ?array
     {
-        $aufgabenStmt = $pdo->prepare('SELECT id, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id');
+        $aufgabenStmt = $pdo->prepare('SELECT id, abschnitt, titel, beschreibung FROM test_aufgaben WHERE test_id = :test_id ORDER BY id');
         $aufgabenStmt->execute([':test_id' => $testId]);
         $aufgaben = $aufgabenStmt->fetchAll();
         if (empty($aufgaben)) {
@@ -565,14 +575,14 @@ class Test
         $snapshot = [];
         foreach ($aufgaben as $aufgabe) {
             $ergStmt->execute([':aufgabe_id' => $aufgabe['id']]);
-            $snapshot[] = [
+            $snapshot[] = self::mitAbschnitt($aufgabe['abschnitt'], [
                 'titel'        => (string) $aufgabe['titel'],
                 'beschreibung' => $aufgabe['beschreibung'] !== null && $aufgabe['beschreibung'] !== '' ? (string) $aufgabe['beschreibung'] : null,
                 'ergebnisse'   => array_map(
                     fn($e) => ['bezeichnung' => (string) $e['bezeichnung'], 'kategorie' => (string) $e['kategorie']],
                     $ergStmt->fetchAll()
                 ),
-            ];
+            ]);
         }
         return $snapshot;
     }
@@ -718,6 +728,16 @@ class Test
             : t('tests.m_existiert', ['name' => $name]);
     }
 
+    /**
+     * Stellt den Abschnitt vor die Aufgabe, aber nur wenn es einen gibt.
+     * So bleiben Versionen von Tests ohne Abschnitte im bisherigen Format.
+     */
+    private static function mitAbschnitt(?string $abschnitt, array $aufgabe): array
+    {
+        $abschnitt = $abschnitt !== null ? trim($abschnitt) : '';
+        return $abschnitt !== '' ? ['abschnitt' => $abschnitt] + $aufgabe : $aufgabe;
+    }
+
     /** MySQL liefert die berechneten Spalten als 0/1, die Seiten erwarten bool. */
     private static function flagsAlsBool(array $row): array
     {
@@ -748,6 +768,10 @@ class Test
             }
 
             $beschreibung = clean_input((string) ($aufgabe['beschreibung'] ?? ''));
+            $abschnitt = clean_input((string) ($aufgabe['abschnitt'] ?? ''));
+            if (mb_strlen($abschnitt) > 150) {
+                return ['success' => false, 'message' => t('tests.m_abschnitt_lang')];
+            }
 
             $cleanedErgebnisse = [];
             foreach (($aufgabe['ergebnisse'] ?? []) as $ergebnis) {
@@ -771,11 +795,11 @@ class Test
                 return ['success' => false, 'message' => t('tests.m_aufgabe_ohne_ergebnis', ['titel' => $titel])];
             }
 
-            $cleaned[] = [
+            $cleaned[] = self::mitAbschnitt($abschnitt, [
                 'titel'        => $titel,
                 'beschreibung' => $beschreibung !== '' ? $beschreibung : null,
                 'ergebnisse'   => $cleanedErgebnisse,
-            ];
+            ]);
         }
 
         if (empty($cleaned)) {
@@ -794,7 +818,7 @@ class Test
     private static function insertAufgabenMitErgebnissen(PDO $pdo, int $testId, array $aufgaben): void
     {
         $aufgabeStmt = $pdo->prepare(
-            'INSERT INTO test_aufgaben (test_id, titel, beschreibung) VALUES (:test_id, :titel, :beschreibung)'
+            'INSERT INTO test_aufgaben (test_id, abschnitt, titel, beschreibung) VALUES (:test_id, :abschnitt, :titel, :beschreibung)'
         );
         $ergebnisStmt = $pdo->prepare(
             'INSERT INTO test_ergebnisse (aufgabe_id, bezeichnung, kategorie) VALUES (:aufgabe_id, :bezeichnung, :kategorie)'
@@ -803,6 +827,7 @@ class Test
         foreach ($aufgaben as $aufgabe) {
             $aufgabeStmt->execute([
                 ':test_id'      => $testId,
+                ':abschnitt'    => $aufgabe['abschnitt'] ?? null,
                 ':titel'        => $aufgabe['titel'],
                 ':beschreibung' => $aufgabe['beschreibung'],
             ]);

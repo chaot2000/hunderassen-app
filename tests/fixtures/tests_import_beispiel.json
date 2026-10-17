@@ -1,0 +1,29 @@
+{
+ "format": "hunderassen-tests",
+ "version": 1,
+ "tests": [
+  {
+   "name": "CI-Importtest Adult",
+   "beschreibung": "Erfundener Test für automatisierte Prüfungen.",
+   "zielgruppe": "erwachsen",
+   "quelle": "ci_beispiel.xlsx",
+   "aufgaben": [
+    {"nr": 1, "abschnitt": "CI-Abschnitt Wesen", "titel": "CI-Freundlichkeit", "beschreibung": "Fremde Person nähert sich.",
+     "ergebnisse": [{"bezeichnung": "Exzellent (EXC)", "kategorie": "bestanden"}, {"bezeichnung": "Indiskutabel (IND)", "kategorie": "nicht_bestanden"}]},
+    {"nr": 2, "abschnitt": "CI-Abschnitt Sozialisierung", "titel": "CI-Parkplatz", "beschreibung": "Gang über einen Parkplatz.\nHinweis: nur bei Trockenheit.",
+     "ergebnisse": [{"bezeichnung": "Hund ist neugierig (EXC)", "kategorie": "bestanden"}, {"bezeichnung": "Hund sucht Schutz (OK)", "kategorie": "bestanden"}, {"bezeichnung": "Hund will weglaufen (IND)", "kategorie": "nicht_bestanden"}]}
+   ]
+  },
+  {
+   "name": "CI-Importtest Welpe",
+   "beschreibung": null,
+   "zielgruppe": "welpe",
+   "quelle": "ci_beispiel_welpe.xlsx",
+   "aufgaben": [
+    {"nr": 11, "titel": "CI-Spieltrieb", "beschreibung": null,
+     "ergebnisse": [{"bezeichnung": "Welpe spielt (EXC)", "kategorie": "bestanden"}, {"bezeichnung": "Welpe ist desinteressiert (IND)", "kategorie": "nicht_bestanden"}]}
+   ]
+  }
+ ],
+ "warnungen": ["ci_beispiel.xlsx: erfundene Warnung für die Anzeige"]
+}

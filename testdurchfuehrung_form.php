@@ -257,10 +257,16 @@ require __DIR__ . '/views/partials/header.php';
                     <p class="text-sm text-fellDk/50"><?= e(t('td.keine_aufgaben')) ?></p>
                 <?php else: ?>
                     <div class="space-y-4">
+                        <?php $letzterAbschnitt = null; ?>
                         <?php foreach ($testDetail['aufgaben'] as $aufgabe):
                             $aufgabeId = (int) $aufgabe['id'];
                             $vorhandenesErgebnis = $existingErgebnisseByAufgabe[$aufgabeId] ?? null;
+                            $abschnitt = (string) ($aufgabe['abschnitt'] ?? '');
                         ?>
+                            <?php if ($abschnitt !== '' && $abschnitt !== $letzterAbschnitt): ?>
+                                <h3 class="text-base font-bold text-fellDk pt-2 border-b border-sand pb-1"><?= e($abschnitt) ?></h3>
+                            <?php endif; ?>
+                            <?php $letzterAbschnitt = $abschnitt; ?>
                             <div class="border border-sand rounded-lg p-4">
                                 <p class="font-semibold text-sm mb-2"><?= e($aufgabe['titel']) ?></p>
                                 <?php if (!empty($aufgabe['beschreibung'])): ?>

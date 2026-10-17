@@ -83,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $aufgaben[] = [
+            'abschnitt'    => $aufgabeRow['abschnitt'] ?? '',
             'titel'        => $aufgabeRow['titel'],
             'beschreibung' => $aufgabeRow['beschreibung'] ?? '',
             'ergebnisse'   => $ergebnisse,
@@ -108,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing = $existing ?? ['allgemein' => $istAllgemein];
     $existing = array_merge($existing, $testData);
     $existing['aufgaben'] = array_map(fn($a) => [
+        'abschnitt'    => $a['abschnitt'],
         'titel'        => $a['titel'],
         'beschreibung' => $a['beschreibung'],
         'ergebnisse'   => array_map(fn($e) => [
@@ -123,6 +125,7 @@ $existingAufgaben = $existing['aufgaben'] ?? [];
 // Aufgaben-/Ergebnisliste beim Laden mit vorhandenen Werten
 // vorbefüllt werden kann (analog admin_add_breed.php's $initialSizesForJs).
 $initialAufgabenForJs = !empty($existingAufgaben) ? array_map(fn($a) => [
+    'abschnitt'    => $a['abschnitt'] ?? '',
     'titel'        => $a['titel'] ?? '',
     'beschreibung' => $a['beschreibung'] ?? '',
     'ergebnisse'   => !empty($a['ergebnisse']) ? array_map(fn($e) => [
@@ -130,7 +133,7 @@ $initialAufgabenForJs = !empty($existingAufgaben) ? array_map(fn($a) => [
         'kategorie'   => $e['kategorie'] ?? 'bestanden',
     ], $a['ergebnisse']) : [['bezeichnung' => '', 'kategorie' => 'bestanden']],
 ], $existingAufgaben) : [
-    ['titel' => '', 'beschreibung' => '', 'ergebnisse' => [['bezeichnung' => '', 'kategorie' => 'bestanden']]],
+    ['abschnitt' => '', 'titel' => '', 'beschreibung' => '', 'ergebnisse' => [['bezeichnung' => '', 'kategorie' => 'bestanden']]],
 ];
 
 $kategorieLabels  = ['bestanden' => t('status.bestanden'), 'neutral' => t('status.neutral'), 'nicht_bestanden' => t('status.nicht_bestanden')];
@@ -234,7 +237,7 @@ require __DIR__ . '/views/partials/header.php';
             <h2 class="text-lg font-bold text-fellDk"><?= e(t('tests.aufgaben')) ?></h2>
             <button
                 type="button" x-show="!gesperrt"
-                @click="aufgaben.push({titel: '', beschreibung: '', ergebnisse: [{bezeichnung: '', kategorie: 'bestanden'}]})"
+                @click="aufgaben.push({abschnitt: aufgaben.length ? aufgaben[aufgaben.length - 1].abschnitt : '', titel: '', beschreibung: '', ergebnisse: [{bezeichnung: '', kategorie: 'bestanden'}]})"
                 class="text-sm bg-pfote/10 text-fell font-semibold px-3 py-1.5 rounded-full hover:bg-pfote/20 transition-colors"
             >
                 + <?= e(t('tests.aufgabe_neu')) ?>
@@ -255,6 +258,12 @@ require __DIR__ . '/views/partials/header.php';
             <div class="border border-sand rounded-lg p-4 mb-4">
                 <div class="flex items-start gap-3 mb-3">
                     <div class="flex-1 space-y-2">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1"><?= e(t('tests.abschnitt_optional')) ?></label>
+                            <input type="text" :name="`aufgaben[${aIndex}][abschnitt]`" x-model="aufgabe.abschnitt" :disabled="gesperrt" maxlength="150"
+                                placeholder="<?= e(t('tests.abschnitt_platzhalter')) ?>"
+                                class="w-full rounded-lg border border-sand px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tanne disabled:bg-creme disabled:text-fellDk/60">
+                        </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1"><?= e(t('tests.aufgabe_titel')) ?></label>
                             <input type="text" :name="`aufgaben[${aIndex}][titel]`" x-model="aufgabe.titel" :disabled="gesperrt"
