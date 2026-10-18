@@ -149,6 +149,7 @@ CREATE TABLE `breeds` (
     `bild_blob`        LONGBLOB NULL,            -- verkleinertes Bild (max. 1200px Breite)
     `bild_mime`        VARCHAR(50) NULL,         -- z.B. 'image/jpeg', 'image/png', 'image/webp'
     `bild_updated_at`  DATETIME NULL,            -- für Cache-Busting bei der Auslieferung
+    `bild_quelle`      VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Herkunft, z.B. 'TheDogAPI:<Bild-ID>', NULL = eigenes Bild
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created_by`      INT UNSIGNED NULL,

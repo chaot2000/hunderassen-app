@@ -28,3 +28,6 @@ composer.lock
 
 # Python-Zwischendateien (tools/excel_tests_umwandeln.py)
 __pycache__/
+
+# TheDogAPI-Bildkandidaten je Rasse (models/TheDogApiBilder.php)
+/cache_thedogapi_bilder.json

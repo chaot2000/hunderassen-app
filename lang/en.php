@@ -32,6 +32,7 @@ return [
     'nav.inhalte_import'       => 'Import content',
     'nav.rassentexte'          => 'Import breed data',
     'nav.thedogapi'            => 'TheDogAPI sync',
+    'nav.rassenbilder'         => 'Breed images from TheDogAPI',
     'nav.gruppe_tests'         => 'Tests (organisation catalogue)',
     'nav.tests'                => 'Manage tests',
     'nav.gruppe_benutzer'      => 'Users',

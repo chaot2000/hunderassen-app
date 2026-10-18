@@ -652,6 +652,7 @@ else
         check_status "B: Mandantenverwaltung ist nur für Super-Admins (403)" "$BASE_URL/admin_manage_tenants.php" "403"
         check_status "B: TheDogAPI-Abgleich ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_review.php" "403"
         check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
+        check_status "B: Rassenbilder nur für Super-Admins (403)" "$BASE_URL/admin_rassenbilder.php" "403"
         check_status "B: Benutzerverwaltung lädt" "$BASE_URL/admin_manage_users.php" "200"
         check_body_not_contains "B: Benutzerliste zeigt den Super-Admin aus Mandant 1 nicht" "Super-Admin"
 
@@ -1187,6 +1188,22 @@ else
     check_body_contains "Unbekannter Begriff bleibt unübersetzt" "nicht im Wörterbuch: ci-erstwert"
     check_status "Rassenseite mit englischem Temperament" "$BASE_URL/breed_detail.php?id=1" "200"
     check_body_contains "Unübersetzter englischer Begriff bleibt als Wesen sichtbar" "CI-Erstwert"
+
+    echo ""
+    echo "--- Rassenbilder aus TheDogAPI ---"
+    # Rasse 1 ist oben TheDogAPI 6 zugeordnet und hat kein Bild. Ohne
+    # Schlüssel (wie in CI) gibt es keine Kandidaten, die Seite meldet das.
+    check_status "Rassenbilder laden" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Rasse ohne Bild wird gelistet" "TheDogAPI 6"
+    check_body_contains "Hinweis auf fehlenden Schlüssel" "Kein TheDogAPI-Schlüssel hinterlegt"
+    check_body_contains "Auswahl Kein Bild vorbelegt" 'name="wahl[1]" value="" checked'
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Untergeschobenes Bild" "$BASE_URL/admin_rassenbilder.php" "302"         "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=ohne --data-urlencode wahl[1]=erfunden123"
+    check_status "Ergebnis nach dem Absenden" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Fremde Bild-ID wird abgelehnt" "Bild gehört nicht zu dieser Rasse."
+    check_body_contains "Nichts übernommen" "0 Bilder übernommen."
+    check_status "Ansicht Rassen mit Bild" "$BASE_URL/admin_rassenbilder.php?modus=mit" "200"
+    check_body_contains "Warnung beim Ersetzen" "Das alte Bild ist danach weg."
 
     echo ""
     echo "--- Rassen-Detailseite und Gliederung der Rassentexte ---"

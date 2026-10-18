@@ -101,6 +101,7 @@ jobs:
           php tests/MerkmalVorschlaegeTest.php
           php tests/InhaltsDateiTest.php
           php tests/TestImportTest.php
+          php tests/TheDogApiBilderTest.php
 
       - name: Rauchtest ausführen
         run: bash bin/smoke-test.sh http://127.0.0.1:8000 admin CiTest123! ci-b admin CiTestB456!
@@ -169,7 +170,7 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen bis Testabschnitte: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+      - name: "Textversionen bis Bildquelle: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
         # Ausgangspunkt ist das Schema vor den Textversionen (Tag
         # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
         # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
@@ -224,10 +225,18 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_22_test_abschnitte.sql
           $R txt_live < sql/migrationen/migration_2026_10_22_test_abschnitte.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'test_aufgaben' AND COLUMN_NAME = 'abschnitt'" | grep -qx 1
+          dump txt_live > /tmp/txt_abschnitte.sql
+          $R txt_live < sql/migrationen/migration_2026_10_23_bild_quelle.sql
+          $R txt_live < sql/migrationen/migration_2026_10_23_bild_quelle.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE bild_quelle IS NULL" | grep -qx 2
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_bild_quelle.sql
+          $R txt_live < sql/migrationen/rollback_bild_quelle.sql
+          dump txt_live > /tmp/txt_zurueck_bild_quelle.sql
+          diff /tmp/txt_abschnitte.sql /tmp/txt_zurueck_bild_quelle.sql
           $R txt_live < sql/migrationen/rollback_test_abschnitte.sql
           $R txt_live < sql/migrationen/rollback_test_abschnitte.sql
           dump txt_live > /tmp/txt_zurueck_abschnitte.sql
