@@ -42,6 +42,14 @@ class TheDogApiFelder
     private const CACHE_DATEI = __DIR__ . '/../cache_thedogapi_breeds.json';
     private const CACHE_MAX_ALTER_SEK = 86400; // 1 Tag, TheDogAPI ändert sich selten
 
+    /** API-Schlüssel aus config/thedogapi.local.php (nie im Repo), sonst ''. */
+    public static function schluessel(): string
+    {
+        $configDatei = __DIR__ . '/../config/thedogapi.local.php';
+        $config = is_file($configDatei) ? require $configDatei : [];
+        return trim((string) ($config['api_key'] ?? ''));
+    }
+
     /**
      * Alle Rassen von TheDogAPI. Frischer Cache gewinnt, sonst Abruf mit
      * dem Schlüssel aus config/thedogapi.local.php (nie im Repo). Geht der
@@ -55,9 +63,7 @@ class TheDogApiFelder
         if (is_array($cache) && (time() - filemtime(self::CACHE_DATEI)) < self::CACHE_MAX_ALTER_SEK) {
             return ['breeds' => $cache, 'fehler' => null];
         }
-        $configDatei = __DIR__ . '/../config/thedogapi.local.php';
-        $config = is_file($configDatei) ? require $configDatei : [];
-        $key = trim((string) ($config['api_key'] ?? ''));
+        $key = self::schluessel();
         $fehler = null;
         if ($key === '') {
             $fehler = 'Kein TheDogAPI-Schlüssel hinterlegt. Lege config/thedogapi.local.php nach der Vorlage config/thedogapi.local.example.php an.';

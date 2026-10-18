@@ -65,6 +65,7 @@ $verwaltungsPfade = [
     '/admin_thedogapi_review.php',
     '/admin_rassentexte.php',
     '/admin_thedogapi_apply.php',
+    '/admin_rassenbilder.php',
     '/admin_manage_tests.php',
     '/test_form.php',
 ];
@@ -205,6 +206,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                                     <a href="/admin_merkmale_befuellen.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.merkmale_befuellen')) ?></a>
                                     <a href="/admin_inhalte_import.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.inhalte_import')) ?></a>
                                     <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.thedogapi')) ?></a>
+                                    <a href="/admin_rassenbilder.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassenbilder')) ?></a>
                                 <?php endif; ?>
                             <?php endif; ?>
 
