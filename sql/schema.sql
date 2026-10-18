@@ -150,6 +150,9 @@ CREATE TABLE `breeds` (
     `bild_mime`        VARCHAR(50) NULL,         -- z.B. 'image/jpeg', 'image/png', 'image/webp'
     `bild_updated_at`  DATETIME NULL,            -- für Cache-Busting bei der Auslieferung
     `bild_quelle`      VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Herkunft, z.B. 'TheDogAPI:<Bild-ID>', NULL = eigenes Bild
+    `bild_urheber`     VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Bildnachweis: Urheber
+    `bild_lizenz`      VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- z.B. 'CC BY-SA 4.0'
+    `bild_lizenz_url`  VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Link zur Lizenz oder Bildseite
     `bild_zurueckgestellt` DATETIME NULL,     -- seit wann admin_rassenbilder.php die Rasse nicht mehr anbietet
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

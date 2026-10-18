@@ -251,14 +251,14 @@ class Breed
             $imageSql    = '';
             $imageParams = [];
             if ($image !== null) {
-                $imageSql = ', bild_blob = :bild_blob, bild_mime = :bild_mime, bild_updated_at = :bild_updated_at, bild_quelle = NULL';
+                $imageSql = ', bild_blob = :bild_blob, bild_mime = :bild_mime, bild_updated_at = :bild_updated_at, bild_quelle = NULL, bild_urheber = NULL, bild_lizenz = NULL, bild_lizenz_url = NULL';
                 $imageParams = [
                     ':bild_blob'       => $image['blob'],
                     ':bild_mime'       => $image['mime'],
                     ':bild_updated_at' => date('Y-m-d H:i:s'),
                 ];
             } elseif ($removeImage) {
-                $imageSql = ', bild_blob = NULL, bild_mime = NULL, bild_updated_at = NULL, bild_quelle = NULL';
+                $imageSql = ', bild_blob = NULL, bild_mime = NULL, bild_updated_at = NULL, bild_quelle = NULL, bild_urheber = NULL, bild_lizenz = NULL, bild_lizenz_url = NULL';
             }
 
             $altStmt = $pdo->prepare(
