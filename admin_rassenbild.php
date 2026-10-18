@@ -17,6 +17,12 @@
  *  - Hochladen: eigene Datei, im Browser auf 4:3 zugeschnitten
  *    (views/partials/bild_zuschneider.php), Urheber freiwillig.
  *
+ * Kandidaten aus TheDogAPI und Wikimedia lassen sich vor dem Speichern
+ * zuschneiden. Das Bild kommt dafür über admin_rassenbild_vorschau.php
+ * von der eigenen Seite, der Zuschnitt geht als Upload zurück. Herkunft
+ * und Nachweis nimmt der Server aus dem Zwischenspeicher, nicht aus dem
+ * Formular.
+ *
  * Nach dem Speichern eines Bildes geht es zurück zur Liste, mit der
  * Suche und den Filtern von vorher (Parameter "zurueck").
  */
@@ -134,6 +140,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             WikimediaBilder::vergessen([(string) $rasse['wikidata_id']]);
             $meldung = 'Bilder werden neu bei Wikimedia abgerufen.';
             $ziel = $hier('wikimedia');
+            break;
+        case 'zugeschnitten':
+            $quelleArt = (string) ($_POST['quelle'] ?? '');
+            $bildId = (string) ($_POST['bild_id'] ?? '');
+            $kandidat = match ($quelleArt) {
+                'thedogapi' => TheDogApiBilder::kandidat((string) $rasse['thedogapi_id'], $bildId),
+                'wikimedia' => WikimediaBilder::kandidat((string) $rasse['wikidata_id'], $bildId),
+                default     => null,
+            };
+            $bild = $kandidat === null
+                ? ['success' => false, 'message' => 'Bild gehört nicht zu dieser Rasse.']
+                : BildVerarbeitung::verarbeiteUpload($_FILES['bild'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
+            if ($bild['success'] && $bild['blob'] === null) {
+                $bild = ['success' => false, 'message' => 'Kein Ausschnitt angekommen.'];
+            }
+            if ($bild['success']) {
+                [$quelle, $nachweis] = $quelleArt === 'thedogapi'
+                    ? [TheDogApiBilder::quelle($kandidat['id']), []]
+                    : [WikimediaBilder::quelle($kandidat['id']), ['urheber' => $kandidat['urheber'], 'lizenz' => $kandidat['lizenz'], 'lizenz_url' => $kandidat['lizenz_url']]];
+                RassenBild::speichern($id, $bild['blob'], $bild['mime'], $quelle, $nachweis);
+                $meldung = 'Zugeschnittenes Bild für ' . $rasse['name'] . ' übernommen.';
+                $ziel = $zurueck;
+            } else {
+                [$ok, $meldung] = [false, $bild['message']];
+            }
             break;
         case 'hochladen':
             $bild = BildVerarbeitung::verarbeiteUpload($_FILES['bild'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
@@ -273,7 +304,15 @@ require __DIR__ . '/views/partials/header.php';
         <?php endforeach; ?>
     </nav>
 
-    <section class="bg-white/80 rounded-b-2xl rounded-tr-2xl shadow border border-t-0 border-sand p-4 sm:p-6">
+    <section class="bg-white/80 rounded-b-2xl rounded-tr-2xl shadow border border-t-0 border-sand p-4 sm:p-6"
+        <?php if ($reiter !== 'hochladen'): ?>
+             x-data="Object.assign(bildZuschneider({ breite: 4, hoehe: 3 }), {
+                 zuschnittBild: '',
+                 zuschneiden(bildId, url) { this.zuschnittBild = bildId; this.ladeUrl(url); },
+             })"
+             @bild-zugeschnitten="$refs.zuschnittForm.submit()"
+        <?php endif; ?>
+    >
     <?php if ($reiter === 'thedogapi'): ?>
         <?php if ($apiFehler !== null): ?>
             <p class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4" role="alert"><?= e($apiFehler) ?></p>
@@ -293,14 +332,17 @@ require __DIR__ . '/views/partials/header.php';
                     <?= csrf_field() ?>
                     <input type="hidden" name="aktion" value="thedogapi_bild">
                     <?php foreach ($kandidaten as $k): ?>
-                        <button type="submit" name="bild_id" value="<?= e($k['id']) ?>"
-                                class="text-left border border-sand rounded-lg p-2 hover:ring-2 hover:ring-tanne focus:ring-2 focus:ring-tanne"
-                                <?= $rasse['hat_bild'] ? 'onclick="return confirm(\'Vorhandenes Bild ersetzen?\');"' : '' ?>>
+                        <div class="border border-sand rounded-lg p-2 flex flex-col">
                             <img src="<?= e($k['url']) ?>" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-full aspect-[4/3] object-cover rounded">
                             <span class="block text-xs mt-1"><?= (int) $k['breite'] ?>×<?= (int) $k['hoehe'] ?></span>
                             <span class="block text-xs text-fellDk/60 truncate" title="Rasse laut TheDogAPI"><?= e($k['rasse'] ?? '') ?></span>
-                            <span class="block text-xs font-bold text-tanne mt-1">Übernehmen</span>
-                        </button>
+                            <span class="mt-auto pt-1 flex gap-3 text-xs font-bold">
+                                <button type="submit" name="bild_id" value="<?= e($k['id']) ?>" class="text-tanne hover:text-tanneDk"
+                                        <?= $rasse['hat_bild'] ? 'onclick="return confirm(\'Vorhandenes Bild ersetzen?\');"' : '' ?>>Übernehmen</button>
+                                <button type="button" class="text-fellDk/70 hover:text-fellDk"
+                                        @click="zuschneiden(<?= e(json_encode($k['id'])) ?>, <?= e(json_encode('/admin_rassenbild_vorschau.php?id=' . $id . '&quelle=thedogapi&bild=' . rawurlencode($k['id']))) ?>)">Zuschneiden</button>
+                            </span>
+                        </div>
                     <?php endforeach; ?>
                 </form>
                 <?php if (!$kandidaten && $apiFehler === null): ?>
@@ -391,8 +433,12 @@ require __DIR__ . '/views/partials/header.php';
                                 </span>
                                 <span class="text-xs text-fellDk/60 truncate" title="<?= e($k['urheber']) ?>"><?= e($k['urheber']) ?></span>
                                 <a href="<?= e($k['seite']) ?>" target="_blank" rel="noopener noreferrer" class="text-xs text-fellDk/60 underline truncate" title="<?= e($k['id']) ?>">Bildseite</a>
-                                <button type="submit" name="datei" value="<?= e($k['id']) ?>" class="mt-auto pt-1 text-left text-xs font-bold text-tanne hover:text-tanneDk"
-                                        <?= $rasse['hat_bild'] ? 'onclick="return confirm(\'Vorhandenes Bild ersetzen?\');"' : '' ?>>Übernehmen</button>
+                                <span class="mt-auto pt-1 flex gap-3 text-xs font-bold">
+                                    <button type="submit" name="datei" value="<?= e($k['id']) ?>" class="text-tanne hover:text-tanneDk"
+                                            <?= $rasse['hat_bild'] ? 'onclick="return confirm(\'Vorhandenes Bild ersetzen?\');"' : '' ?>>Übernehmen</button>
+                                    <button type="button" class="text-fellDk/70 hover:text-fellDk"
+                                            @click="zuschneiden(<?= e(json_encode($k['id'], JSON_UNESCAPED_UNICODE)) ?>, <?= e(json_encode('/admin_rassenbild_vorschau.php?id=' . $id . '&quelle=wikimedia&bild=' . rawurlencode($k['id']))) ?>)">Zuschneiden</button>
+                                </span>
                             </div>
                         <?php endforeach; ?>
                     </form>
@@ -482,6 +528,17 @@ require __DIR__ . '/views/partials/header.php';
             </div>
             <?php bild_zuschneider_modal(); ?>
         </form>
+    <?php endif; ?>
+
+    <?php if ($reiter !== 'hochladen'): ?>
+        <form method="post" action="<?= e($hier()) ?>" enctype="multipart/form-data" x-ref="zuschnittForm" class="hidden">
+            <?= csrf_field() ?>
+            <input type="hidden" name="aktion" value="zugeschnitten">
+            <input type="hidden" name="quelle" value="<?= e($reiter) ?>">
+            <input type="hidden" name="bild_id" :value="zuschnittBild">
+            <input type="file" name="bild" x-ref="hiddenFileInput">
+        </form>
+        <?php bild_zuschneider_modal(); ?>
     <?php endif; ?>
     </section>
 </div>
