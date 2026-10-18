@@ -658,6 +658,7 @@ else
         check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
         check_status "B: Rassenbilder nur für Super-Admins (403)" "$BASE_URL/admin_rassenbilder.php" "403"
         check_status "B: Bildauswahl nur für Super-Admins (403)" "$BASE_URL/admin_rassenbild.php?id=1" "403"
+        check_status "B: Bildvorschau nur für Super-Admins (403)" "$BASE_URL/admin_rassenbild_vorschau.php?id=1&quelle=thedogapi&bild=x" "403"
         check_status "B: Benutzerverwaltung lädt" "$BASE_URL/admin_manage_users.php" "200"
         check_body_not_contains "B: Benutzerliste zeigt den Super-Admin aus Mandant 1 nicht" "Super-Admin"
 
@@ -1273,6 +1274,34 @@ else
         "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=wikimedia_bild --data-urlencode datei=Erfunden.jpg"
     check_status "Nach dem untergeschobenen Wikimedia-Bild" "$RB_WM" "200"
     check_body_contains "Fremdes Wikimedia-Bild abgelehnt" "Bild gehört nicht zu diesem Wikidata-Eintrag."
+
+    # Zuschneiden fremder Bilder: Vorschau nur für Kandidaten aus dem
+    # Zwischenspeicher. Für den Speicherweg wird ein Kandidat für
+    # TheDogAPI 6 hinterlegt, abgerufen wird dabei nichts.
+    check_status "Vorschau ohne passenden Kandidaten" "$BASE_URL/admin_rassenbild_vorschau.php?id=1&quelle=thedogapi&bild=gibtsnicht" "404"
+    check_status "Vorschau mit unbekannter Quelle" "$BASE_URL/admin_rassenbild_vorschau.php?id=1&quelle=irgendwo&bild=x" "404"
+    RB_CACHE_ALT=""
+    [ -f cache_thedogapi_bilder.json ] && RB_CACHE_ALT=$(cat cache_thedogapi_bilder.json)
+    printf '{"6":{"v":2,"zeit":%s,"bilder":[{"id":"CiBild1","url":"https://cdn2.thedogapi.com/images/CiBild1.jpg","breite":800,"hoehe":600,"rasse":"CI-Rasse"}]}}' "$(date +%s)" > cache_thedogapi_bilder.json
+    check_status "Kandidat mit Zuschneiden-Knopf" "$RB" "200"
+    check_body_contains "Knopf Zuschneiden" "quelle=thedogapi&amp;bild=CiBild1"
+    check_body_contains "Formular für den Zuschnitt" 'name="aktion" value="zugeschnitten"'
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Zuschnitt einer fremden Bild-ID" "$RB" "302" \
+        "-X POST -F csrf_token=$RB_CSRF -F aktion=zugeschnitten -F quelle=thedogapi -F bild_id=Erfunden -F bild=@tests/fixtures/rassenbild.jpg"
+    check_status "Nach dem fremden Zuschnitt" "$RB" "200"
+    check_body_contains "Fremder Zuschnitt abgelehnt" "Bild gehört nicht zu dieser Rasse."
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Zugeschnittenes TheDogAPI-Bild speichern" "$RB" "302" \
+        "-X POST -F csrf_token=$RB_CSRF -F aktion=zugeschnitten -F quelle=thedogapi -F bild_id=CiBild1 -F bild=@tests/fixtures/rassenbild.jpg"
+    check_status "Liste nach dem Zuschnitt" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Zuschnitt gemeldet" "Zugeschnittenes Bild für CI-Testrasse übernommen."
+    check_status "Herkunft nach dem Zuschnitt" "$RB" "200"
+    check_body_contains "Herkunft aus dem Zwischenspeicher" "TheDogAPI, Bild CiBild1"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Zugeschnittenes Bild wieder entfernen" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=entfernen"
+    if [ -n "$RB_CACHE_ALT" ]; then printf '%s' "$RB_CACHE_ALT" > cache_thedogapi_bilder.json; else rm -f cache_thedogapi_bilder.json; fi
     check_status "Rasse bearbeiten mit gemeinsamem Zuschneider" "$BASE_URL/admin_add_breed.php?id=1" "200"
     check_body_contains "Rasse bearbeiten nutzt 4:3" "aspect-[4/3]"
 
