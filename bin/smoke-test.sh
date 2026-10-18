@@ -1247,7 +1247,8 @@ else
     check_body_contains "Entfernen gemeldet" "Bild entfernt."
     check_body_not_contains "Urheber ist mit entfernt" "CI-Fotograf"
     check_status "Fremde Rücksprungadresse" "$BASE_URL/admin_rassenbild.php?id=1&zurueck=https%3A%2F%2Fexample.com%2F" "200"
-    check_body_not_contains "Keine fremde Rücksprungadresse" "example.com"
+    check_body_not_contains "Keine fremde Rücksprungadresse" 'href="https://example.com'
+    check_body_contains "Rücksprung zur eigenen Liste" '<a href="/admin_rassenbilder.php" class="inline-flex'
     check_status "Unbekannte Rasse" "$BASE_URL/admin_rassenbild.php?id=999999" "404"
     check_status "Rasse bearbeiten mit gemeinsamem Zuschneider" "$BASE_URL/admin_add_breed.php?id=1" "200"
     check_body_contains "Rasse bearbeiten nutzt 4:3" "aspect-[4/3]"
