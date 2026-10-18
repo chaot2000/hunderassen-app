@@ -145,11 +145,13 @@ CREATE TABLE `breeds` (
     `gliederung`      ENUM('keine', 'automatisch', 'geprueft') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'keine', -- siehe admin_rassentexte.php
     `thedogapi_id`    VARCHAR(20)  NULL,        -- verknüpfte TheDogAPI-Rasse, falls abgeglichen
     `thedogapi_stand` DATETIME     NULL,        -- Zeitpunkt des letzten Abgleichs
+    `wikidata_id`     VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- zugeordneter Wikidata-Eintrag, z.B. 'Q21080'
+    `wikipedia_de`    VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Titel des deutschen Wikipedia-Artikels
     `daten_stand`     CHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Prüfwert der alten Felder bei der Übernahme ins Merkmalsmodell
     `bild_blob`        LONGBLOB NULL,            -- verkleinertes Bild (max. 1200px Breite)
     `bild_mime`        VARCHAR(50) NULL,         -- z.B. 'image/jpeg', 'image/png', 'image/webp'
     `bild_updated_at`  DATETIME NULL,            -- für Cache-Busting bei der Auslieferung
-    `bild_quelle`      VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Herkunft, z.B. 'TheDogAPI:<Bild-ID>', NULL = eigenes Bild
+    `bild_quelle`      VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Herkunft, z.B. 'TheDogAPI:<Bild-ID>', NULL = eigenes Bild
     `bild_urheber`     VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Bildnachweis: Urheber
     `bild_lizenz`      VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- z.B. 'CC BY-SA 4.0'
     `bild_lizenz_url`  VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Link zur Lizenz oder Bildseite

@@ -1242,6 +1242,10 @@ else
     check_status "Bildauswahl mit eigenem Bild" "$RB" "200"
     check_body_contains "Herkunft eigenes Bild" "eigenes Bild"
     check_body_contains "Urheber wird gezeigt" "CI-Fotograf"
+    check_status "Rassenseite mit eigenem Bild" "$BASE_URL/breed_detail.php?id=1" "200"
+    check_body_contains "Bildnachweis auf der Rassenseite" "CI-Fotograf"
+    check_status "Rassenliste mit eigenem Bild" "$BASE_URL/rassen.php" "200"
+    check_body_contains "Bildnachweis als Tooltip in der Liste" 'title="Foto: CI-Fotograf"'
     check_status "Bild wird ausgeliefert" "$BASE_URL/bildausgabe.php?id=1" "200"
     check_status "Bildauswahl für das Entfernen" "$RB" "200"
     RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
@@ -1254,6 +1258,21 @@ else
     check_body_not_contains "Keine fremde Rücksprungadresse" 'href="https://example.com'
     check_body_contains "Rücksprung zur eigenen Liste" '<a href="/admin_rassenbilder.php" class="inline-flex'
     check_status "Unbekannte Rasse" "$BASE_URL/admin_rassenbild.php?id=999999" "404"
+    # Reiter Wikimedia: ohne Zuordnung. Ob Wikidata aus der CI erreichbar
+    # ist, spielt keine Rolle, die Seite zeigt dann einen Hinweis.
+    RB_WM="$BASE_URL/admin_rassenbild.php?id=1&reiter=wikimedia&zurueck=%2Fadmin_rassenbilder.php"
+    check_status "Reiter Wikimedia lädt" "$RB_WM" "200"
+    check_body_contains "Eingabe einer Wikidata-ID" "Wikidata-ID von Hand"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Ungültige Wikidata-ID" "$RB_WM" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=wikidata_zuordnen --data-urlencode wikidata_id=Q0"
+    check_status "Nach der ungültigen Wikidata-ID" "$RB_WM" "200"
+    check_body_contains "Ungültige Wikidata-ID abgelehnt" "Ungültige Wikidata-ID"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Untergeschobenes Wikimedia-Bild" "$RB_WM" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=wikimedia_bild --data-urlencode datei=Erfunden.jpg"
+    check_status "Nach dem untergeschobenen Wikimedia-Bild" "$RB_WM" "200"
+    check_body_contains "Fremdes Wikimedia-Bild abgelehnt" "Bild gehört nicht zu diesem Wikidata-Eintrag."
     check_status "Rasse bearbeiten mit gemeinsamem Zuschneider" "$BASE_URL/admin_add_breed.php?id=1" "200"
     check_body_contains "Rasse bearbeiten nutzt 4:3" "aspect-[4/3]"
 

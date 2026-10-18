@@ -377,6 +377,7 @@ class Breed
                     temperament, temperament_en, lebenserwartung, zuchtzweck, zuchtzweck_en, thedogapi_id,
                     quelle_url, quelle_stand, gliederung,
                     (bild_blob IS NOT NULL) AS hat_bild, bild_updated_at,
+                    bild_quelle, bild_urheber, bild_lizenz, bild_lizenz_url, wikidata_id, wikipedia_de,
                     created_at, updated_at, created_by
              FROM breeds WHERE id = :id LIMIT 1'
         );
@@ -453,7 +454,7 @@ class Breed
     public static function search(string $searchTerm = ''): array
     {
         $pdo = Database::getConnection();
-        $sql = 'SELECT b.id, b.name, b.name_en, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, (b.bild_blob IS NOT NULL) AS hat_bild
+        $sql = 'SELECT b.id, b.name, b.name_en, b.namenszusatz, b.ursprungsland, b.fci_klasse, b.fci_nr, b.bild_updated_at, b.bild_quelle, b.bild_urheber, b.bild_lizenz, (b.bild_blob IS NOT NULL) AS hat_bild
                 FROM breeds b';
         $params = [];
         $searchTerm = clean_input($searchTerm);

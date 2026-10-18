@@ -221,6 +221,8 @@ return [
     'rasse.quelle_vdh'           => 'Text: VDH breed encyclopaedia',
     'rasse.abgerufen'            => ', retrieved on {datum}',
     'rasse.original_vdh'         => 'Original at VDH',
+    'rasse.foto'                 => 'Photo',
+    'rasse.wikipedia'            => 'More about the breed on Wikipedia (German)',
     'rasse.abschnitte'           => 'Sections',
     'rasse.aehnlich'             => 'Similar breeds',
 

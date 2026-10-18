@@ -31,3 +31,6 @@ __pycache__/
 
 # TheDogAPI-Bildkandidaten je Rasse (models/TheDogApiBilder.php)
 /cache_thedogapi_bilder.json
+
+# Wikimedia-Bildkandidaten je Wikidata-Eintrag (models/WikimediaBilder.php)
+/cache_wikimedia_bilder.json
