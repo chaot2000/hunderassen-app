@@ -85,6 +85,7 @@ class TheDogApiAbgleich
         'zwergspitz' => 'Pomeranian', 'dobermann' => 'Doberman Pinscher', 'akita' => 'Akita',
         'tibet terrier' => 'Tibetan Terrier', 'tibet spaniel' => 'Tibetan Spaniel',
         'afghanischer windhund' => 'Afghan Hound', 'irish red setter' => 'Irish Setter',
+        'galgo espanol' => 'Spanish Greyhound',
         'deutsch kurzhaar' => 'German Shorthaired Pointer', 'deutsch drahthaar' => 'German Wirehaired Pointer',
         'deutsch langhaar' => 'German Longhaired Pointer', 'deutsch stichelhaar' => 'German Roughhaired Pointer',
         'samojede' => 'Samoyed', 'tiroler bracke' => 'Tyrolean Hound',
