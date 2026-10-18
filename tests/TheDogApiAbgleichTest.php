@@ -76,5 +76,11 @@ $m = $zu(['name' => 'Bullmastiffartiger']);
 pruefe('Nur ähnlich → nie sicher', $m === null || $m['score'] < TheDogApiAbgleich::SICHER);
 pruefe('Nichts Ähnliches → kein Treffer', $zu(['name' => 'Qqqq Zzzz']) === null);
 
+// Vorschläge für die Bildauswahl: vorhandene Zuordnung zählt nicht
+$v = TheDogApiAbgleich::vorschlaege(['name' => 'Afghanischer Windhund', 'thedogapi_id' => '14'], $api, 3);
+pruefe('Vorschläge: bester Treffer zuerst, trotz falscher Zuordnung', ($v[0]['breed']['name'] ?? null) === 'Afghan Hound');
+pruefe('Vorschläge: höchstens die gewünschte Zahl', count($v) === 3);
+pruefe('Vorschläge: keine doppelten Rassen', count(array_unique(array_map(fn($x) => $x['breed']['id'], $v))) === 3);
+
 echo $fehler === 0 ? "\nAlle Tests grün.\n" : "\n{$fehler} Test(s) fehlgeschlagen.\n";
 exit($fehler === 0 ? 0 : 1);

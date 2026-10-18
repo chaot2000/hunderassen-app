@@ -66,6 +66,7 @@ $verwaltungsPfade = [
     '/admin_rassentexte.php',
     '/admin_thedogapi_apply.php',
     '/admin_rassenbilder.php',
+    '/admin_rassenbild.php',
     '/admin_manage_tests.php',
     '/test_form.php',
 ];

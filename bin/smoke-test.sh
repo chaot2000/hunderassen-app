@@ -653,6 +653,7 @@ else
         check_status "B: TheDogAPI-Abgleich ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_review.php" "403"
         check_status "B: TheDogAPI-Übernahme ist nur für Super-Admins (403)" "$BASE_URL/admin_thedogapi_apply.php" "403"
         check_status "B: Rassenbilder nur für Super-Admins (403)" "$BASE_URL/admin_rassenbilder.php" "403"
+        check_status "B: Bildauswahl nur für Super-Admins (403)" "$BASE_URL/admin_rassenbild.php?id=1" "403"
         check_status "B: Benutzerverwaltung lädt" "$BASE_URL/admin_manage_users.php" "200"
         check_body_not_contains "B: Benutzerliste zeigt den Super-Admin aus Mandant 1 nicht" "Super-Admin"
 
@@ -1190,42 +1191,67 @@ else
     check_body_contains "Unübersetzter englischer Begriff bleibt als Wesen sichtbar" "CI-Erstwert"
 
     echo ""
-    echo "--- Rassenbilder aus TheDogAPI ---"
+    echo "--- Rassenbilder: Liste, Auswahl, Hochladen ---"
     # Rasse 1 ist oben TheDogAPI 6 zugeordnet und hat kein Bild. Ohne
     # Schlüssel (wie in CI) gibt es keine Kandidaten, die Seite meldet das.
-    check_status "Rassenbilder laden" "$BASE_URL/admin_rassenbilder.php" "200"
-    check_body_contains "Rasse ohne Bild wird gelistet" "TheDogAPI 6"
+    RB="$BASE_URL/admin_rassenbild.php?id=1&reiter=thedogapi&zurueck=%2Fadmin_rassenbilder.php"
+    check_status "Rassenbilder-Liste lädt" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Rasse mit Zuordnung in der Liste" "&quot;tdapi&quot;:&quot;6&quot;"
+    check_body_contains "Statusfilter mit Zahl" "Ohne Bild ("
+    check_status "Bildauswahl lädt" "$RB" "200"
+    check_body_contains "Zuordnung wird gezeigt" "TheDogAPI 6"
     check_body_contains "Hinweis auf fehlenden Schlüssel" "Kein TheDogAPI-Schlüssel hinterlegt"
-    check_body_contains "Auswahl Kein Bild vorbelegt" 'name="wahl[1]" value="" checked'
+    check_body_contains "Reiter Hochladen" "reiter=hochladen"
     RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Untergeschobenes Bild" "$BASE_URL/admin_rassenbilder.php" "302"         "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=ohne --data-urlencode wahl[1]=erfunden123"
-    check_status "Ergebnis nach dem Absenden" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_status "Untergeschobenes TheDogAPI-Bild" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=thedogapi_bild --data-urlencode bild_id=erfunden123"
+    check_status "Nach dem untergeschobenen Bild" "$RB" "200"
     check_body_contains "Fremde Bild-ID wird abgelehnt" "Bild gehört nicht zu dieser Rasse."
-    check_body_contains "Nichts übernommen" "0 Bilder übernommen."
     RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Rasse zurückstellen" "$BASE_URL/admin_rassenbilder.php" "302" \
-        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=ohne --data-urlencode wahl[1]=:zurueckstellen"
-    check_status "Nach dem Zurückstellen" "$BASE_URL/admin_rassenbilder.php" "200"
-    check_body_contains "Zurückstellen gemeldet" "1 zurückgestellt."
-    check_body_not_contains "Zurückgestellte Rasse fehlt im Abgleich" "TheDogAPI 6"
-    check_body_contains "Zähler der Zurückgestellten" "Zurückgestellt (1)"
-    check_status "Ansicht Zurückgestellt" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
-    check_body_contains "Zurückgestellte Rasse wird gelistet" "TheDogAPI 6"
-    check_body_contains "Datum des Zurückstellens" "zurückgestellt seit"
+    check_status "Unbekannte TheDogAPI-Rasse zuordnen" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=zuordnen --data-urlencode thedogapi_id=999999"
+    check_status "Nach der unbekannten Zuordnung" "$RB" "200"
+    check_body_contains "Unbekannte Rasse abgelehnt" "Unbekannte TheDogAPI-Rasse."
+    check_body_contains "Zuordnung bleibt" "TheDogAPI 6"
     RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Bilder neu abrufen" "$BASE_URL/admin_rassenbilder.php" "302" \
-        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=neu_abrufen --data-urlencode modus=zurueck --data-urlencode rassen[]=1"
-    check_status "Nach dem neuen Abruf" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
-    check_body_contains "Neuer Abruf gemeldet" "Bilder für 1 Rassen neu bei TheDogAPI abgerufen."
+    check_status "Rasse zurückstellen" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=zurueckstellen"
+    check_status "Liste nach dem Zurückstellen" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Zurückstellen gemeldet" "CI-Testrasse ist zurückgestellt."
+    check_body_contains "Status zurückgestellt in der Liste" "&quot;status&quot;:&quot;zurueck&quot;"
+    check_status "Bildauswahl einer zurückgestellten Rasse" "$RB" "200"
+    check_body_contains "Datum des Zurückstellens" "Zurückgestellt seit:"
     RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
-    check_status "Rasse wieder anbieten" "$BASE_URL/admin_rassenbilder.php" "302" \
-        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=zurueck --data-urlencode wahl[1]=:anbieten"
-    check_status "Nach dem Wieder-Anbieten" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
-    check_body_contains "Wieder-Anbieten gemeldet" "1 wieder im Abgleich."
-    check_status "Rasse wieder im Abgleich" "$BASE_URL/admin_rassenbilder.php" "200"
-    check_body_contains "Rasse ohne Bild wieder gelistet" "TheDogAPI 6"
-    check_status "Ansicht Rassen mit Bild" "$BASE_URL/admin_rassenbilder.php?modus=mit" "200"
-    check_body_contains "Warnung beim Ersetzen" "Das alte Bild ist danach weg."
+    check_status "Wieder als offen führen" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=anbieten"
+    check_status "Nach dem Wieder-Anbieten" "$RB" "200"
+    check_body_contains "Wieder-Anbieten gemeldet" "wird wieder als offen geführt."
+    RB_UP="$BASE_URL/admin_rassenbild.php?id=1&reiter=hochladen&zurueck=%2Fadmin_rassenbilder.php%3Fstatus%3Dmit"
+    check_status "Reiter Hochladen lädt" "$RB_UP" "200"
+    check_body_contains "Zuschneider im Format 4:3" "bildZuschneider({ breite: 4, hoehe: 3 })"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Eigenes Bild hochladen" "$RB_UP" "302" \
+        "-X POST -F csrf_token=$RB_CSRF -F aktion=hochladen -F urheber=CI-Fotograf -F bild=@tests/fixtures/rassenbild.jpg"
+    check_status "Liste nach dem Hochladen" "$BASE_URL/admin_rassenbilder.php?status=mit" "200"
+    check_body_contains "Hochladen gemeldet" "Bild für CI-Testrasse gespeichert."
+    check_body_contains "Herkunft eigenes Bild in der Liste" "&quot;quelle&quot;:&quot;upload&quot;"
+    check_status "Bildauswahl mit eigenem Bild" "$RB" "200"
+    check_body_contains "Herkunft eigenes Bild" "eigenes Bild"
+    check_body_contains "Urheber wird gezeigt" "CI-Fotograf"
+    check_status "Bild wird ausgeliefert" "$BASE_URL/bildausgabe.php?id=1" "200"
+    check_status "Bildauswahl für das Entfernen" "$RB" "200"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Bild entfernen" "$RB" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=entfernen"
+    check_status "Nach dem Entfernen" "$RB" "200"
+    check_body_contains "Entfernen gemeldet" "Bild entfernt."
+    check_body_not_contains "Urheber ist mit entfernt" "CI-Fotograf"
+    check_status "Fremde Rücksprungadresse" "$BASE_URL/admin_rassenbild.php?id=1&zurueck=https%3A%2F%2Fexample.com%2F" "200"
+    check_body_not_contains "Keine fremde Rücksprungadresse" 'href="https://example.com'
+    check_body_contains "Rücksprung zur eigenen Liste" '<a href="/admin_rassenbilder.php" class="inline-flex'
+    check_status "Unbekannte Rasse" "$BASE_URL/admin_rassenbild.php?id=999999" "404"
+    check_status "Rasse bearbeiten mit gemeinsamem Zuschneider" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Rasse bearbeiten nutzt 4:3" "aspect-[4/3]"
 
     echo ""
     echo "--- Rassen-Detailseite und Gliederung der Rassentexte ---"

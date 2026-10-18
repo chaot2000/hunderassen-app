@@ -33,7 +33,7 @@ return [
     'nav.inhalte_import'       => 'Inhalte importieren',
     'nav.rassentexte'          => 'Rassendaten übernehmen',
     'nav.thedogapi'            => 'TheDogAPI-Abgleich',
-    'nav.rassenbilder'         => 'Rassenbilder aus TheDogAPI',
+    'nav.rassenbilder'         => 'Rassenbilder',
     'nav.gruppe_tests'         => 'Tests (Katalog der Organisation)',
     'nav.tests'                => 'Tests verwalten',
     'nav.gruppe_benutzer'      => 'Benutzer',

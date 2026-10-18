@@ -170,7 +170,7 @@ jobs:
           dump > /tmp/nachher.sql
           diff /tmp/vorher.sql /tmp/nachher.sql
 
-      - name: "Textversionen bis Bilder zurückstellen: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
+      - name: "Textversionen bis Bildnachweis: hin (je 2x), gegen schema.sql vergleichen, zurück (je 2x)"
         # Ausgangspunkt ist das Schema vor den Textversionen (Tag
         # prod-2026-10-15-mandanten). Beide Migrationen nacheinander, dann
         # muss das Schema exakt einer Neuinstallation aus sql/schema.sql
@@ -233,10 +233,18 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_24_bild_zurueckgestellt.sql
           $R txt_live < sql/migrationen/migration_2026_10_24_bild_zurueckgestellt.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE bild_zurueckgestellt IS NULL" | grep -qx 2
+          dump txt_live > /tmp/txt_zurueckgestellt.sql
+          $R txt_live < sql/migrationen/migration_2026_10_25_bildnachweis.sql
+          $R txt_live < sql/migrationen/migration_2026_10_25_bildnachweis.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE bild_urheber IS NULL AND bild_lizenz IS NULL" | grep -qx 2
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_bildnachweis.sql
+          $R txt_live < sql/migrationen/rollback_bildnachweis.sql
+          dump txt_live > /tmp/txt_zurueck_bildnachweis.sql
+          diff /tmp/txt_zurueckgestellt.sql /tmp/txt_zurueck_bildnachweis.sql
           $R txt_live < sql/migrationen/rollback_bild_zurueckgestellt.sql
           $R txt_live < sql/migrationen/rollback_bild_zurueckgestellt.sql
           dump txt_live > /tmp/txt_zurueck_zurueckgestellt.sql

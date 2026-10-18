@@ -318,4 +318,49 @@ class TheDogApiAbgleich
         }
         return null;
     }
+
+    /**
+     * Mehrere Vorschläge für eine Rasse ohne Zuordnung: der beste Treffer
+     * und danach die ähnlichsten Namen. Die vorhandene Zuordnung zählt
+     * hier nicht, damit sich auch eine falsche korrigieren lässt.
+     *
+     * @param list<array{id: int|string, name: string}> $apiBreeds
+     * @return list<array{breed: array, score: int, grund: string}>
+     */
+    public static function vorschlaege(array $rasse, array $apiBreeds, int $anzahl = 5): array
+    {
+        $rasse['thedogapi_id'] = null;
+        $ergebnis = [];
+        $bester = self::bestesMatch($rasse, $apiBreeds);
+        if ($bester !== null) {
+            $ergebnis[(string) $bester['breed']['id']] = $bester;
+        }
+        $varianten = [];
+        foreach (self::kandidaten((string) $rasse['name'], $rasse['alternative_namen'] ?? null) as $k) {
+            $varianten[$k] = true;
+            $varianten[self::uebersetzen($k)] = true;
+        }
+        $en = self::aufbereiten((string) ($rasse['name_en'] ?? ''));
+        if ($en !== '') {
+            $varianten[$en] = true;
+        }
+        $aehnlich = [];
+        foreach ($apiBreeds as $b) {
+            $apiName = self::aufbereiten((string) $b['name']);
+            $score = 0;
+            foreach (array_keys($varianten) as $v) {
+                similar_text((string) $v, $apiName, $prozent);
+                $score = max($score, (int) round(min($prozent, self::SICHER - 1)));
+            }
+            $aehnlich[] = ['breed' => $b, 'score' => $score, 'grund' => 'ähnlich'];
+        }
+        usort($aehnlich, fn($a, $b) => $b['score'] <=> $a['score']);
+        foreach ($aehnlich as $v) {
+            if (count($ergebnis) >= $anzahl) {
+                break;
+            }
+            $ergebnis[(string) $v['breed']['id']] ??= $v;
+        }
+        return array_values($ergebnis);
+    }
 }
