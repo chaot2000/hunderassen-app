@@ -64,6 +64,8 @@ $m = $zu(['name' => 'Fox Terrier (Glatthaar)']);
 pruefe('Fox Terrier (Glatthaar) → Smooth Fox Terrier', $name($m) === 'Smooth Fox Terrier');
 $m = $zu(['name' => 'Afghanischer Windhund']);
 pruefe('Afghanischer Windhund → Afghan Hound, nicht Spanish Greyhound', $name($m) === 'Afghan Hound');
+$m = $zu(['name' => 'Galgo Español']);
+pruefe('Galgo Español → Spanish Greyhound, nicht Alano Español', $name($m) === 'Spanish Greyhound' && $m['score'] >= TheDogApiAbgleich::SICHER);
 $m = $zu(['name' => 'Kleiner Münsterländer']);
 pruefe('Kleiner Münsterländer → Small, nicht Large', $name($m) === 'Small Münsterländer');
 $m = $zu(['name' => 'Irgendwas Ganz Anderes', 'name_en' => 'Toy Fox Terrier']);
