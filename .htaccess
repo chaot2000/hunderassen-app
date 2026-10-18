@@ -85,3 +85,9 @@ Options -Indexes
         Deny from all
     </IfModule>
 </FilesMatch>
+
+# Web-Manifest mit richtigem MIME-Typ ausliefern (Apache kennt
+# .webmanifest nicht überall).
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>

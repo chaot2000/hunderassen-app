@@ -90,6 +90,12 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($pageTitle) ?> &middot; <?= e(t('kopf.titel')) ?></title>
 
+    <!-- App-Icon: Low-Poly-Hundekopf, erzeugt mit tools/icons_erzeugen.py -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#3F5A3F">
+
     <!-- Tailwind CSS via CDN (kein Build-Tool auf Shared-Hosting verfügbar) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -134,7 +140,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
 <header class="bg-tanne text-creme shadow-md relative z-20">
     <div class="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <a href="<?= is_logged_in() ? '/dashboard.php' : '/index.php' ?>" class="flex items-center gap-2.5 text-lg sm:text-xl font-extrabold tracking-tight whitespace-nowrap">
-            <?= render_dog_icon(38, '#2C4130', '#C4D62A') ?>
+            <img src="/icons/logo-kopf.png" width="38" height="38" alt="" class="shrink-0 rounded-lg">
             <span class="hidden sm:inline"><?= e(t('kopf.titel')) ?></span>
         </a>
 
