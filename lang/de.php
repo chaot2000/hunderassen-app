@@ -222,6 +222,8 @@ return [
     'rasse.quelle_vdh'           => 'Text: VDH-Rasselexikon',
     'rasse.abgerufen'            => ', abgerufen am {datum}',
     'rasse.original_vdh'         => 'Original beim VDH',
+    'rasse.foto'                 => 'Foto',
+    'rasse.wikipedia'            => 'Mehr über die Rasse bei Wikipedia',
     'rasse.abschnitte'           => 'Abschnitte',
     'rasse.aehnlich'             => 'Ähnliche Rassen',
 

@@ -5,7 +5,8 @@
  * Übersicht der Rassenbilder für den Super-Admin: alle Rassen mit Suche
  * und Filtern nach Status (ohne Bild, mit Bild, zurückgestellt) und
  * Herkunft des Bildes. Je Rasse führt "Bild wählen" zu
- * admin_rassenbild.php, dort stehen die Quellen (TheDogAPI, Hochladen).
+ * admin_rassenbild.php, dort stehen die Quellen (TheDogAPI, Wikimedia,
+ * Hochladen).
  *
  * Die Liste fragt keine fremde Schnittstelle ab. Alle Rassen kommen auf
  * einmal (knapp 400), gesucht und gefiltert wird im Browser, damit das
@@ -41,6 +42,7 @@ foreach (RassenBild::liste() as $r) {
         'status'  => $status,
         'quelle'  => $quelle,
         'tdapi'   => (string) $r['thedogapi_id'],
+        'wd'      => (string) $r['wikidata_id'],
         'bild'    => $r['hat_bild'] ? '/bildausgabe.php?id=' . (int) $r['id'] . '&v=' . urlencode((string) $r['bild_updated_at']) : '',
         'seit'    => $r['bild_zurueckgestellt'] ? date('d.m.Y', (int) strtotime((string) $r['bild_zurueckgestellt'])) : '',
     ];
@@ -56,7 +58,7 @@ require __DIR__ . '/views/partials/header.php';
 <div class="max-w-5xl" x-data="rassenbilderListe(<?= e(json_encode($zeilen, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>)" x-init="init()">
     <h1 class="text-2xl font-extrabold text-fellDk mb-2">🖼️ Rassenbilder</h1>
     <p class="text-fellDk mb-4 max-w-[70ch]">
-        Alle Rassen mit ihrem Bild. Über „Bild wählen“ suchst du ein Bild bei TheDogAPI oder lädst ein eigenes hoch.
+        Alle Rassen mit ihrem Bild. Über „Bild wählen“ suchst du ein Bild bei TheDogAPI oder Wikimedia Commons oder lädst ein eigenes hoch.
         Rassen, für die es nichts Passendes gibt, kannst du dort zurückstellen.
     </p>
 
@@ -102,6 +104,7 @@ require __DIR__ . '/views/partials/header.php';
                     <p class="text-xs text-fellDk/50 truncate" x-text="r.neben"></p>
                     <p class="text-xs mt-1 flex flex-wrap gap-1.5">
                         <span x-show="r.tdapi" class="border border-sand rounded-full px-2 py-0.5" x-text="'TheDogAPI ' + r.tdapi"></span>
+                        <span x-show="r.wd" class="border border-sand rounded-full px-2 py-0.5" x-text="'Wikidata ' + r.wd"></span>
                         <span x-show="r.quelle" class="bg-sand/40 rounded-full px-2 py-0.5" x-text="quellenName(r.quelle)"></span>
                         <span x-show="r.seit" class="bg-pfote/15 rounded-full px-2 py-0.5" x-text="'zurückgestellt seit ' + r.seit"></span>
                     </p>

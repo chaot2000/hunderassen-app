@@ -10,6 +10,10 @@
  *    (models/TheDogApiBilder.php). Ohne Zuordnung oder zum Ändern:
  *    Vorschläge aus dem Abgleich und Suche über alle TheDogAPI-Rassen,
  *    Zuordnen wird als Version gespeichert.
+ *  - Wikimedia: Bilder zum zugeordneten Wikidata-Eintrag (Hauptbild und
+ *    Commons-Kategorie, models/WikimediaBilder.php), nur freie Lizenzen,
+ *    mit Urheber und Lizenz als Bildnachweis. Ohne Zuordnung: Vorschläge
+ *    über Wikipedia-Titel und Wikidata-Suche oder eine Q-ID von Hand.
  *  - Hochladen: eigene Datei, im Browser auf 4:3 zugeschnitten
  *    (views/partials/bild_zuschneider.php), Urheber freiwillig.
  *
@@ -24,6 +28,7 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/RassenBild.php';
 require_once __DIR__ . '/models/TheDogApiBilder.php';
 require_once __DIR__ . '/models/TheDogApiAbgleich.php';
+require_once __DIR__ . '/models/WikimediaBilder.php';
 require_once __DIR__ . '/models/BildVerarbeitung.php';
 require_once __DIR__ . '/views/partials/bild_zuschneider.php';
 
@@ -31,7 +36,7 @@ secure_session_start();
 require_super_admin();
 set_time_limit(120);
 
-const RB_REITER = ['thedogapi' => 'TheDogAPI', 'hochladen' => 'Hochladen'];
+const RB_REITER = ['thedogapi' => 'TheDogAPI', 'wikimedia' => 'Wikimedia Commons', 'hochladen' => 'Hochladen'];
 
 $rasse = RassenBild::finde((int) ($_REQUEST['id'] ?? 0));
 if ($rasse === null) {
@@ -39,7 +44,9 @@ if ($rasse === null) {
     die('Rasse nicht gefunden.');
 }
 $id = (int) $rasse['id'];
-$reiter = array_key_exists($_REQUEST['reiter'] ?? '', RB_REITER) ? $_REQUEST['reiter'] : 'thedogapi';
+// Ohne TheDogAPI-Zuordnung ist Wikimedia meist der bessere Einstieg.
+$reiter = array_key_exists($_REQUEST['reiter'] ?? '', RB_REITER) ? $_REQUEST['reiter']
+    : ((string) $rasse['thedogapi_id'] !== '' ? 'thedogapi' : 'wikimedia');
 // Nur Rücksprünge zur eigenen Liste, keine beliebigen Adressen.
 $zurueck = (string) ($_REQUEST['zurueck'] ?? '');
 if (!preg_match('#^/admin_rassenbilder\.php(\?[^\s"<>]*)?$#', $zurueck)) {
@@ -91,6 +98,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [$ok, $meldung] = [false, $bild['message']];
             }
             break;
+        case 'wikidata_zuordnen':
+            $qid = strtoupper(trim((string) ($_POST['wikidata_id'] ?? '')));
+            if ($qid === '') {
+                RassenBild::wikidataZuordnen($id, '', '', $userId);
+                $meldung = 'Wikidata-Zuordnung entfernt.';
+            } elseif (!WikimediaBilder::istQid($qid)) {
+                [$ok, $meldung] = [false, 'Ungültige Wikidata-ID, erwartet wird z. B. Q21080.'];
+            } else {
+                $e = WikimediaBilder::eintraege([$qid]);
+                $eintrag = $e['eintraege'][$qid] ?? null;
+                if ($eintrag === null) {
+                    [$ok, $meldung] = [false, $e['fehler'] ?? 'Wikidata-Eintrag nicht gefunden.'];
+                } else {
+                    RassenBild::wikidataZuordnen($id, $qid, $eintrag['wikipedia_de'], $userId);
+                    $meldung = 'Zugeordnet: ' . $qid . ' · ' . $eintrag['label'] . ($eintrag['rasse'] ? '' : ' (kein Eintrag vom Typ Hunderasse)') . '.';
+                }
+            }
+            $ziel = $hier('wikimedia');
+            break;
+        case 'wikimedia_bild':
+            $kandidat = WikimediaBilder::kandidat((string) $rasse['wikidata_id'], (string) ($_POST['datei'] ?? ''));
+            $bild = $kandidat ? WikimediaBilder::laden($kandidat['url']) : ['success' => false, 'message' => 'Bild gehört nicht zu diesem Wikidata-Eintrag.'];
+            if ($bild['success']) {
+                RassenBild::speichern($id, $bild['blob'], $bild['mime'], WikimediaBilder::quelle($kandidat['id']), [
+                    'urheber' => $kandidat['urheber'], 'lizenz' => $kandidat['lizenz'], 'lizenz_url' => $kandidat['lizenz_url'],
+                ]);
+                $meldung = 'Bild für ' . $rasse['name'] . ' übernommen.';
+                $ziel = $zurueck;
+            } else {
+                [$ok, $meldung] = [false, $bild['message']];
+            }
+            break;
+        case 'wikimedia_neu':
+            WikimediaBilder::vergessen([(string) $rasse['wikidata_id']]);
+            $meldung = 'Bilder werden neu bei Wikimedia abgerufen.';
+            $ziel = $hier('wikimedia');
+            break;
         case 'hochladen':
             $bild = BildVerarbeitung::verarbeiteUpload($_FILES['bild'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
             if (!$bild['success']) {
@@ -140,10 +184,29 @@ if ($reiter === 'thedogapi') {
         $vorschlaege = TheDogApiAbgleich::vorschlaege($rasse, $apiBreeds['breeds']);
     }
 }
+$wmFehler = null;
+$wmKandidaten = [];
+$wmVorschlaege = [];
+$wmEintrag = null;
+if ($reiter === 'wikimedia') {
+    $qid = (string) $rasse['wikidata_id'];
+    if ($qid !== '') {
+        $e = WikimediaBilder::eintraege([$qid]);
+        $wmEintrag = $e['eintraege'][$qid] ?? null;
+        $k = WikimediaBilder::kandidaten($qid);
+        $wmKandidaten = $k['bilder'];
+        $wmFehler = $e['fehler'] ?? $k['fehler'];
+    } else {
+        $v = WikimediaBilder::vorschlaege($rasse);
+        $wmVorschlaege = $v['vorschlaege'];
+        $wmFehler = $v['fehler'];
+    }
+}
 
 $quelleText = match (RassenBild::quellenArt($rasse['bild_quelle'])) {
     'thedogapi' => 'TheDogAPI, Bild ' . substr((string) $rasse['bild_quelle'], strlen('TheDogAPI:')),
     'upload'    => 'eigenes Bild',
+    'wikimedia' => 'Wikimedia Commons, ' . substr((string) $rasse['bild_quelle'], strlen('Wikimedia:')),
     default     => $rasse['hat_bild'] ? 'Herkunft unbekannt' : '',
 };
 $knopf = 'text-sm font-semibold rounded-full px-4 py-2 border border-sand hover:bg-sand/30';
@@ -293,6 +356,98 @@ require __DIR__ . '/views/partials/header.php';
                         <input type="hidden" name="aktion" value="zuordnen">
                         <input type="hidden" name="thedogapi_id" value="">
                         <button type="submit" class="text-sm text-red-700 hover:underline">Zuordnung entfernen</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+
+    <?php elseif ($reiter === 'wikimedia'): ?>
+        <?php if ($wmFehler !== null): ?>
+            <p class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4" role="alert"><?= e($wmFehler) ?></p>
+        <?php endif; ?>
+
+        <div x-data="{ aendern: false }">
+            <?php if ($rasse['wikidata_id']): ?>
+                <p class="text-sm">
+                    Zugeordnet: <a href="https://www.wikidata.org/wiki/<?= e((string) $rasse['wikidata_id']) ?>" target="_blank" rel="noopener noreferrer" class="font-bold underline"><?= e((string) $rasse['wikidata_id']) ?><?= $wmEintrag ? ' · ' . e($wmEintrag['label']) : '' ?></a>
+                    <?php if ($wmEintrag && $wmEintrag['beschreibung'] !== ''): ?><span class="text-fellDk/60">(<?= e($wmEintrag['beschreibung']) ?>)</span><?php endif; ?>
+                    <button type="button" @click="aendern = !aendern" class="ml-2 text-tanne underline">Zuordnung ändern</button>
+                </p>
+                <?php if ($rasse['wikipedia_de']): ?>
+                    <p class="text-xs text-fellDk/60 mt-1">Wikipedia: <a href="https://de.wikipedia.org/wiki/<?= e(rawurlencode(str_replace(' ', '_', (string) $rasse['wikipedia_de']))) ?>" target="_blank" rel="noopener noreferrer" class="underline"><?= e((string) $rasse['wikipedia_de']) ?></a></p>
+                <?php endif; ?>
+
+                <?php if ($wmKandidaten): ?>
+                    <p class="text-sm text-fellDk/60 mt-4"><?= count($wmKandidaten) ?> Bilder unter freier Lizenz. Hauptbilder des Wikidata-Eintrags stehen vorne.</p>
+                    <form method="post" action="<?= e($hier()) ?>" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-2">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="aktion" value="wikimedia_bild">
+                        <?php foreach ($wmKandidaten as $k): ?>
+                            <div class="border border-sand rounded-lg p-2 flex flex-col">
+                                <img src="<?= e($k['vorschau']) ?>" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-full aspect-[4/3] object-cover rounded bg-creme">
+                                <span class="text-xs mt-1">
+                                    <?php if ($k['haupt']): ?><span class="font-bold text-tanneDk">Hauptbild · </span><?php endif; ?>
+                                    <?= (int) $k['breite'] ?>×<?= (int) $k['hoehe'] ?> · <?= e($k['lizenz']) ?>
+                                </span>
+                                <span class="text-xs text-fellDk/60 truncate" title="<?= e($k['urheber']) ?>"><?= e($k['urheber']) ?></span>
+                                <a href="<?= e($k['seite']) ?>" target="_blank" rel="noopener noreferrer" class="text-xs text-fellDk/60 underline truncate" title="<?= e($k['id']) ?>">Bildseite</a>
+                                <button type="submit" name="datei" value="<?= e($k['id']) ?>" class="mt-auto pt-1 text-left text-xs font-bold text-tanne hover:text-tanneDk"
+                                        <?= $rasse['hat_bild'] ? 'onclick="return confirm(\'Vorhandenes Bild ersetzen?\');"' : '' ?>>Übernehmen</button>
+                            </div>
+                        <?php endforeach; ?>
+                    </form>
+                <?php elseif ($wmFehler === null): ?>
+                    <p class="text-sm text-fellDk/60 mt-4">Zu diesem Eintrag gibt es bei Wikimedia Commons keine Fotos unter freier Lizenz.</p>
+                <?php endif; ?>
+                <form method="post" action="<?= e($hier()) ?>" class="mt-4">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="aktion" value="wikimedia_neu">
+                    <button type="submit" class="text-sm text-tanne underline">Bilder neu bei Wikimedia abrufen</button>
+                    <span class="text-xs text-fellDk/50">Sonst kommen sie bis zu einer Woche aus dem Zwischenspeicher.</span>
+                </form>
+            <?php else: ?>
+                <p class="text-sm">Noch kein Wikidata-Eintrag zugeordnet. Wähle den passenden Eintrag, danach erscheinen seine Bilder.</p>
+                <?php if ($wmVorschlaege): ?>
+                    <ul class="space-y-2 mt-3">
+                        <?php foreach ($wmVorschlaege as $v): ?>
+                            <li class="flex items-start gap-3 text-sm">
+                                <form method="post" action="<?= e($hier('wikimedia')) ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="aktion" value="wikidata_zuordnen">
+                                    <input type="hidden" name="wikidata_id" value="<?= e($v['id']) ?>">
+                                    <button type="submit" class="font-semibold text-tanne hover:text-tanneDk">Zuordnen</button>
+                                </form>
+                                <span>
+                                    <a href="https://www.wikidata.org/wiki/<?= e($v['id']) ?>" target="_blank" rel="noopener noreferrer" class="font-semibold underline"><?= e($v['label']) ?></a>
+                                    <span class="text-fellDk/50">(<?= e($v['id']) ?>)</span>
+                                    <?php if ($v['sicher']): ?><span class="ml-1 text-xs font-bold bg-tanne/10 text-tanneDk rounded-full px-2 py-0.5">passt</span><?php endif; ?>
+                                    <?php if (!$v['rasse']): ?><span class="ml-1 text-xs bg-pfote/15 rounded-full px-2 py-0.5">kein Eintrag vom Typ Hunderasse</span><?php endif; ?>
+                                    <span class="block text-xs text-fellDk/60"><?= e($v['beschreibung']) ?><?= $v['wikipedia_de'] !== '' ? ' · Wikipedia: ' . e($v['wikipedia_de']) : '' ?> · gefunden über <?= e($v['weg']) ?></span>
+                                </span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php elseif ($wmFehler === null): ?>
+                    <p class="text-sm text-fellDk/60 mt-3">Keine Vorschläge gefunden. Such den Eintrag auf <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" class="underline">wikidata.org</a> und trag seine Q-ID unten ein.</p>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <div <?= $rasse['wikidata_id'] ? 'x-show="aendern" x-cloak' : '' ?> class="mt-6 border-t border-sand pt-4">
+                <form method="post" action="<?= e($hier('wikimedia')) ?>" class="flex flex-wrap items-end gap-3">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="aktion" value="wikidata_zuordnen">
+                    <div>
+                        <label for="wikidata_id" class="block text-sm font-semibold mb-1">Wikidata-ID von Hand</label>
+                        <input type="text" id="wikidata_id" name="wikidata_id" pattern="[Qq][0-9]+" placeholder="z. B. Q21080" class="w-40 border border-sand rounded-lg px-3 py-2 bg-white">
+                    </div>
+                    <button type="submit" class="<?= $knopf ?>">Zuordnen</button>
+                </form>
+                <?php if ($rasse['wikidata_id']): ?>
+                    <form method="post" action="<?= e($hier('wikimedia')) ?>" class="mt-3">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="aktion" value="wikidata_zuordnen">
+                        <input type="hidden" name="wikidata_id" value="">
+                        <button type="submit" class="text-sm text-red-700 hover:underline">Zuordnung entfernen, Vorschläge zeigen</button>
                     </form>
                 <?php endif; ?>
             </div>

@@ -15,6 +15,7 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/Breed.php';
 require_once __DIR__ . '/models/RassenFilter.php';
 require_once __DIR__ . '/models/RassenDatenSchreiben.php';
+require_once __DIR__ . '/models/RassenBild.php';
 
 secure_session_start();
 require_login();
@@ -281,6 +282,7 @@ require __DIR__ . '/views/partials/header.php';
                             <img
                                 src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
                                 alt="<?= e($anzeigeName) ?>"
+                                title="<?= e(RassenBild::nachweisText($breed)) ?>"
                                 class="w-full h-36 object-cover rounded-xl border border-sand mb-3 group-hover:opacity-90 transition-opacity"
                             >
                         <?php else: ?>

@@ -127,8 +127,12 @@ class WikimediaBilder
             $ueberTitel += self::entitaetenAuswerten($daten);
         }
 
+        // Gesucht wird mit den einzelnen Namensteilen, der ganze Name samt
+        // Zusatz ("Galgo Espanol, Spanischer Windhund") findet nichts.
+        $suchbegriffe = array_map(fn($t) => [$t, 'de'], array_slice(array_values(array_filter($titel, fn($t) => !str_contains($t, ','))), 0, 3));
+        $suchbegriffe[] = [(string) ($rasse['name_en'] ?? ''), 'en'];
         $gesucht = [];
-        foreach ([[$titel[0] ?? '', 'de'], [(string) ($rasse['name_en'] ?? ''), 'en']] as [$text, $sprache]) {
+        foreach ($suchbegriffe as [$text, $sprache]) {
             if (trim($text) === '') {
                 continue;
             }
@@ -144,7 +148,10 @@ class WikimediaBilder
             $alle[] = $e + ['sicher' => $e['rasse'], 'weg' => 'Wikipedia-Titel'];
         }
         foreach ($ueberSuche as $e) {
-            $alle[] = $e + ['sicher' => false, 'weg' => 'Suche'];
+            // Treffer ohne Bezug zu Bildern (z. B. Fachartikel) weglassen
+            if ($e['rasse'] || $e['bilder'] || $e['kategorie'] !== '') {
+                $alle[] = $e + ['sicher' => false, 'weg' => 'Suche'];
+            }
         }
         // Hunderassen zuerst, sonst Reihenfolge der Fundstellen
         usort($alle, fn($a, $b) => [$b['sicher'], $b['rasse']] <=> [$a['sicher'], $a['rasse']]);

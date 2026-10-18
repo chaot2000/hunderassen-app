@@ -29,7 +29,7 @@ class RassenBild
     public static function liste(): array
     {
         return Database::getConnection()->query(
-            'SELECT id, name, name_en, alternative_namen, thedogapi_id,
+            'SELECT id, name, name_en, alternative_namen, thedogapi_id, wikidata_id,
                     bild_blob IS NOT NULL AS hat_bild, bild_updated_at, bild_quelle, bild_urheber, bild_zurueckgestellt
              FROM breeds ORDER BY name'
         )->fetchAll();
@@ -38,7 +38,7 @@ class RassenBild
     public static function finde(int $id): ?array
     {
         $stmt = Database::getConnection()->prepare(
-            'SELECT id, name, name_en, alternative_namen, thedogapi_id,
+            'SELECT id, name, name_en, alternative_namen, thedogapi_id, wikidata_id, wikipedia_de,
                     bild_blob IS NOT NULL AS hat_bild, bild_updated_at, bild_quelle, bild_urheber, bild_lizenz,
                     bild_lizenz_url, bild_zurueckgestellt
              FROM breeds WHERE id = :id'
@@ -135,6 +135,77 @@ class RassenBild
             }
             throw $e;
         }
+    }
+
+    /**
+     * Wikidata-Zuordnung setzen (mit Titel des deutschen Wikipedia-Artikels)
+     * oder mit '' entfernen, als Version gespeichert.
+     */
+    public static function wikidataZuordnen(int $id, string $qid, string $wikipediaDe, int $userId): bool
+    {
+        if ($qid !== '' && !preg_match('/^Q[1-9]\d{0,11}$/', $qid)) {
+            return false;
+        }
+        $neu = [
+            'wikidata_id'  => $qid === '' ? null : $qid,
+            'wikipedia_de' => $qid === '' || trim($wikipediaDe) === '' ? null : mb_substr(trim($wikipediaDe), 0, 255),
+        ];
+        $pdo = Database::getConnection();
+        $pdo->beginTransaction();
+        try {
+            $alt = $pdo->prepare('SELECT wikidata_id, wikipedia_de FROM breeds WHERE id = :id FOR UPDATE');
+            $alt->execute([':id' => $id]);
+            $vorher = $alt->fetch();
+            if (!$vorher) {
+                $pdo->rollBack();
+                return false;
+            }
+            $pdo->prepare('UPDATE breeds SET wikidata_id = :q, wikipedia_de = :w WHERE id = :id')
+                ->execute([':q' => $neu['wikidata_id'], ':w' => $neu['wikipedia_de'], ':id' => $id]);
+            ContentRevision::protokolliere($pdo, 'breeds', $id, $vorher, $neu, $userId, 'bearbeitung');
+            $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Bildnachweis für die Anzeige: Text, Link zur Bildseite, Lizenz mit
+     * Link. Null, wenn nichts bekannt ist.
+     *
+     * @return array{urheber: string, quelle: string, link: string, lizenz: string, lizenz_url: string}|null
+     */
+    public static function nachweis(array $rasse): ?array
+    {
+        $quelle = (string) ($rasse['bild_quelle'] ?? '');
+        $urheber = trim((string) ($rasse['bild_urheber'] ?? ''));
+        $art = self::quellenArt($quelle);
+        if ($art === 'wikimedia') {
+            $datei = substr($quelle, strlen('Wikimedia:'));
+            return [
+                'urheber' => $urheber, 'quelle' => 'Wikimedia Commons',
+                'link' => 'https://commons.wikimedia.org/wiki/File:' . rawurlencode(str_replace(' ', '_', $datei)),
+                'lizenz' => (string) ($rasse['bild_lizenz'] ?? ''), 'lizenz_url' => (string) ($rasse['bild_lizenz_url'] ?? ''),
+            ];
+        }
+        if ($art === 'thedogapi') {
+            return ['urheber' => $urheber, 'quelle' => 'TheDogAPI', 'link' => 'https://thedogapi.com', 'lizenz' => '', 'lizenz_url' => ''];
+        }
+        if ($urheber !== '') {
+            return ['urheber' => $urheber, 'quelle' => '', 'link' => '', 'lizenz' => (string) ($rasse['bild_lizenz'] ?? ''), 'lizenz_url' => (string) ($rasse['bild_lizenz_url'] ?? '')];
+        }
+        return null;
+    }
+
+    /** Bildnachweis als eine Zeile, z. B. für einen Tooltip. */
+    public static function nachweisText(array $rasse): string
+    {
+        $n = self::nachweis($rasse);
+        return $n === null ? '' : 'Foto: ' . implode(' · ', array_filter([$n['urheber'], $n['lizenz'], $n['quelle']]));
     }
 
     /**

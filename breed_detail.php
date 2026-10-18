@@ -20,6 +20,7 @@ require_once __DIR__ . '/models/Breed.php';
 require_once __DIR__ . '/models/ContentRevision.php';
 require_once __DIR__ . '/models/RassentextGliederung.php';
 require_once __DIR__ . '/models/RassenDaten.php';
+require_once __DIR__ . '/models/RassenBild.php';
 require_once __DIR__ . '/views/partials/rassentext.php';
 
 secure_session_start();
@@ -267,6 +268,19 @@ require __DIR__ . '/views/partials/header.php';
                 <img src="/bildausgabe.php?id=<?= (int) $breed['id'] ?>&v=<?= urlencode((string) ($breed['bild_updated_at'] ?? '')) ?>"
                      alt="<?= e($namen['haupt']) ?>"
                      class="absolute inset-0 w-full h-full object-cover object-[50%_25%]">
+                <?php if ($nachweis = RassenBild::nachweis($breed)): ?>
+                    <!-- Bildnachweis oben, unten liegt der FCI-Balken über dem Bild. Bei CC BY und CC BY-SA Pflicht. -->
+                    <p class="absolute top-0 right-0 max-w-full bg-fellDk/70 text-creme text-[11px] leading-tight px-2 py-1 lg:rounded-tr-lg">
+                        <?= e(t('rasse.foto')) ?>:
+                        <?php if ($nachweis['urheber'] !== ''): ?><?= e($nachweis['urheber']) ?><?php endif; ?>
+                        <?php if ($nachweis['lizenz'] !== ''): ?>
+                            · <?php if ($nachweis['lizenz_url'] !== ''): ?><a href="<?= e($nachweis['lizenz_url']) ?>" target="_blank" rel="noopener noreferrer license" class="underline"><?= e($nachweis['lizenz']) ?></a><?php else: ?><?= e($nachweis['lizenz']) ?><?php endif; ?>
+                        <?php endif; ?>
+                        <?php if ($nachweis['quelle'] !== ''): ?>
+                            · <?php if ($nachweis['link'] !== ''): ?><a href="<?= e($nachweis['link']) ?>" target="_blank" rel="noopener noreferrer" class="underline"><?= e($nachweis['quelle']) ?></a><?php else: ?><?= e($nachweis['quelle']) ?><?php endif; ?>
+                        <?php endif; ?>
+                    </p>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="lg:col-span-5 relative bg-tanneDk overflow-hidden lg:min-h-[300px] lg:rounded-r-lg">
@@ -432,6 +446,15 @@ require __DIR__ . '/views/partials/header.php';
                     <?php endif; ?>
                 </div>
             </footer>
+        <?php endif; ?>
+
+        <?php if (!empty($breed['wikipedia_de'])): ?>
+            <p class="lg:grid lg:grid-cols-12 lg:gap-10 mt-4">
+                <span class="lg:col-start-5 lg:col-span-8 text-sm text-fellDk">
+                    <a href="https://de.wikipedia.org/wiki/<?= e(rawurlencode(str_replace(' ', '_', (string) $breed['wikipedia_de']))) ?>" target="_blank" rel="noopener noreferrer" lang="de"
+                       class="inline-block py-1 font-semibold text-tanneDk underline underline-offset-4"><?= e(t('rasse.wikipedia')) ?></a>
+                </span>
+            </p>
         <?php endif; ?>
     </div>
 
