@@ -26,7 +26,7 @@ require __DIR__ . '/views/partials/header.php';
 
 <div class="max-w-4xl mx-auto text-center py-10 sm:py-16">
     <div class="flex justify-center mb-6">
-        <img src="/icons/icon-192.png" width="84" height="84" alt="" class="shrink-0">
+        <img src="/app-icons/icon-192.png" width="84" height="84" alt="" class="shrink-0">
     </div>
 
     <h1 class="text-3xl sm:text-5xl font-extrabold text-fellDk leading-tight">

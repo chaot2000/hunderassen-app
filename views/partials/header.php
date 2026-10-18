@@ -93,7 +93,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
 
     <!-- App-Icon: Low-Poly-Hundekopf, erzeugt mit tools/icons_erzeugen.py -->
     <link rel="icon" href="/favicon.ico" sizes="32x32">
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="/app-icons/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#3F5A3F">
 
@@ -141,7 +141,7 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
 <header class="bg-tanne text-creme shadow-md relative z-20">
     <div class="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
         <a href="<?= is_logged_in() ? '/dashboard.php' : '/index.php' ?>" class="flex items-center gap-2.5 text-lg sm:text-xl font-extrabold tracking-tight whitespace-nowrap">
-            <img src="/icons/logo-kopf.png" width="38" height="38" alt="" class="shrink-0 rounded-lg">
+            <img src="/app-icons/logo-kopf.png" width="38" height="38" alt="" class="shrink-0 rounded-lg">
             <span class="hidden sm:inline"><?= e(t('kopf.titel')) ?></span>
         </a>
 
