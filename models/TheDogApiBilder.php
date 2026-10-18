@@ -94,6 +94,21 @@ class TheDogApiBilder
         return array_values($bilder);
     }
 
+    /**
+     * Kandidaten dieser Rassen aus dem Cache werfen, damit beim nächsten
+     * Anzeigen neu bei TheDogAPI gesucht wird.
+     *
+     * @param list<string> $thedogapiIds
+     */
+    public static function vergessen(array $thedogapiIds): void
+    {
+        $cache = self::cacheLesen();
+        foreach ($thedogapiIds as $id) {
+            unset($cache[(string) $id]);
+        }
+        file_put_contents(self::CACHE_DATEI, json_encode($cache, JSON_UNESCAPED_SLASHES), LOCK_EX);
+    }
+
     /** Ein Kandidat aus dem Cache, nur wenn er zur Rasse gehört. */
     public static function kandidat(string $thedogapiId, string $bildId): ?array
     {
