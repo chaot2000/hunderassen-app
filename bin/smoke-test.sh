@@ -108,7 +108,7 @@ check_status "index.php lädt (öffentlich)" "$BASE_URL/index.php" "200"
 check_body_contains "Startseite zeigt Anmelden-Link" "Anmelden"
 check_body_contains "Kopf bindet Favicon ein" 'href="/favicon.ico"'
 check_status "favicon.ico erreichbar" "$BASE_URL/favicon.ico" "200"
-check_status "Kopf-Logo erreichbar" "$BASE_URL/icons/logo-kopf.png" "200"
+check_status "Kopf-Logo erreichbar" "$BASE_URL/app-icons/logo-kopf.png" "200"
 check_status "Web-Manifest erreichbar" "$BASE_URL/manifest.webmanifest" "200"
 
 echo ""
