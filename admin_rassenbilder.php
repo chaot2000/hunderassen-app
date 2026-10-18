@@ -160,6 +160,13 @@ foreach ($rassen as &$r) {
 }
 unset($r);
 
+// Englischer Name der zugeordneten TheDogAPI-Rasse, damit eine falsche
+// Zuordnung auffällt. Aus dem Rassen-Cache, ohne eigenen Abruf je Rasse.
+$apiNamen = [];
+foreach (TheDogApiFelder::breeds()['breeds'] as $b) {
+    $apiNamen[(string) ($b['id'] ?? '')] = (string) ($b['name'] ?? '');
+}
+
 $pageTitle = 'Rassenbilder';
 require __DIR__ . '/views/partials/header.php';
 ?>
@@ -173,7 +180,7 @@ $kachel = 'flex flex-col items-center justify-center gap-2 border border-sand ro
 <div class="max-w-5xl">
     <h1 class="text-2xl font-extrabold text-fellDk mb-2">🖼️ Rassenbilder aus TheDogAPI</h1>
     <p class="text-fellDk mb-4 max-w-[70ch]">
-        Je Rasse stehen bis zu <?= TheDogApiBilder::ANZAHL ?> Bilder aus TheDogAPI zur Auswahl. Wähle das passende aus.
+        Je Rasse stehen bis zu <?= TheDogApiBilder::ANZAHL ?> Bilder aus TheDogAPI zur Auswahl, unter jedem steht die Rasse laut TheDogAPI. Wähle das passende aus.
         Passt keines, stell die Rasse zurück, dann kommt sie hier nicht mehr. Unter „Zurückgestellt“ kannst du sie
         jederzeit wieder anbieten und nach neuen Bildern sehen. Übernommen wird verkleinert, die Herkunft wird
         mitgespeichert. Die Bilder stammen von Nutzern von TheDogAPI, die Rechte daran sind nicht geklärt.
@@ -214,7 +221,7 @@ $kachel = 'flex flex-col items-center justify-center gap-2 border border-sand ro
                 <fieldset class="bg-white/80 rounded-2xl shadow border border-sand p-4">
                     <legend class="px-1 font-bold text-fellDk">
                         <a href="/breed_detail.php?id=<?= $rid ?>" class="hover:underline"><?= e($r['name']) ?></a>
-                        <span class="text-xs font-normal text-fellDk/50">TheDogAPI <?= e((string) $r['thedogapi_id']) ?></span>
+                        <span class="text-xs font-normal text-fellDk/50">TheDogAPI <?= e((string) $r['thedogapi_id']) ?><?= ($apiNamen[(string) $r['thedogapi_id']] ?? '') !== '' ? ' · ' . e($apiNamen[(string) $r['thedogapi_id']]) : '' ?></span>
                         <?php if ($r['bild_zurueckgestellt']): ?>
                             <span class="text-xs font-normal text-fellDk/50">· zurückgestellt seit <?= e(date('d.m.Y', (int) strtotime((string) $r['bild_zurueckgestellt']))) ?></span>
                         <?php endif; ?>
@@ -237,6 +244,7 @@ $kachel = 'flex flex-col items-center justify-center gap-2 border border-sand ro
                             <label class="flex flex-col gap-1 border border-sand rounded-lg p-2 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-tanne">
                                 <img src="<?= e($k['url']) ?>" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-full h-24 object-cover rounded">
                                 <span class="text-xs"><input type="radio" name="wahl[<?= $rid ?>]" value="<?= e($k['id']) ?>"> <?= $k['breite'] ?>×<?= $k['hoehe'] ?></span>
+                                <span class="text-xs text-fellDk/60 truncate" title="Rasse laut TheDogAPI"><?= e($k['rasse'] ?? '') ?></span>
                             </label>
                         <?php endforeach; ?>
                         <?php if (!$r['kandidaten']): ?>

@@ -22,7 +22,7 @@ function pruefe(string $beschreibung, bool $ok): void
 }
 
 $antwort = [
-    ['id' => 'abc123', 'url' => 'https://cdn2.thedogapi.com/images/abc123.jpg', 'width' => 800, 'height' => 600, 'breeds' => [['id' => 7]]],
+    ['id' => 'abc123', 'url' => 'https://cdn2.thedogapi.com/images/abc123.jpg', 'width' => 800, 'height' => 600, 'breeds' => [['id' => 7, 'name' => 'Akita']]],
     ['id' => 'ohneRasse', 'url' => 'https://cdn4.thedogapi.com/optimized/ohneRasse.jpg', 'width' => 1000, 'height' => 900],
     ['id' => 'fremd', 'url' => 'https://cdn2.thedogapi.com/images/fremd.jpg', 'breeds' => [['id' => 8]]],
     ['id' => 'boese', 'url' => 'https://example.com/boese.jpg'],
@@ -32,9 +32,10 @@ $antwort = [
     'kein Array',
 ];
 $bilder = TheDogApiBilder::auswerten($antwort, '7');
-pruefe('Zwei gültige Kandidaten', count($bilder) === 2);
+pruefe('Ein gültiger Kandidat', count($bilder) === 1);
 pruefe('Passende Rasse bleibt', ($bilder[0]['id'] ?? '') === 'abc123' && $bilder[0]['breite'] === 800);
-pruefe('Bild ohne Rassenangabe bleibt', ($bilder[1]['id'] ?? '') === 'ohneRasse');
+pruefe('Rassenname des Bildes', ($bilder[0]['rasse'] ?? '') === 'Akita');
+pruefe('Bild ohne Rassenangabe fällt weg', !in_array('ohneRasse', array_column($bilder, 'id'), true));
 pruefe('Bild einer anderen Rasse fällt weg', !in_array('fremd', array_column($bilder, 'id'), true));
 pruefe('Fremder Host fällt weg', !in_array('boese', array_column($bilder, 'id'), true));
 pruefe('Ohne HTTPS fällt weg', !in_array('http', array_column($bilder, 'id'), true));

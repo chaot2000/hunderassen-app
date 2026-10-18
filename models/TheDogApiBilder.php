@@ -12,6 +12,9 @@
  * Schlüssel. Ohne Schlüssel ignoriert die API den Filter und liefert
  * irgendein Hundebild, deshalb wird ohne Schlüssel gar nicht gesucht.
  *
+ * Gesucht wird nur nach Bildern mit Rassenangabe (has_breeds), und die
+ * Angabe muss die gesuchte Rasse nennen (auswerten()).
+ *
  * Kandidaten werden je Rasse eine Woche in cache_thedogapi_bilder.json
  * gehalten. Das schont das Abrufkontingent, und beim Übernehmen kommt
  * die Bildadresse aus diesem Cache statt aus dem Formular.
@@ -28,6 +31,9 @@ class TheDogApiBilder
     private const CACHE_DATEI = __DIR__ . '/../cache_thedogapi_bilder.json';
     private const CACHE_MAX_ALTER_SEK = 7 * 86400;
     private const MAX_BREITE = 1200;
+    // Aufbau der Cache-Einträge. Ältere Einträge (ohne Rassenangabe je
+    // Bild) gelten als veraltet und werden neu abgerufen.
+    private const CACHE_VERSION = 2;
 
     /**
      * Bildkandidaten für eine TheDogAPI-Rasse.
@@ -41,7 +47,8 @@ class TheDogApiBilder
         }
         $cache = self::cacheLesen();
         $eintrag = $cache[$thedogapiId] ?? null;
-        if (is_array($eintrag) && time() - (int) ($eintrag['zeit'] ?? 0) < self::CACHE_MAX_ALTER_SEK) {
+        if (is_array($eintrag) && ($eintrag['v'] ?? 1) === self::CACHE_VERSION
+            && time() - (int) ($eintrag['zeit'] ?? 0) < self::CACHE_MAX_ALTER_SEK) {
             return ['bilder' => $eintrag['bilder'] ?? [], 'fehler' => null];
         }
 
@@ -50,7 +57,7 @@ class TheDogApiBilder
             return ['bilder' => [], 'fehler' => 'Kein TheDogAPI-Schlüssel hinterlegt. Lege config/thedogapi.local.php nach der Vorlage config/thedogapi.local.example.php an.'];
         }
         $ch = curl_init(self::URL . '?' . http_build_query([
-            'breed_ids' => $thedogapiId, 'limit' => self::ANZAHL, 'order' => 'ASC', 'include_breeds' => 1,
+            'breed_ids' => $thedogapiId, 'limit' => self::ANZAHL, 'order' => 'ASC', 'has_breeds' => 1, 'include_breeds' => 1,
         ]));
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['x-api-key: ' . $key], CURLOPT_TIMEOUT => 15]);
         $antwort = curl_exec($ch);
@@ -62,16 +69,18 @@ class TheDogApiBilder
         }
 
         $bilder = self::auswerten($daten, $thedogapiId);
-        $cache[$thedogapiId] = ['zeit' => time(), 'bilder' => $bilder];
+        $cache[$thedogapiId] = ['v' => self::CACHE_VERSION, 'zeit' => time(), 'bilder' => $bilder];
         file_put_contents(self::CACHE_DATEI, json_encode($cache, JSON_UNESCAPED_SLASHES), LOCK_EX);
         return ['bilder' => $bilder, 'fehler' => null];
     }
 
     /**
      * Antwort von /v1/images/search prüfen: nur Bilder von TheDogAPI mit
-     * gültiger ID. Nennt ein Bild Rassen, muss die gesuchte dabei sein.
+     * gültiger ID, die laut TheDogAPI die gesuchte Rasse zeigen. Bilder
+     * ohne Rassenangabe fallen weg, das waren oft beliebige Hunde.
+     * "rasse" ist der englische Name aus der Rassenangabe des Bildes.
      *
-     * @return list<array{id: string, url: string, breite: int, hoehe: int}>
+     * @return list<array{id: string, url: string, breite: int, hoehe: int, rasse: string}>
      */
     public static function auswerten(array $daten, string $thedogapiId): array
     {
@@ -85,11 +94,17 @@ class TheDogApiBilder
             if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $id) || !self::istTheDogApiUrl($url)) {
                 continue;
             }
-            if (!empty($b['breeds']) && is_array($b['breeds'])
-                && !in_array($thedogapiId, array_map(fn($r) => (string) ($r['id'] ?? ''), $b['breeds']), true)) {
+            $rasse = null;
+            foreach (is_array($b['breeds'] ?? null) ? $b['breeds'] : [] as $r) {
+                if (is_array($r) && (string) ($r['id'] ?? '') === $thedogapiId) {
+                    $rasse = trim((string) ($r['name'] ?? ''));
+                    break;
+                }
+            }
+            if ($rasse === null) {
                 continue;
             }
-            $bilder[$id] ??= ['id' => $id, 'url' => $url, 'breite' => (int) ($b['width'] ?? 0), 'hoehe' => (int) ($b['height'] ?? 0)];
+            $bilder[$id] ??= ['id' => $id, 'url' => $url, 'breite' => (int) ($b['width'] ?? 0), 'hoehe' => (int) ($b['height'] ?? 0), 'rasse' => $rasse];
         }
         return array_values($bilder);
     }
