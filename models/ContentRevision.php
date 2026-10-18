@@ -48,6 +48,8 @@ class ContentRevision
             'zuchtzweck'        => 'Zuchtzweck',
             'zuchtzweck_en'     => 'Zuchtzweck (englisch)',
             'thedogapi_id'      => 'TheDogAPI-Zuordnung',
+            'wikidata_id'       => 'Wikidata-Zuordnung',
+            'wikipedia_de'      => 'Wikipedia-Artikel',
             'quelle_url'        => 'Quelle',
             'quelle_stand'      => 'Stand der Quelle',
             'gliederung'        => 'Gliederung',

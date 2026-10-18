@@ -23,6 +23,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/TheDogApiFelder.php';
+require_once __DIR__ . '/ExternesBild.php';
 
 class TheDogApiBilder
 {
@@ -30,7 +31,6 @@ class TheDogApiBilder
     private const URL = 'https://api.thedogapi.com/v1/images/search';
     private const CACHE_DATEI = __DIR__ . '/../cache_thedogapi_bilder.json';
     private const CACHE_MAX_ALTER_SEK = 7 * 86400;
-    private const MAX_BREITE = 1200;
     // Aufbau der Cache-Einträge. Ältere Einträge (ohne Rassenangabe je
     // Bild) gelten als veraltet und werden neu abgerufen.
     private const CACHE_VERSION = 2;
@@ -155,103 +155,12 @@ class TheDogApiBilder
         return parse_url($url, PHP_URL_SCHEME) === 'https' && (bool) preg_match('/(^|\.)thedogapi\.com$/', $host);
     }
 
-    /**
-     * Lädt ein Bild von TheDogAPI, prüft das Format anhand der Bytes,
-     * verkleinert auf höchstens 1200 px Breite und kodiert neu, wie bei
-     * eigenen Uploads (BildVerarbeitung).
-     *
-     * @return array{success: bool, blob?: string, mime?: string, message?: string}
-     */
+    /** Lädt ein Bild von TheDogAPI und verkleinert es (models/ExternesBild.php). */
     public static function laden(string $url): array
     {
-        // Nur Bilder von TheDogAPI laden, sonst ließe sich der Server auf
-        // beliebige Adressen schicken.
-        if (!self::istTheDogApiUrl($url)) {
-            return ['success' => false, 'message' => 'Bildadresse ist nicht von TheDogAPI.'];
-        }
-        $tmpDatei = tempnam(sys_get_temp_dir(), 'tdapi_');
-        if ($tmpDatei === false) {
-            return ['success' => false, 'message' => 'Konnte keine temporäre Datei anlegen.'];
-        }
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-            // Weiterleitungen nur innerhalb von HTTPS, höchstens drei.
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-        ]);
-        $bildDaten = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($bildDaten === false || $httpCode !== 200) {
-            @unlink($tmpDatei);
-            return ['success' => false, 'message' => 'Download fehlgeschlagen (HTTP ' . $httpCode . ')'];
-        }
-
-        file_put_contents($tmpDatei, $bildDaten);
-        // BildVerarbeitung::verarbeiteUpload() verlangt einen echten
-        // HTTP-Upload (is_uploaded_file), deshalb hier dieselben Regeln
-        // für eine Datei aus tempnam().
-        $result = self::verarbeiten($tmpDatei);
-        @unlink($tmpDatei);
-        return $result;
-    }
-
-    private static function verarbeiten(string $pfad): array
-    {
-        $info = @getimagesize($pfad);
-        if ($info === false || !isset($info['mime'])) {
-            return ['success' => false, 'message' => 'Kein gültiges Bildformat.'];
-        }
-
-        $mime = $info['mime'];
-        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
-            return ['success' => false, 'message' => 'Nicht unterstütztes Format: ' . $mime];
-        }
-
-        $bild = match ($mime) {
-            'image/jpeg' => @imagecreatefromjpeg($pfad),
-            'image/png'  => @imagecreatefrompng($pfad),
-            'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($pfad) : false,
-            default      => false,
-        };
-        if ($bild === false) {
-            return ['success' => false, 'message' => 'Bild konnte nicht gelesen werden.'];
-        }
-
-        $breite = imagesx($bild);
-        $hoehe = imagesy($bild);
-        if ($breite > self::MAX_BREITE) {
-            $zielHoehe = (int) round($hoehe * (self::MAX_BREITE / $breite));
-            $verkleinert = imagecreatetruecolor(self::MAX_BREITE, $zielHoehe);
-            imagealphablending($verkleinert, false);
-            imagesavealpha($verkleinert, true);
-            $transparent = imagecolorallocatealpha($verkleinert, 0, 0, 0, 127);
-            imagefilledrectangle($verkleinert, 0, 0, self::MAX_BREITE, $zielHoehe, $transparent);
-            imagecopyresampled($verkleinert, $bild, 0, 0, 0, 0, self::MAX_BREITE, $zielHoehe, $breite, $hoehe);
-            imagedestroy($bild);
-            $bild = $verkleinert;
-        }
-
-        ob_start();
-        $erfolg = match ($mime) {
-            'image/jpeg' => imagejpeg($bild, null, 85),
-            'image/png'  => imagepng($bild, null, 6),
-            'image/webp' => function_exists('imagewebp') ? imagewebp($bild, null, 85) : false,
-            default      => false,
-        };
-        $blob = ob_get_clean();
-        imagedestroy($bild);
-
-        if (!$erfolg) {
-            return ['success' => false, 'message' => 'Bild konnte nicht kodiert werden.'];
-        }
-        return ['success' => true, 'blob' => $blob, 'mime' => $mime];
+        return self::istTheDogApiUrl($url)
+            ? ExternesBild::laden($url)
+            : ['success' => false, 'message' => 'Bildadresse ist nicht von TheDogAPI.'];
     }
 
     private static function cacheLesen(): array
