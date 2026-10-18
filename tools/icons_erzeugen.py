@@ -6,12 +6,15 @@ Die Vorlage ist das 1024er Bild mit dem Low-Poly-Hundekopf auf dem
 dunkelgrünen, abgerundeten Quadrat. Die Ausschnitt-Koordinaten unten
 passen zu genau diesem Bild; bei einer neuen Vorlage neu ausmessen.
 
+Der Ordner heißt app-icons/, nicht icons/: all-inkl (wie viele Apache-
+Installationen) leitet /icons/ serverweit auf Apaches eigene Symbole um.
+
 Schreibt:
-  favicon.ico                    16/32/48, enger Ausschnitt nur Kopf
-  icons/logo-kopf.png            96 px, Kopf-Logo (Anzeige 38 px)
-  icons/icon-192.png, -512.png   Manifest "any", transparente Ecken
-  icons/icon-maskable-512.png    Manifest "maskable", vollflächig
-  icons/apple-touch-icon.png     180 px, vollflächig (iOS rundet selbst)
+  favicon.ico                        16/32/48, enger Ausschnitt nur Kopf
+  app-icons/logo-kopf.png            96 px, Kopf-Logo (Anzeige 38 px)
+  app-icons/icon-192.png, -512.png   Manifest "any", transparente Ecken
+  app-icons/icon-maskable-512.png    Manifest "maskable", vollflächig
+  app-icons/apple-touch-icon.png     180 px, vollflächig (iOS rundet selbst)
 """
 import sys
 from pathlib import Path
@@ -45,7 +48,7 @@ def klein(kopf, size):
 
 def main(src, root):
     root = Path(root)
-    (root / 'icons').mkdir(exist_ok=True)
+    (root / 'app-icons').mkdir(exist_ok=True)
     im = Image.open(src).convert('RGB')
 
     # Favicon
@@ -57,20 +60,20 @@ def main(src, root):
     rgba = im.crop((L, T, L + S, T + S))
     rgba.putalpha(rund_maske(S, R))
     for size, name in ((96, 'logo-kopf.png'), (192, 'icon-192.png'), (512, 'icon-512.png')):
-        rgba.resize((size, size), Image.LANCZOS).save(root / 'icons' / name, optimize=True)
+        rgba.resize((size, size), Image.LANCZOS).save(root / 'app-icons' / name, optimize=True)
 
     # Vollflächig: Innenfläche ohne Kontur, Ecken mit Dunkelgrün gefüllt
     inset = 14
     inner = im.crop((L + inset, T + inset, L + S - inset, T + S - inset))
     n = inner.size[0]
     full = Image.composite(inner, Image.new('RGB', (n, n), BG), rund_maske(n, R - inset))
-    full.resize((180, 180), Image.LANCZOS).save(root / 'icons' / 'apple-touch-icon.png', optimize=True)
+    full.resize((180, 180), Image.LANCZOS).save(root / 'app-icons' / 'apple-touch-icon.png', optimize=True)
 
     # maskable: Motiv in die Sicherheitszone (innerer Kreis, 80 %)
     canvas = Image.new('RGB', (n, n), BG)
     k = int(n * 0.86)
     canvas.paste(full.resize((k, k), Image.LANCZOS), ((n - k) // 2, (n - k) // 2))
-    canvas.resize((512, 512), Image.LANCZOS).save(root / 'icons' / 'icon-maskable-512.png', optimize=True)
+    canvas.resize((512, 512), Image.LANCZOS).save(root / 'app-icons' / 'icon-maskable-512.png', optimize=True)
 
 
 if __name__ == '__main__':

@@ -42,7 +42,7 @@ require __DIR__ . '/views/partials/header.php';
 ?>
 
 <div class="flex items-center gap-3 mb-8">
-    <img src="/icons/logo-kopf.png" width="44" height="44" alt="" class="shrink-0">
+    <img src="/app-icons/logo-kopf.png" width="44" height="44" alt="" class="shrink-0">
     <div>
         <h1 class="text-2xl font-extrabold text-fellDk">
             <?= e(t('dash.hallo', ['name' => current_user()['username'] ?? ''])) ?>

@@ -286,7 +286,7 @@ require __DIR__ . '/views/partials/header.php';
             <div class="lg:col-span-5 relative bg-tanneDk overflow-hidden lg:min-h-[300px] lg:rounded-r-lg">
                 <!-- Schmal (unter lg): eine Zeile mit kleinem Signet, damit die Aktion im ersten Bild bleibt -->
                 <div class="lg:hidden flex items-center gap-3 px-5 min-h-[56px]">
-                    <img src="/icons/logo-kopf.png" width="32" height="32" alt="" class="shrink-0">
+                    <img src="/app-icons/logo-kopf.png" width="32" height="32" alt="" class="shrink-0">
                     <span class="text-sm font-semibold text-creme"><?= e(t('rasse.kein_foto')) ?></span>
                     <?php if ($darfPflegen): ?>
                         <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="ml-auto text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center"><?= e(t('rasse.foto_hinzufuegen')) ?></a>
@@ -295,7 +295,7 @@ require __DIR__ . '/views/partials/header.php';
                 <!-- Breit: gesetzte Farbfläche mit großer Gruppennummer und Signet -->
                 <div class="hidden lg:block absolute inset-0">
                     <span class="absolute -top-6 right-2 font-mono font-medium text-[12rem] leading-none text-creme/15 select-none" aria-hidden="true"><?= $gruppe !== null ? $gruppe : '' ?></span>
-                    <div class="absolute inset-0 flex items-center justify-center pb-24"><img src="/icons/icon-512.png" width="200" height="200" alt="" class="shrink-0"></div>
+                    <div class="absolute inset-0 flex items-center justify-center pb-24"><img src="/app-icons/icon-512.png" width="200" height="200" alt="" class="shrink-0"></div>
                     <p class="sr-only"><?= e(t('rasse.kein_foto')) ?>.</p>
                     <?php if ($darfPflegen): ?>
                         <a href="/admin_add_breed.php?id=<?= (int) $breed['id'] ?>" class="absolute top-3 right-4 text-sm font-bold text-creme underline underline-offset-4 min-h-[44px] py-2 inline-flex items-center"><?= e(t('rasse.foto_hinzufuegen')) ?></a>
