@@ -1202,6 +1202,28 @@ else
     check_status "Ergebnis nach dem Absenden" "$BASE_URL/admin_rassenbilder.php" "200"
     check_body_contains "Fremde Bild-ID wird abgelehnt" "Bild gehört nicht zu dieser Rasse."
     check_body_contains "Nichts übernommen" "0 Bilder übernommen."
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Rasse zurückstellen" "$BASE_URL/admin_rassenbilder.php" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=ohne --data-urlencode wahl[1]=:zurueckstellen"
+    check_status "Nach dem Zurückstellen" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Zurückstellen gemeldet" "1 zurückgestellt."
+    check_body_not_contains "Zurückgestellte Rasse fehlt im Abgleich" "TheDogAPI 6"
+    check_body_contains "Zähler der Zurückgestellten" "Zurückgestellt (1)"
+    check_status "Ansicht Zurückgestellt" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
+    check_body_contains "Zurückgestellte Rasse wird gelistet" "TheDogAPI 6"
+    check_body_contains "Datum des Zurückstellens" "zurückgestellt seit"
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Bilder neu abrufen" "$BASE_URL/admin_rassenbilder.php" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode aktion=neu_abrufen --data-urlencode modus=zurueck --data-urlencode rassen[]=1"
+    check_status "Nach dem neuen Abruf" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
+    check_body_contains "Neuer Abruf gemeldet" "Bilder für 1 Rassen neu bei TheDogAPI abgerufen."
+    RB_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Rasse wieder anbieten" "$BASE_URL/admin_rassenbilder.php" "302" \
+        "-X POST --data-urlencode csrf_token=$RB_CSRF --data-urlencode modus=zurueck --data-urlencode wahl[1]=:anbieten"
+    check_status "Nach dem Wieder-Anbieten" "$BASE_URL/admin_rassenbilder.php?modus=zurueck" "200"
+    check_body_contains "Wieder-Anbieten gemeldet" "1 wieder im Abgleich."
+    check_status "Rasse wieder im Abgleich" "$BASE_URL/admin_rassenbilder.php" "200"
+    check_body_contains "Rasse ohne Bild wieder gelistet" "TheDogAPI 6"
     check_status "Ansicht Rassen mit Bild" "$BASE_URL/admin_rassenbilder.php?modus=mit" "200"
     check_body_contains "Warnung beim Ersetzen" "Das alte Bild ist danach weg."
 
