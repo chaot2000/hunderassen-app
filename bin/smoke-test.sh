@@ -1278,6 +1278,18 @@ else
     check_status "Liste nach dem Hochladen" "$BASE_URL/admin_rassenbilder.php?status=mit" "200"
     check_body_contains "Hochladen gemeldet" "Bild für CI-Testrasse gespeichert."
     check_body_contains "Herkunft eigenes Bild in der Liste" "&quot;quelle&quot;:&quot;upload&quot;"
+    check_body_contains "Reiter Ungeprüft" "Ungeprüft ("
+    RBL_CSRF=$(grep -oP 'const csrf = "\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Prüfung zurücknehmen" "$BASE_URL/admin_rassenbilder.php" "200" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=ungeprueft --data-urlencode id=1"
+    check_body_contains "Antwort ungeprüft" '{"ok":true,"geprueft":""}'
+    check_status "Bild als passend bestätigen" "$BASE_URL/admin_rassenbilder.php" "200" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=geprueft --data-urlencode id=1"
+    check_body_contains "Antwort mit Prüfdatum" '{"ok":true,"geprueft":"'
+    check_status "Bestätigen ohne Bild abgelehnt" "$BASE_URL/admin_rassenbilder.php" "400" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=geprueft --data-urlencode id=999999"
+    check_status "Bestätigen ohne CSRF abgelehnt" "$BASE_URL/admin_rassenbilder.php" "403" \
+        "-X POST --data-urlencode aktion=geprueft --data-urlencode id=1"
     check_status "Bildauswahl mit eigenem Bild" "$RB" "200"
     check_body_contains "Herkunft eigenes Bild" "eigenes Bild"
     check_body_contains "Urheber wird gezeigt" "CI-Fotograf"

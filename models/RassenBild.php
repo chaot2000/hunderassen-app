@@ -30,7 +30,8 @@ class RassenBild
     {
         return Database::getConnection()->query(
             'SELECT id, name, name_en, alternative_namen, thedogapi_id, wikidata_id,
-                    bild_blob IS NOT NULL AS hat_bild, bild_updated_at, bild_quelle, bild_urheber, bild_zurueckgestellt
+                    bild_blob IS NOT NULL AS hat_bild, bild_updated_at, bild_quelle, bild_urheber, bild_zurueckgestellt,
+                    bild_geprueft
              FROM breeds ORDER BY name'
         )->fetchAll();
     }
@@ -40,7 +41,7 @@ class RassenBild
         $stmt = Database::getConnection()->prepare(
             'SELECT id, name, name_en, alternative_namen, thedogapi_id, wikidata_id, wikipedia_de,
                     bild_blob IS NOT NULL AS hat_bild, bild_updated_at, bild_quelle, bild_urheber, bild_lizenz,
-                    bild_lizenz_url, bild_zurueckgestellt
+                    bild_lizenz_url, bild_zurueckgestellt, bild_geprueft
              FROM breeds WHERE id = :id'
         );
         $stmt->execute([':id' => $id]);
@@ -60,7 +61,8 @@ class RassenBild
     }
 
     /**
-     * Bild speichern. Leere Nachweis-Felder werden zu NULL.
+     * Bild speichern. Leere Nachweis-Felder werden zu NULL. Ein hier
+     * gewähltes Bild gilt als geprüft, es wurde gerade angesehen.
      *
      * @param array{urheber?: ?string, lizenz?: ?string, lizenz_url?: ?string} $nachweis
      */
@@ -69,11 +71,12 @@ class RassenBild
         $leer = fn(?string $v, int $max): ?string => ($v = trim((string) $v)) === '' ? null : mb_substr($v, 0, $max);
         $stmt = Database::getConnection()->prepare(
             'UPDATE breeds SET bild_blob = :blob, bild_mime = :mime, bild_updated_at = NOW(), bild_quelle = :quelle,
-                    bild_urheber = :urheber, bild_lizenz = :lizenz, bild_lizenz_url = :lizenz_url, bild_zurueckgestellt = NULL
+                    bild_urheber = :urheber, bild_lizenz = :lizenz, bild_lizenz_url = :lizenz_url, bild_zurueckgestellt = NULL,
+                    bild_geprueft = NOW()
              WHERE id = :id'
         );
         $stmt->execute([
-            ':blob' => $blob, ':mime' => $mime, ':quelle' => mb_substr($quelle, 0, 100),
+            ':blob' => $blob, ':mime' => $mime, ':quelle' => mb_substr($quelle, 0, 255),
             ':urheber' => $leer($nachweis['urheber'] ?? null, 255),
             ':lizenz' => $leer($nachweis['lizenz'] ?? null, 50),
             ':lizenz_url' => $leer($nachweis['lizenz_url'] ?? null, 255),
@@ -86,9 +89,20 @@ class RassenBild
     {
         Database::getConnection()->prepare(
             'UPDATE breeds SET bild_blob = NULL, bild_mime = NULL, bild_updated_at = NULL, bild_quelle = NULL,
-                    bild_urheber = NULL, bild_lizenz = NULL, bild_lizenz_url = NULL
+                    bild_urheber = NULL, bild_lizenz = NULL, bild_lizenz_url = NULL, bild_geprueft = NULL
              WHERE id = :id'
         )->execute([':id' => $id]);
+    }
+
+    /** Bild als passend bestätigen bzw. die Bestätigung zurücknehmen. Nur Rassen mit Bild. */
+    public static function geprueft(int $id, bool $passt): bool
+    {
+        $stmt = Database::getConnection()->prepare(
+            'UPDATE breeds SET bild_geprueft = ' . ($passt ? 'NOW()' : 'NULL') . ' WHERE id = :id AND bild_blob IS NOT NULL'
+        );
+        $stmt->execute([':id' => $id]);
+        // rowCount ist 0, wenn sich nichts ändert (schon ungeprüft)
+        return $stmt->rowCount() === 1 || (bool) (self::finde($id)['hat_bild'] ?? false);
     }
 
     /** Rasse nicht mehr als "ohne Bild" anbieten, weil keine Quelle etwas Passendes hat. */

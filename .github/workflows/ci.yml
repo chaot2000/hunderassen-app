@@ -247,10 +247,18 @@ jobs:
           $R txt_live < sql/migrationen/migration_2026_10_27_groessenklasse_berechnet.sql
           $R txt_live < sql/migrationen/migration_2026_10_27_groessenklasse_berechnet.sql
           $R txt_live -N -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rasse_merkmale' AND COLUMN_NAME = 'quelle' AND COLUMN_TYPE LIKE '%berechnet%'" | grep -qx 1
+          dump txt_live > /tmp/txt_groessenklasse.sql
+          $R txt_live < sql/migrationen/migration_2026_10_28_bild_geprueft.sql
+          $R txt_live < sql/migrationen/migration_2026_10_28_bild_geprueft.sql
+          $R txt_live -N -e "SELECT COUNT(*) FROM breeds WHERE bild_geprueft IS NULL" | grep -qx 2
           $R txt_frisch < sql/schema.sql
           dump txt_live > /tmp/txt_migriert.sql
           dump txt_frisch > /tmp/txt_frisch.sql
           diff /tmp/txt_migriert.sql /tmp/txt_frisch.sql
+          $R txt_live < sql/migrationen/rollback_bild_geprueft.sql
+          $R txt_live < sql/migrationen/rollback_bild_geprueft.sql
+          dump txt_live > /tmp/txt_zurueck_geprueft.sql
+          diff /tmp/txt_groessenklasse.sql /tmp/txt_zurueck_geprueft.sql
           $R txt_live < sql/migrationen/rollback_groessenklasse_berechnet.sql
           $R txt_live < sql/migrationen/rollback_groessenklasse_berechnet.sql
           dump txt_live > /tmp/txt_zurueck_groessenklasse.sql

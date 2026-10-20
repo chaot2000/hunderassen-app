@@ -156,6 +156,7 @@ CREATE TABLE `breeds` (
     `bild_lizenz`      VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- z.B. 'CC BY-SA 4.0'
     `bild_lizenz_url`  VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Link zur Lizenz oder Bildseite
     `bild_zurueckgestellt` DATETIME NULL,     -- seit wann admin_rassenbilder.php die Rasse nicht mehr anbietet
+    `bild_geprueft`        DATETIME NULL,     -- wann das Bild als passend bestätigt wurde, NULL = ungeprüft
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created_by`      INT UNSIGNED NULL,
