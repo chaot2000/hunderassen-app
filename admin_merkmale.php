@@ -10,6 +10,9 @@
  * Je Merkmal ein Formular für die ganze Werteliste, damit sich z. B.
  * fehlende englische Namen in einem Rutsch nachtragen lassen. Löschen
  * und Zusammenführen sind Knöpfe in diesem Formular (name="aktion_wert").
+ *
+ * Bei der Größenklasse zeigt die Seite die Grenzen und einen Knopf, der
+ * sie für alle Rassen aus der Schulterhöhe neu berechnet.
  */
 
 declare(strict_types=1);
@@ -17,6 +20,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/config/security.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/models/MerkmalVerwaltung.php';
+require_once __DIR__ . '/models/Groessenklasse.php';
 
 secure_session_start();
 // Geteilter Katalog: wie "Rasse bearbeiten"
@@ -50,6 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'zusammen' => MerkmalVerwaltung::werteZusammenfuehren($merkmalId, $wertId, (int) ($_POST['ziel'][$wertId] ?? 0), $userId),
                 default => MerkmalVerwaltung::werteSpeichern($merkmalId, is_array($_POST['w'] ?? null) ? $_POST['w'] : []),
             };
+            break;
+        case 'groessen_berechnen':
+            $n = RassenDatenSchreiben::alleGroessenklassenAktualisieren($userId);
+            $r = ['success' => true, 'message' => "Größenklasse neu berechnet: {$n['geaendert']} Rassen geändert, {$n['von_hand']} von Hand gesetzt und unverändert."];
             break;
         default:
             $r = ['success' => false, 'message' => 'Unbekannte Aktion.'];
@@ -131,6 +139,15 @@ require __DIR__ . '/views/partials/header.php';
                 </summary>
 
                 <div class="px-5 pb-5 border-t border-sand pt-4 space-y-6">
+                    <?php if ($m['schluessel'] === 'groessenklasse'): ?>
+                        <form method="post" action="/admin_merkmale.php" class="bg-creme/60 border border-sand rounded-lg p-3 text-sm flex flex-wrap items-center gap-3">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="aktion" value="groessen_berechnen">
+                            <input type="hidden" name="merkmal_id" value="<?= $m['id'] ?>">
+                            <p class="flex-1 min-w-[16rem]">Aus der Schulterhöhe: <?= e(Groessenklasse::beschreibung(array_map(fn($w) => $w['name_de'], $m['werte']))) ?>. Von Hand gesetzte Klassen bleiben.</p>
+                            <button type="submit" class="bg-tanne hover:bg-tanneDk text-white font-bold rounded-lg px-3 py-1.5">Für alle Rassen berechnen</button>
+                        </form>
+                    <?php endif; ?>
                     <!-- Merkmal selbst -->
                     <form method="post" action="/admin_merkmale.php" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                         <?= csrf_field() ?>

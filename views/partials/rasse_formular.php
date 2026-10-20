@@ -13,6 +13,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../models/RassenDaten.php';
+require_once __DIR__ . '/../../models/Groessenklasse.php';
 
 const MERKMAL_GRUPPEN = RassenDaten::GRUPPEN;
 
@@ -34,8 +35,9 @@ const FORM_FELD = 'w-full rounded-lg border border-sand px-3 py-2 focus:outline-
 /**
  * @param list<array> $definitionen RassenDatenSchreiben::definitionen()
  * @param array<string, array> $werte RassenDatenSchreiben::formularWerte() bzw. ausEingabe()['werte']
+ * @param bool $groesseVonHand Größenklasse von Hand gesetzt, sonst aus der Schulterhöhe
  */
-function render_steckbrief_formular(array $definitionen, array $werte): void
+function render_steckbrief_formular(array $definitionen, array $werte, bool $groesseVonHand = false): void
 {
     $nachGruppe = [];
     foreach ($definitionen as $m) {
@@ -58,7 +60,7 @@ function render_steckbrief_formular(array $definitionen, array $werte): void
             <fieldset class="border-t border-sand pt-4 mt-4 first-of-type:border-t-0 first-of-type:pt-0 first-of-type:mt-0">
                 <legend class="text-sm font-black uppercase tracking-wide text-fellDk mb-3"><?= e($gruppenName ?? $gruppe) ?></legend>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                    <?php foreach ($nachGruppe[$gruppe] as $m): render_merkmal_feld($m, $werte[$m['schluessel']] ?? null, $laender); endforeach; ?>
+                    <?php foreach ($nachGruppe[$gruppe] as $m): render_merkmal_feld($m, $werte[$m['schluessel']] ?? null, $laender, $groesseVonHand); endforeach; ?>
                 </div>
             </fieldset>
         <?php endforeach; ?>
@@ -66,8 +68,9 @@ function render_steckbrief_formular(array $definitionen, array $werte): void
     <?php
 }
 
-function render_merkmal_feld(array $m, ?array $wert, array $laender): void
+function render_merkmal_feld(array $m, ?array $wert, array $laender, bool $groesseVonHand = false): void
 {
+    $groesse = $m['schluessel'] === 'groessenklasse';
     $id = 'merkmal-' . $m['schluessel'];
     $name = 'merkmal[' . $m['schluessel'] . ']';
     $einheit = ['cm' => 'cm', 'kg' => 'kg', 'jahre' => 'Jahre'][$m['einheit'] ?? ''] ?? '';
@@ -89,8 +92,16 @@ function render_merkmal_feld(array $m, ?array $wert, array $laender): void
             <?php endforeach; ?>
 
         <?php elseif ($m['typ'] === 'mehrfach'): ?>
-            <fieldset <?= $breit ? 'x-data="{ suche: \'\' }"' : '' ?>>
+            <fieldset <?= $breit ? 'x-data="{ suche: \'\' }"' : '' ?><?= $groesse ? ' x-data="{ auto: ' . ($groesseVonHand ? 'false' : 'true') . ' }"' : '' ?>>
                 <legend class="block text-sm font-semibold mb-1"><?= e($m['name_de']) ?></legend>
+                <?php if ($groesse): ?>
+                    <label class="inline-flex items-center gap-2 text-sm mb-2">
+                        <input type="hidden" name="groesse_auto" value="0">
+                        <input type="checkbox" name="groesse_auto" value="1" x-model="auto" <?= $groesseVonHand ? '' : 'checked' ?> class="rounded border-sand text-tanne focus:ring-tanne">
+                        automatisch aus der Schulterhöhe
+                    </label>
+                    <p class="text-xs text-fellDk/70 mb-2" x-show="auto"><?= e(Groessenklasse::beschreibung(array_map(fn($w) => $w['name_de'], $m['werte']))) ?>. Wird beim Speichern berechnet.</p>
+                <?php endif; ?>
                 <?php if ($breit): ?>
                     <input type="search" x-model="suche" placeholder="Begriff suchen …" aria-label="<?= e($m['name_de']) ?> durchsuchen" class="<?= FORM_FELD ?> max-w-xs mb-2 py-1.5 text-sm">
                 <?php endif; ?>
@@ -99,7 +110,7 @@ function render_merkmal_feld(array $m, ?array $wert, array $laender): void
                         $an = in_array($schl, $wert['werte'] ?? [], true); ?>
                         <label class="inline-flex items-center gap-1.5 text-sm border border-sand rounded-full px-3 py-1 cursor-pointer has-[:checked]:border-tanne has-[:checked]:bg-tanne/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-tanne"
                             <?= $breit ? 'x-show="suche === \'\' || ' . e(json_encode(mb_strtolower($w['name_de'] . ' ' . $w['name_en']))) . '.includes(suche.toLowerCase())"' : '' ?>>
-                            <input type="checkbox" name="<?= e($name) ?>[werte][]" value="<?= e($schl) ?>" <?= $an ? 'checked' : '' ?> class="rounded border-sand text-tanne focus:ring-tanne">
+                            <input type="checkbox" name="<?= e($name) ?>[werte][]" value="<?= e($schl) ?>" <?= $an ? 'checked' : '' ?><?= $groesse ? ' :disabled="auto"' : '' ?> class="rounded border-sand text-tanne focus:ring-tanne disabled:opacity-50">
                             <?= e($w['name_de']) ?>
                             <?php if (!$w['name_en']): ?><span class="text-xs text-fell" title="Englischer Name fehlt">EN?</span><?php endif; ?>
                         </label>

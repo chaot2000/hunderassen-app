@@ -592,7 +592,7 @@ CREATE TABLE IF NOT EXISTS `rasse_merkmale` (
     `zahl_bis`   DECIMAL(6,1) NULL,
     `text_wert`  VARCHAR(20)  NULL,
     `geschlecht` ENUM('alle', 'ruede', 'huendin') NOT NULL DEFAULT 'alle',
-    `quelle`     ENUM('alt', 'hand', 'thedogapi', 'vdh_text') NOT NULL DEFAULT 'hand',
+    `quelle`     ENUM('alt', 'hand', 'thedogapi', 'vdh_text', 'berechnet') NOT NULL DEFAULT 'hand',  -- berechnet: Größenklasse aus der Schulterhöhe
     `geprueft`   TINYINT(1)   NOT NULL DEFAULT 0,
     `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
