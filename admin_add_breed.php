@@ -45,6 +45,7 @@ if ($isEditMode) {
 $definitionen = RassenDatenSchreiben::definitionen();
 $merkmalWerte = $isEditMode ? RassenDatenSchreiben::formularWerte($editingId) : [];
 $texte        = $isEditMode ? RassenDaten::alleTexte($editingId) : ['de' => [], 'en' => []];
+$groesseVonHand = $isEditMode && RassenDatenSchreiben::groessenklasseVonHand($editingId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid();
@@ -74,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eingabe      = RassenDatenSchreiben::ausEingabe(is_array($_POST['merkmal'] ?? null) ? $_POST['merkmal'] : []);
     $merkmalWerte = $eingabe['werte'];
     $texte        = RassenDatenSchreiben::texteAusEingabe(is_array($_POST['text'] ?? null) ? $_POST['text'] : []);
+    $groesseVonHand = ($_POST['groesse_auto'] ?? '1') !== '1';
 
     // Bild-Upload verarbeiten (validiert Typ/Größe und verkleinert
     // serverseitig auf max. 1200px Breite). Bei Validierungsfehlern wird
@@ -95,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($result['success']) {
             $breedId = $isEditMode ? $editingId : (int) $result['breed_id'];
             try {
-                RassenDatenSchreiben::speichern($breedId, $merkmalWerte, $texte, $userId);
+                RassenDatenSchreiben::speichern($breedId, $merkmalWerte, $texte, $userId, !$groesseVonHand);
                 header('Location: /breed_detail.php?id=' . $breedId);
                 exit;
             } catch (Throwable $e) {
@@ -284,7 +286,7 @@ require __DIR__ . '/views/partials/header.php';
         </div>
     </div>
 
-    <?php render_steckbrief_formular($definitionen, $merkmalWerte); ?>
+    <?php render_steckbrief_formular($definitionen, $merkmalWerte, $groesseVonHand); ?>
 
     <?php render_texte_formular($texte); ?>
 

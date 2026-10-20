@@ -17,6 +17,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/Groessenklasse.php';
 
 class Datenpruefung
 {
@@ -33,16 +34,6 @@ class Datenpruefung
     private const HOEHE_MAX_CM   = 110;
     private const GEWICHT_MAX_KG = 120;
 
-    /**
-     * Schulterhöhe in cm, die zu einer Größenklasse passt (bewusst
-     * überlappend, gemeldet wird nur, was zu keiner Klasse der Rasse passt).
-     */
-    private const GROESSE_CM = [
-        'klein'      => [0, 40],
-        'mittel'     => [35, 60],
-        'gross'      => [55, 72],
-        'sehr_gross' => [65, 999],
-    ];
 
     /** Prüfungen des Rassenkatalogs: Schlüssel => Sprachschlüssel des Titels. */
     public const KATALOG = [
@@ -371,15 +362,9 @@ class Datenpruefung
                     }
                 }
             }
+            // Grenzen wie bei der Berechnung, auffallen kann nur eine von Hand gesetzte Klasse
             if ($hoeheMax !== null && !empty($d['klassen'])) {
-                $passt = false;
-                foreach ($d['klassen'] as $klasse) {
-                    [$min, $max] = self::GROESSE_CM[$klasse] ?? [0, 999];
-                    if ($hoeheMax >= $min && $hoeheMax <= $max) {
-                        $passt = true;
-                        break;
-                    }
-                }
+                $passt = (bool) array_intersect($d['klassen'], Groessenklasse::ausSpannen($d['schulterhoehe'] ?? []));
                 if (!$passt) {
                     $probleme[] = t('dp.p_groessenklasse', ['wert' => self::zahl($hoeheMax)]);
                 }

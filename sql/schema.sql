@@ -156,6 +156,7 @@ CREATE TABLE `breeds` (
     `bild_lizenz`      VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,  -- z.B. 'CC BY-SA 4.0'
     `bild_lizenz_url`  VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, -- Link zur Lizenz oder Bildseite
     `bild_zurueckgestellt` DATETIME NULL,     -- seit wann admin_rassenbilder.php die Rasse nicht mehr anbietet
+    `bild_geprueft`        DATETIME NULL,     -- wann das Bild als passend bestätigt wurde, NULL = ungeprüft
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created_by`      INT UNSIGNED NULL,
@@ -592,7 +593,7 @@ CREATE TABLE IF NOT EXISTS `rasse_merkmale` (
     `zahl_bis`   DECIMAL(6,1) NULL,
     `text_wert`  VARCHAR(20)  NULL,
     `geschlecht` ENUM('alle', 'ruede', 'huendin') NOT NULL DEFAULT 'alle',
-    `quelle`     ENUM('alt', 'hand', 'thedogapi', 'vdh_text') NOT NULL DEFAULT 'hand',
+    `quelle`     ENUM('alt', 'hand', 'thedogapi', 'vdh_text', 'berechnet') NOT NULL DEFAULT 'hand',  -- berechnet: Größenklasse aus der Schulterhöhe
     `geprueft`   TINYINT(1)   NOT NULL DEFAULT 0,
     `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

@@ -8,6 +8,9 @@
  * wie "text_de_wesen" oder "merkmal_farben" (tabelle = 'breeds').
  * Texte lassen sich daraus wiederherstellen, Merkmale nur nachlesen.
  *
+ * Die Größenklasse folgt der Schulterhöhe (Groessenklasse.php, quelle
+ * 'berechnet'), außer sie wurde von Hand gesetzt (quelle 'hand').
+ *
  * Werte im Formularformat je Merkmal (siehe formularWerte()):
  *   ['werte' => [wertSchluessel, …], 'spannen' => [geschlecht => [von, bis]], 'text' => ?string]
  */
@@ -17,6 +20,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/RassenDaten.php';
 require_once __DIR__ . '/ContentRevision.php';
 require_once __DIR__ . '/Uebersetzung.php';
+require_once __DIR__ . '/Groessenklasse.php';
 
 class RassenDatenSchreiben
 {
@@ -220,7 +224,11 @@ class RassenDatenSchreiben
      * Speichert Merkmale und Texte aus dem Formular. Nur Geänderte werden
      * geschrieben (Quelle 'hand') und als Version festgehalten.
      */
-    public static function speichern(int $breedId, array $merkmalWerte, array $texte, ?int $userId): void
+    /**
+     * @param ?bool $groesseAuto true = Größenklasse aus der Schulterhöhe, false = von Hand wie eingegeben,
+     *                           null = nur neu berechnen, wenn sie nicht von Hand gesetzt ist
+     */
+    public static function speichern(int $breedId, array $merkmalWerte, array $texte, ?int $userId, ?bool $groesseAuto = null): void
     {
         RassenDaten::uebernehmenWennNoetig($breedId);
         $pdo = Database::getConnection();
@@ -232,7 +240,15 @@ class RassenDatenSchreiben
             foreach (self::definitionen() as $m) {
                 $alt = $vorher[$m['schluessel']] ?? null;
                 $neu = $merkmalWerte[$m['schluessel']] ?? null;
+                if ($m['schluessel'] === 'groessenklasse' && $groesseAuto === true) {
+                    continue;
+                }
                 if (self::gleich($alt, $neu)) {
+                    if ($m['schluessel'] === 'groessenklasse' && $groesseAuto === false) {
+                        // unverändert, aber ab jetzt von Hand festgelegt
+                        $pdo->prepare("UPDATE rasse_merkmale SET quelle = 'hand' WHERE breed_id = :b AND merkmal_id = :m")
+                            ->execute([':b' => $breedId, ':m' => $m['id']]);
+                    }
                     continue;
                 }
                 self::merkmalSchreiben($pdo, $breedId, $m, $neu, 'hand');
@@ -244,6 +260,9 @@ class RassenDatenSchreiben
                     self::textSchreiben($pdo, $breedId, $sprache, $abschnitt, $texteVorher[$sprache][$abschnitt] ?? null,
                         $texte[$sprache][$abschnitt] ?? null, $userId, 'bearbeitung', 'hand');
                 }
+            }
+            if ($groesseAuto !== false) {
+                self::groessenklasseAktualisieren($pdo, $breedId, $userId, $groesseAuto === true, 'bearbeitung');
             }
             // Neu angelegte Rasse: nie aus (leeren) alten Feldern übernehmen
             $pdo->prepare('UPDATE breeds SET daten_stand = :s, updated_at = updated_at WHERE id = :id AND daten_stand IS NULL')
@@ -293,6 +312,9 @@ class RassenDatenSchreiben
                 ContentRevision::protokolliereFeld($pdo, 'breeds', $v['breed_id'], 'merkmal_' . $m['schluessel'],
                     null, self::lesbar($m, $neu), $userId, 'import');
                 $geschrieben++;
+                if ($m['schluessel'] === 'schulterhoehe') {
+                    self::groessenklasseAktualisieren($pdo, $v['breed_id'], $userId, false, 'import');
+                }
             }
             $pdo->commit();
         } catch (Throwable $e) {
@@ -323,6 +345,9 @@ class RassenDatenSchreiben
             ContentRevision::protokolliereFeld($pdo, 'breeds', $breedId, 'merkmal_' . $schluessel,
                 self::lesbar($m, $vorher[$schluessel] ?? null), self::lesbar($m, $neu), $userId, 'import');
         }
+        if (array_key_exists('schulterhoehe', $merkmale) && !array_key_exists('groessenklasse', $merkmale)) {
+            self::groessenklasseAktualisieren($pdo, $breedId, $userId, false, 'import');
+        }
         $texteVorher = RassenDaten::alleTexte($breedId);
         foreach ($texte as $sprache => $abschnitte) {
             foreach ($abschnitte as $abschnitt => $neu) {
@@ -336,6 +361,96 @@ class RassenDatenSchreiben
             $pdo->prepare('UPDATE breeds SET name_en = :n WHERE id = :id')->execute([':n' => $nameEn !== '' ? $nameEn : null, ':id' => $breedId]);
             ContentRevision::protokolliereFeld($pdo, 'breeds', $breedId, 'name_en', $altWert === false ? null : $altWert, $nameEn !== '' ? $nameEn : null, $userId, 'import');
         }
+    }
+
+    /**
+     * Setzt die Größenklasse einer Rasse aus ihrer Schulterhöhe, in der
+     * laufenden Transaktion. Von Hand gesetzte Klassen bleiben, außer bei
+     * $erzwingen. Ohne Schulterhöhe bleibt die Klasse stehen, bei
+     * $erzwingen gilt sie danach nicht mehr als von Hand gesetzt.
+     *
+     * @return bool ob sich die Klasse geändert hat
+     */
+    public static function groessenklasseAktualisieren(PDO $pdo, int $breedId, ?int $userId, bool $erzwingen, string $anlass): bool
+    {
+        $m = self::nachSchluessel()['groessenklasse'] ?? null;
+        if ($m === null) {
+            return false;
+        }
+        $q = $pdo->prepare('SELECT DISTINCT quelle FROM rasse_merkmale WHERE breed_id = :b AND merkmal_id = :m');
+        $q->execute([':b' => $breedId, ':m' => $m['id']]);
+        $quellen = $q->fetchAll(PDO::FETCH_COLUMN);
+        if (!$erzwingen && in_array('hand', $quellen, true)) {
+            return false;
+        }
+        $vorher = self::formularWerte($breedId);
+        $klassen = array_values(array_filter(
+            Groessenklasse::ausSpannen(array_values($vorher['schulterhoehe']['spannen'] ?? [])),
+            fn($k) => isset($m['werte'][$k])
+        ));
+        if (!$klassen) {
+            if ($erzwingen && in_array('hand', $quellen, true)) {
+                $pdo->prepare("UPDATE rasse_merkmale SET quelle = 'alt' WHERE breed_id = :b AND merkmal_id = :m")
+                    ->execute([':b' => $breedId, ':m' => $m['id']]);
+            }
+            return false;
+        }
+        $alt = $vorher['groessenklasse'] ?? null;
+        $neu = ['werte' => $klassen, 'spannen' => [], 'text' => null];
+        if (self::gleich($alt, $neu)) {
+            if ($quellen !== ['berechnet']) {
+                $pdo->prepare("UPDATE rasse_merkmale SET quelle = 'berechnet' WHERE breed_id = :b AND merkmal_id = :m")
+                    ->execute([':b' => $breedId, ':m' => $m['id']]);
+            }
+            return false;
+        }
+        self::merkmalSchreiben($pdo, $breedId, $m, $neu, 'berechnet');
+        ContentRevision::protokolliereFeld($pdo, 'breeds', $breedId, 'merkmal_groessenklasse',
+            self::lesbar($m, $alt), self::lesbar($m, $neu), $userId, $anlass);
+        return true;
+    }
+
+    /**
+     * Größenklasse für alle Rassen mit Schulterhöhe neu berechnen, von
+     * Hand gesetzte bleiben (Knopf auf admin_merkmale.php).
+     *
+     * @return array{geaendert: int, von_hand: int}
+     */
+    public static function alleGroessenklassenAktualisieren(?int $userId): array
+    {
+        RassenDaten::alleUebernehmen();
+        $pdo = Database::getConnection();
+        $ids = $pdo->query(
+            "SELECT DISTINCT rm.breed_id FROM rasse_merkmale rm JOIN merkmale m ON m.id = rm.merkmal_id
+             WHERE m.schluessel = 'schulterhoehe' ORDER BY rm.breed_id"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $vonHand = (int) $pdo->query(
+            "SELECT COUNT(DISTINCT rm.breed_id) FROM rasse_merkmale rm JOIN merkmale m ON m.id = rm.merkmal_id
+             WHERE m.schluessel = 'groessenklasse' AND rm.quelle = 'hand'"
+        )->fetchColumn();
+        $geaendert = 0;
+        $pdo->beginTransaction();
+        try {
+            foreach ($ids as $id) {
+                $geaendert += self::groessenklasseAktualisieren($pdo, (int) $id, $userId, false, 'umstrukturierung') ? 1 : 0;
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        return ['geaendert' => $geaendert, 'von_hand' => $vonHand];
+    }
+
+    /** Ob die Größenklasse einer Rasse von Hand gesetzt ist. */
+    public static function groessenklasseVonHand(int $breedId): bool
+    {
+        $stmt = Database::getConnection()->prepare(
+            "SELECT 1 FROM rasse_merkmale rm JOIN merkmale m ON m.id = rm.merkmal_id
+             WHERE rm.breed_id = :b AND m.schluessel = 'groessenklasse' AND rm.quelle = 'hand' LIMIT 1"
+        );
+        $stmt->execute([':b' => $breedId]);
+        return (bool) $stmt->fetchColumn();
     }
 
     /** Ersetzt alle Werte eines Merkmals einer Rasse. */

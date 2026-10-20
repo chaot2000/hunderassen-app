@@ -1065,6 +1065,44 @@ else
     check_body_not_contains "Neues Merkmal ist weg" 'id="merkmal-ci_ohrform"'
 
     echo ""
+    echo "--- Größenklasse aus der Schulterhöhe ---"
+    # Gleiche Werte wie oben, Kurzporträt vorab kodiert (Leerzeichen)
+    GK_KURZ=$(php -r 'echo rawurlencode("Nur für automatisierte Tests angelegt.");')
+    GK_FELDER="--data-urlencode name=CI-Testrasse --data-urlencode fci_klasse=1 --data text%5Bde%5D%5Bkurzportraet%5D=$GK_KURZ \
+         --data-urlencode merkmal[farben][werte][]=braun \
+         --data-urlencode merkmal[schulterhoehe][spanne][ruede][von]=40 --data-urlencode merkmal[schulterhoehe][spanne][ruede][bis]=50 \
+         --data-urlencode merkmal[ursprungsland][land]=DE --data-urlencode merkmal[eignung][werte][]=assistenzhund"
+    check_status "Rasse bearbeiten mit Größenklasse" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Schalter automatisch ist an" 'name="groesse_auto" value="1" x-model="auto" checked'
+    check_body_contains "Grenzen im Formular" "mittel 35 bis unter 48 cm"
+    check_body_contains "40–50 cm ergibt groß" 'value="gross" checked'
+    check_body_contains "40–50 cm ergibt auch mittel" 'value="mittel" checked'
+    GK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Größenklasse von Hand setzen (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$GK_CSRF $GK_FELDER --data-urlencode groesse_auto=0 --data-urlencode merkmal[groessenklasse][werte][]=klein"
+    check_status "Rasse bearbeiten nach Handeintrag" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Schalter automatisch ist aus" 'name="groesse_auto" value="1" x-model="auto"  class'
+    check_body_contains "Handeintrag klein bleibt" 'value="klein" checked'
+    check_body_not_contains "Kein berechnetes groß" 'value="gross" checked'
+    check_status "Merkmale mit Größengrenzen" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Knopf zum Berechnen" 'name="aktion" value="groessen_berechnen"'
+    GK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Größenklassen für alle berechnen (Redirect)" "$BASE_URL/admin_merkmale.php" "302" \
+        "-X POST --data-urlencode csrf_token=$GK_CSRF --data-urlencode aktion=groessen_berechnen"
+    check_status "Merkmale nach dem Berechnen" "$BASE_URL/admin_merkmale.php" "200"
+    check_body_contains "Handeintrag wird gezählt" "1 von Hand gesetzt und unverändert."
+    check_status "Rasse bearbeiten nach dem Berechnen" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Berechnen lässt Handeintrag stehen" 'value="klein" checked'
+    GK_CSRF=$(grep -oP 'name="csrf_token" value="\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Wieder automatisch (Redirect)" "$BASE_URL/admin_add_breed.php?id=1" "302" \
+        "-X POST --data-urlencode csrf_token=$GK_CSRF $GK_FELDER --data-urlencode groesse_auto=1 --data-urlencode merkmal[groessenklasse][werte][]=klein"
+    check_status "Rasse bearbeiten wieder automatisch" "$BASE_URL/admin_add_breed.php?id=1" "200"
+    check_body_contains "Automatisch: groß zurück" 'value="gross" checked'
+    check_body_not_contains "Automatisch: klein weg" 'value="klein" checked'
+    check_status "Versionen mit Größenklasse" "$BASE_URL/content_versionen.php?typ=rasse&id=1" "200"
+    check_body_contains "Größenklasse als Version" "Merkmal „Größenklasse“"
+
+    echo ""
     echo "--- Merkmale befüllen (Vorschläge aus dem VDH-Text) ---"
     # Abschnitt "Aussehen" mit Gewicht ergänzen, übrige Werte wie oben. Texte vorab
     # kodiert, weil extra_curl_args an Leerzeichen getrennt wird.
@@ -1240,6 +1278,18 @@ else
     check_status "Liste nach dem Hochladen" "$BASE_URL/admin_rassenbilder.php?status=mit" "200"
     check_body_contains "Hochladen gemeldet" "Bild für CI-Testrasse gespeichert."
     check_body_contains "Herkunft eigenes Bild in der Liste" "&quot;quelle&quot;:&quot;upload&quot;"
+    check_body_contains "Reiter Ungeprüft" "Ungeprüft ("
+    RBL_CSRF=$(grep -oP 'const csrf = "\K[^"]+' /tmp/smoke_last_response.html | head -1 || true)
+    check_status "Prüfung zurücknehmen" "$BASE_URL/admin_rassenbilder.php" "200" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=ungeprueft --data-urlencode id=1"
+    check_body_contains "Antwort ungeprüft" '{"ok":true,"geprueft":""}'
+    check_status "Bild als passend bestätigen" "$BASE_URL/admin_rassenbilder.php" "200" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=geprueft --data-urlencode id=1"
+    check_body_contains "Antwort mit Prüfdatum" '{"ok":true,"geprueft":"'
+    check_status "Bestätigen ohne Bild abgelehnt" "$BASE_URL/admin_rassenbilder.php" "400" \
+        "-X POST --data-urlencode csrf_token=$RBL_CSRF --data-urlencode aktion=geprueft --data-urlencode id=999999"
+    check_status "Bestätigen ohne CSRF abgelehnt" "$BASE_URL/admin_rassenbilder.php" "403" \
+        "-X POST --data-urlencode aktion=geprueft --data-urlencode id=1"
     check_status "Bildauswahl mit eigenem Bild" "$RB" "200"
     check_body_contains "Herkunft eigenes Bild" "eigenes Bild"
     check_body_contains "Urheber wird gezeigt" "CI-Fotograf"
