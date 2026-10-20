@@ -207,13 +207,15 @@ $meineEintraegeAktiv = nav_is_active($currentPath, $meineEintraegePfade);
                             <?php if (can_manage_breeds()): ?>
                                 <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-fellDk/50"><?= e(t('nav.gruppe_rassen')) ?></p>
                                 <a href="/admin_add_breed.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rasse_anlegen')) ?></a>
+                                <?php if (is_super_admin()): ?>
+                                    <a href="/admin_rassenbilder.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassenbilder')) ?></a>
+                                <?php endif; ?>
                                 <a href="/admin_merkmale.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.merkmale')) ?></a>
                                 <?php if (is_super_admin()): ?>
-                                    <a href="/admin_rassentexte.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassentexte')) ?></a>
                                     <a href="/admin_merkmale_befuellen.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.merkmale_befuellen')) ?></a>
-                                    <a href="/admin_inhalte_import.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.inhalte_import')) ?></a>
                                     <a href="/admin_thedogapi_review.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.thedogapi')) ?></a>
-                                    <a href="/admin_rassenbilder.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.rassenbilder')) ?></a>
+                                    <a href="/admin_inhalte_import.php" class="block px-4 py-2.5 text-sm hover:bg-creme transition-colors"><?= e(t('nav.inhalte_import')) ?></a>
+                                    <?php /* admin_rassentexte.php bleibt per Adresse erreichbar, die Übernahme läuft sonst automatisch */ ?>
                                 <?php endif; ?>
                             <?php endif; ?>
 
